@@ -1,0 +1,3 @@
+# Runtime interception via DLL injection + inline hook (MinHook)
+
+APE needs to change existing game logic (starting with crush-depth damage) at runtime. Considered a static binary patch to the target function's own bytes, and an external process that polls/writes game memory each tick (trainer-style). Chose DLL injection with a MinHook-based inline hook: it gives a real C/C++ environment to express hook logic (config-driven damage curves, state tracking) without touching the target function's original bytes at all, and it's the standard approach for this class of hack in Win32 game modding. New hacks in the suite follow the same pattern — install an inline hook from within `ape.act`'s `DllMain`, rather than statically patching each target function.

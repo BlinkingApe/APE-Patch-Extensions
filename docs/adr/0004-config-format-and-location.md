@@ -1,0 +1,5 @@
+# Config: data/Cfg/ape.cfg, INI, one section per hack
+
+Two config conventions already exist side by side in the OAE install: `hsie.ini` at the install root, using a single `[sh3_exe_patches]` section with opaque positional keys (`Val1`, `Val2`, ...) that only make sense via accompanying comments; and NSAP-style files under `data/Cfg/`, the game engine's own native location for tunable gameplay parameters, using descriptive keys. Neither is more "correct" by precedent alone.
+
+Decided: `data/Cfg/ape.cfg` — grouping with the engine's own native config files rather than root-level binary-adjacent files — using descriptive section/key names (e.g. `[CrushDepthDamage]` / `light_damage_window=`) instead of hsie's positional style, so the file is self-documenting without a comment above every key. One flat file for the whole suite, with each hack getting its own section, rather than one file per hack — avoids both a monolithic shared schema and an ever-growing pile of per-hack files. Config is read once at DLL load; hot-reload is deferred, not ruled out.

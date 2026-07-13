@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "x86-debug",
+      "displayName": "x86 Debug (MSVC/Ninja)",
+      "description": "32-bit MSVC build. Configure from a vcvars32 shell or the x86 kit.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/x86-debug",
+      "architecture": { "value": "x86", "strategy": "external" },
+      "toolset": { "value": "host=x86", "strategy": "external" },
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "x86-release",
+      "inherits": "x86-debug",
+      "displayName": "x86 Release (MSVC/Ninja)",
+      "binaryDir": "${sourceDir}/build/x86-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "x86-debug", "configurePreset": "x86-debug" },
+    { "name": "x86-release", "configurePreset": "x86-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "x86-debug",
+      "configurePreset": "x86-debug",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
