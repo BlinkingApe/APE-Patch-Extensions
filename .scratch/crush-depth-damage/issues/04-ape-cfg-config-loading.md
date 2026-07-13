@@ -18,4 +18,4 @@ Parsing of `data/Cfg/ape.cfg` (INI format, per ADR-0004) into the band-configura
 
 ## Blocked by
 
-- 03-damage-band-decision-function (shares the band-configuration struct shape).
+- 03-damage-band-decision-function (shares the band-configuration struct shape). **Unblocked** — 03 is complete (commit `1acf9be`). The struct to populate is `ape::BandConfig` in `src/core/damage_band.hpp`: `light_window`/`medium_window`/`heavy_window` (fractions of crush depth) and `light_rate`/`medium_rate`/`heavy_rate`. Map the config's `light_damage_window` / `light_damage_rate` (etc.) keys onto those fields.
