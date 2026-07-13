@@ -27,11 +27,20 @@ add_library(ape_core STATIC
 )
 target_include_directories(ape_core PUBLIC src)
 
+# --- ape_config: ape.cfg (INI) loading ------------------------------------
+# File parsing lives out of ape_core so ape_core keeps its "no I/O" contract.
+# Per the spec, real-file config parsing is not part of the automated test
+# seam; it is verified manually via the config_check harness below.
+add_library(ape_config STATIC
+  src/core/config.cpp
+)
+target_include_directories(ape_config PUBLIC src)
+
 # --- ape.act: the injected hook module (PE32 DLL, `.act` extension) -------
 add_library(ape_act SHARED
   src/ape_act/dllmain.cpp
 )
-target_link_libraries(ape_act PRIVATE ape_core minhook)
+target_link_libraries(ape_act PRIVATE ape_core ape_config minhook)
 set_target_properties(ape_act PROPERTIES
   PREFIX ""            # no "lib" prefix
   OUTPUT_NAME "ape"
@@ -42,6 +51,15 @@ set_target_properties(ape_act PROPERTIES
 add_executable(patcher
   src/patcher/main.cpp
 )
+
+# --- config_check: manual verification harness for the ape.cfg loader -----
+# Deliberately NOT registered with ctest (config parsing is manually verified,
+# per the spec's testing decision). Run it by hand, optionally passing the path
+# to data/Cfg/ape.cfg to print the shipped values.
+add_executable(config_check
+  tools/config_check/main.cpp
+)
+target_link_libraries(config_check PRIVATE ape_config)
 
 # --- Tests ----------------------------------------------------------------
 enable_testing()
