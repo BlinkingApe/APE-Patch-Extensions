@@ -18,29 +18,51 @@ float while the boat is below crush depth.
 
 ## ▶ NEXT SESSION — START HERE
 
-The hull-write we traced leads only into the engine's **generic collision
-system** (see §"CONCLUSION / STRATEGY PIVOT" below) — not a crush-depth-specific
-function. Do **not** resume by climbing collision frames. Instead run the
-**`CrashSpeed` data probe**:
+**Status (2026-07-14):** the damage-*application* seam is fully confirmed as the
+engine's generic collision solver (see "2026-07-14 confirmations" in §1). The
+crush-depth *decision/generator* — the upstream code that has depth + crush depth
++ `CrashSpeed` in scope — is **still unlocated**. Run the **differential depth
+access-trace** below to find it. Do **not** resume by climbing collision frames,
+and do **not** use the old `CrashSpeed` access-probe (`CrashSpeed` is cached at
+load and never re-read per tick — confirmed dead).
 
-1. In x32dbg, clear the breakpoint at `02B930D7` and let the game run.
-2. Set `CrashSpeed` to a distinctive exact value (e.g. `43`, not a round number);
-   reload; confirm crush-depth damage now ticks ~43/s (proves it's live).
-3. Cheat Engine: Float, **Exact Value** `43`, First Scan. If >handful of hits,
-   change `CrashSpeed` to another exact value (e.g. `37`), reload, Next Scan to
-   isolate the one address that tracks it.
-4. Right-click that address → **"Find out what ACCESSES this address"** (reads,
-   not writes). Dive past crush depth so damage ticks.
-5. The accessing instruction is **inside the real crush-depth damage function**
-   (has depth + crush depth in scope). Capture its address + opcode +
-   `module+offset`. That read-site is APE's hook target → then derive the AOB
-   signature (§3) and verify uniqueness.
+### Per-run re-anchor (do this FIRST, every session — heap + ASLR relocate)
 
-**Fallback** if the access list stays empty (CrashSpeed cached at load, not read
-per-tick): find **current depth** or the sub's **crush-depth** value in memory
-and trace *its* readers instead.
+Object pointers move every launch; **module offsets are stable**. `sh3.exe` is a
+static image at `0x00400000`. `sh3collisions.act` relocates (base `0x02B90000` on
+07-13, `0x02B40000` on 07-14) but our offsets are constant.
 
-Environment is ready (user confirmed CE + x32dbg + OAE install all set up).
+1. **Hull field**, via the static mirror as a permanent handle:
+   - "Find what writes" the mirror `0x00566A28` (`sh3.exe+166A28`).
+   - The only writer is the getter `004E1C99 mov eax,[ecx+0xB8]` /
+     `004E1C9F mov [00566A28],eax` (copies player hull → HUD global).
+   - At that instruction **ECX = live player-boat object base** (uniquely the
+     player, since only the player hull is mirrored). Hull field = **ECX + 0xB8**.
+   - ⚠ Read **ECX**, *not* EAX. EAX holds the HP *value* (a float, e.g.
+     `0x43F3A666` ≈ 487); ECX is the *pointer*.
+2. **Current depth**: Exact-Value float scan on the depth gauge → the field at
+   **`[movementObj + 0x54]`** (§1, 07-14).
+
+### The trace to run: differential depth access-trace → crush-depth value + generator
+
+Rationale: crush depth is **compared against current depth every tick**, only
+mattering when deep — so let the *code* isolate it (scanning for the value
+`≈ 221` returns too many static candidates to pick from).
+
+1. Right-click the **current-depth** address → **Find out what ACCESSES this**.
+2. **Above** crush depth (no damage): note the baseline readers (physics, gauge,
+   the `0x00514000` clamp code).
+3. **Dive below** crush depth (hull bleeding): watch for a **new** reader, or one
+   that only starts climbing now. That instruction loads current depth to compare
+   against crush depth = the **crush-depth damage check**.
+4. Break there. The **other operand** it compares depth against **is the
+   crush-depth value** (isolates it from the 221-candidates). Its surrounding code
+   + call stack = the **impact generator** — the clean, sub-specific hook target.
+5. **Fallback**: if no new reader appears on the gauge-depth field when deep, the
+   generator reads a different depth representation — run the same differential on
+   the **world-space Z** at the `[obj+0x10]` field (candidate B, §1, 07-14).
+
+Environment is ready (CE + x32dbg + OAE install all confirmed present).
 
 ---
 
@@ -138,7 +160,62 @@ reach the damage code.
   address" to land directly on the crush-depth damage code (where depth/crush
   depth live). That read-site is APE's real hook target.**
 
-- Function entry point (real hook target): _TBD (via CrashSpeed access-trace)_
+- Function entry point (real hook target): **still TBD** — pursuit is now the
+  crush-depth *generator* via the differential depth access-trace (see START
+  HERE), not the CrashSpeed probe.
+
+### 2026-07-14 session — confirmations (build 4B6BEE20)
+
+Re-ran the hull-write trace **with a depth-toggle control**, so the break is now
+*proven* to coincide with pressure-only damage (deep calm water, no combat;
+`CrashSpeed` lowered to `0.03` for a long, survivable bleed).
+
+- **Damage-application seam = the generic collision solver, re-confirmed.** Same
+  writer as 07-13, re-derived cleanly: `02B430D7 fstp [ebx+0xB8]` at module base
+  `0x02B40000` → **offset +0x30D7**; solver entry **+0x2E70**. Surrounding bytes
+  unchanged (`fsub; mov [ebx+170],4; fstp [ebx+B8]`). `ebx` = the collision/damage
+  object (hull at +0xB8), **not** the sub's spatial object.
+- **Call stack during a *proven* pressure tick is identical to 07-13 — all
+  generic:**
+  ```
+  004042C3 (main loop) → 004CC7E8 → 0044C764
+    → 004D7409  sObject::Action(float)+50
+    → 1000E830  kernel.dll  (generic vdispatch, call [eax+24])
+    → 02B43AE0  sh3collisions collision entry (+0x3AE0)
+    → 02B430D7  sh3collisions store            (+0x30D7)
+  ```
+  ⇒ **Crush-depth pressure is synthesized as a generic impact and pushed through
+  the same solver as gunfire/ramming/grounding.** No crush-depth-specific frame is
+  on the damage stack; the depth/CrashSpeed decision runs *upstream* as the impact
+  **generator** (not a caller here). 07-13's stack was NOT a wrong-mechanic fluke —
+  this really is the pressure path.
+- **Pressure magnitude:** at `CrashSpeed=0.03`, per-tick damage = `ST(1) ≈ 0.00265`
+  HP (at the store, `ST(0)` = new hull, `ST(1)` = amount subtracted). Verified the
+  hull field bled `495 → 483` while held below crush depth.
+
+**Depth values located (on objects *other* than the collision object):**
+- **Current/gauge depth = `[movementObj + 0x54]`** — written by depth-clamp code
+  `00514159/0051416B`, compared at `00514001`. Movement-obj base e.g. `3CB236E0`.
+- **World-space Z (candidate B)** = a field read as `[obj+0x10]`/`[ecx]` from many
+  physics/render sites (7740× from a `0x02BFxxxx` module) — fallback depth source.
+- **`0x00514000` is depth *movement/rate-clamp*, NOT crush depth** — ruled out. It
+  writes commanded depth `X=[esp+14]` into `[ecx+0x54]`/`[ecx+0x58]` and clamps the
+  per-tick change against `[0x00520640] = 3.0` (max ~3 m/s). The `ST(0)=222.87` we
+  saw there was commanded/new depth.
+- **Crush depth ≈ 221 m** (±0.5) by damage-onset; too many static value-candidates
+  to isolate by value → use the differential access-trace (START HERE).
+
+**Two viable hook architectures (decision pending the generator hunt):**
+- **(A) Hook the generic solver** (`+0x2E70`/`+0x30D7`, stable offsets) and
+  discriminate at runtime — is `ebx` the player sub? below crush depth?
+  pressure-sized magnitude? — then overwrite `ST(1)`/the stored value with APE's
+  banded damage. Downside: reachability (depth & crush depth live on *other*
+  objects; combat-vs-pressure discrimination is heuristic).
+- **(B) Hook the crush-depth generator** (current pursuit): cleaner — depth, crush
+  depth, and the damage are all in scope, and it's sub-specific by construction.
+  Found via the differential depth access-trace.
+  → **Recommendation: pursue (B); fall back to (A) if no clean generator seam
+  exists.**
 
 ## 2. Confirmation (x32dbg)
 
