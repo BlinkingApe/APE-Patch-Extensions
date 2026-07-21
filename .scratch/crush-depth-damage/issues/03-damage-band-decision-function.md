@@ -1,6 +1,6 @@
 # Damage-band decision function + unit tests
 
-Status: ready-for-agent
+Status: ready-for-agent (reopened — pivot rework, see Comments)
 
 ## Parent
 
@@ -8,23 +8,54 @@ Status: ready-for-agent
 
 ## What to build
 
-The pure damage-band decision function: given current depth expressed as a percentage under crush depth, plus the light/medium/heavy band configuration (window boundaries and flat damage-per-tick rates), return which band applies and what damage rate to use — or a signal that depth is past the last configured band and stock behavior should apply instead. No I/O, no game-memory access. This is the one automated-test seam agreed for this hack.
+The pure damage-band decision function: given current depth and crush depth (its
+ratio, `under = (depth − CDT)/CDT` clamped at 0, is what matters), plus the
+light/medium/heavy band configuration (two cumulative window boundaries as
+fractions of crush depth + three flat rates), return which band applies and the
+**HP-per-game-second** rate to use. The heavy band is **open-ended**: past the
+medium boundary, heavy always applies — there is no "defer to stock" / past-heavy
+signal (APE owns 100% of crush-depth damage; PRD). No I/O, no game-memory access.
+The caller multiplies the returned rate by the game-time delta `dt` and subtracts
+from HP. This is the one automated-test seam agreed for this hack.
 
 ## Acceptance criteria
 
-- [x] The function correctly selects the light, medium, or heavy band for depths within each respective window.
-- [x] Boundary depths (exactly at a window edge) resolve to the correct adjoining band, consistently.
-- [x] Depth past the outer edge of the heavy band returns a "defer to stock" signal rather than fabricating a rate.
-- [x] Depth at or above crush depth (zero percent under) is handled correctly.
-- [x] A degenerate config (a band with zero width) is handled without crashing or misclassifying.
-- [x] Unit tests (Catch2 or doctest, building under CMake/MSVC) cover all of the above and pass.
+- [ ] The function correctly selects the light, medium, or heavy band for depths
+      within each respective window (`light [0,a)`, `medium [a,b)`, `heavy [b,∞)`).
+- [ ] Boundary depths (exactly at a window edge) resolve to the correct adjoining
+      band, consistently.
+- [ ] Depth far below crush depth resolves to the open-ended **heavy** band and
+      returns the heavy rate — it never signals "defer" or fabricates a rate.
+- [ ] Depth at or above crush depth (zero percent under) resolves to the light
+      band.
+- [ ] A degenerate config (a band with zero width) is handled without crashing or
+      misclassifying (the zero-width band is simply never selected).
+- [ ] The returned rate is documented and tested as HP-per-game-second (the caller,
+      not this function, applies `dt`).
+- [ ] Unit tests (doctest, building under CMake/MSVC) cover all of the above and
+      pass.
 
 ## Blocked by
 
-None — pure logic, no RE dependency, no game interaction. Can start immediately.
+None — pure logic, no RE dependency, no game interaction.
 
 ## Comments
 
-**False start (Linux sandbox session) — restart on Windows 11:** Implementation was attempted in a Linux sandbox and did not get past toolchain discovery — no CMake/g++/clang toolchain is available in that environment. No source files were created under `src/ape/`; nothing was left to clean up. Restart this ticket from scratch on Windows 11, using VS Code + CMake + MSVC per the project's build-toolchain decision. Still open when picking this back up: whether to vendor doctest (single-header) or fetch Catch2 via CMake — decide based on what's easiest to pull in cleanly on the actual dev machine, network access there hasn't been checked either.
+**COMPLETE (Windows 11, commit `1acf9be`) — now partially STALE.** Implemented as
+`ape::select_band` in `src/core/damage_band.{hpp,cpp}` (`ape_core` lib), tests in
+`tests/damage_band_test.cpp`, doctest vendored under `third_party/doctest/`.
 
-**COMPLETE (Windows 11, commit `1acf9be`).** Implemented as the pure `ape::select_band` in `src/core/damage_band.{hpp,cpp}` (the `ape_core` static lib), with all six acceptance criteria covered by `tests/damage_band_test.cpp`. Decision: **doctest** vendored as a single header under `third_party/doctest/` (network was available; simpler than fetching Catch2). Tests build and pass under CMake/MSVC x86 via `ctest --preset x86-debug`. Note on the boundary test: boundaries are exercised with binary-exact fractions (1/8, 1/4, 1/2) so "exactly on the edge" is deterministic rather than a floating-point coin flip. The band-config struct shape (`ape::BandConfig`: three `*_window` fractions + three `*_rate` values, cumulative half-open intervals) is now fixed — this is what issue 04's config loader must produce.
+**REOPENED (2026-07-21, architecture pivot).** The pivot to "APE owns 100%,
+alongside" changes this function's contract. Required rework:
+- **Remove `Band::PastHeavy`, `BandResult::defer_to_stock`, and `heavy_window`
+  from `BandConfig`.** The model is now three bands with two boundaries; heavy is
+  everything past the medium edge (open-ended). Config carries `light_window`,
+  `medium_window`, and three rates only.
+- **Rate units are HP-per-game-second** (were "damage-per-tick"). The function's
+  contract/comments must say so; the loop caller multiplies by `dt = Δ(mission
+  clock)`.
+- **Update the tests:** replace the "past heavy → defer_to_stock" case with a
+  "far below crush depth → open-ended heavy rate" case; keep the binary-exact
+  boundary fractions (1/8, 1/4, 1/2) so edge tests stay deterministic.
+- Coordinate with issue 04: dropping `heavy_window` removes the
+  `heavy_damage_window` config key.

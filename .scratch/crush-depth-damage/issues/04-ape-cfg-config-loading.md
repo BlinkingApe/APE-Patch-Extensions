@@ -1,6 +1,6 @@
 # Config loading for ape.cfg [CrushDepthDamage]
 
-Status: ready-for-agent
+Status: ready-for-agent (reopened — pivot rework, see Comments)
 
 ## Parent
 
@@ -10,6 +10,8 @@ Status: ready-for-agent
 
 Parsing of `data/Cfg/ape.cfg` (INI format, per ADR-0004) into the band-configuration struct consumed by the damage-band decision function (03-damage-band-decision-function), reading the `[CrushDepthDamage]` section's window-boundary and damage-rate keys. Loaded once, at DLL load — no hot-reload.
 
+Post-pivot the section has **five** keys, not six: two cumulative window boundaries (`light_damage_window`, `medium_damage_window`, fractions of crush depth) and three flat rates (`light_damage_rate`, `medium_damage_rate`, `heavy_damage_rate`, in **HP per game-second**). The heavy band is open-ended, so there is no `heavy_damage_window` key.
+
 ## Acceptance criteria
 
 - [x] Given a real `ape.cfg` file with a populated `[CrushDepthDamage]` section, loading produces a band-configuration struct with the correct boundary and rate values, matching the shape the decision function expects.
@@ -18,7 +20,7 @@ Parsing of `data/Cfg/ape.cfg` (INI format, per ADR-0004) into the band-configura
 
 ## Blocked by
 
-- 03-damage-band-decision-function (shares the band-configuration struct shape). **Unblocked** — 03 is complete (commit `1acf9be`). The struct to populate is `ape::BandConfig` in `src/core/damage_band.hpp`: `light_window`/`medium_window`/`heavy_window` (fractions of crush depth) and `light_rate`/`medium_rate`/`heavy_rate`. Map the config's `light_damage_window` / `light_damage_rate` (etc.) keys onto those fields.
+- 03-damage-band-decision-function (shares the band-configuration struct shape). After the pivot rework, the struct to populate is `ape::BandConfig` in `src/core/damage_band.hpp`: `light_window`/`medium_window` (fractions of crush depth) and `light_rate`/`medium_rate`/`heavy_rate` (HP per game-second). Map the config's `light_damage_window` / `light_damage_rate` (etc.) keys onto those fields. `heavy_window`/`heavy_damage_window` no longer exists.
 
 ## Comments
 
@@ -26,4 +28,9 @@ Parsing of `data/Cfg/ape.cfg` (INI format, per ADR-0004) into the band-configura
 
 Shipped a documented `data/Cfg/ape.cfg` (comments cover each key's meaning, units, valid ranges — PRD user story 18). Verified manually via the `config_check` harness (`tools/config_check/main.cpp`, its own CMake target, deliberately **not** registered with ctest per the spec's testing decision): it self-checks an embedded sample and asserts every field, checks that an incomplete section is rejected, and prints the parsed values of the real shipped `ape.cfg`. Ran it against `data/Cfg/ape.cfg` — all fields correct, self-check PASSED. Full `ctest` seam (`ape_tests`) still green.
 
-Not in scope here / deferred to **05**: actually calling `load_band_config` from `DllMain` and resolving `ape.cfg`'s runtime path relative to the game root — that's part of the live hook wiring.
+Not in scope here / deferred to **05**: actually calling `load_band_config` from `DllMain` and resolving `ape.cfg`'s runtime path relative to the game root — that's part of the live wiring.
+
+**REOPENED (2026-07-21, architecture pivot).** The completed loader required six keys including `heavy_damage_window`. Rework needed to track the new band model (issue 03):
+- **Drop the `heavy_damage_window` key** and its mapping — the heavy band is open-ended, so `BandConfig` no longer has `heavy_window`. Five required keys remain.
+- **Rate keys are HP per game-second** — update the units in the shipped `ape.cfg` comments and the key-doc text (were "damage-per-tick"). Also document the pause / time-compression behavior for tuners (damage accrues in game-time).
+- Re-run the `config_check` harness against the updated `ape.cfg`.
