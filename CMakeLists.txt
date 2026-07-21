@@ -17,7 +17,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # --- Vendored dependencies ------------------------------------------------
-add_subdirectory(third_party/minhook)  # provides the `minhook` static lib
+# MinHook was dropped in the architecture pivot: APE runs alongside and never
+# hooks a stock function (ADR-0001), so no function-hooking library is linked.
 
 # --- ape_core: the pure, unit-testable logic ------------------------------
 # No I/O, no Windows headers, no game memory. Both ape.act and the test
@@ -36,11 +37,15 @@ add_library(ape_config STATIC
 )
 target_include_directories(ape_config PUBLIC src)
 
-# --- ape.act: the injected hook module (PE32 DLL, `.act` extension) -------
+# --- ape.act: the injected loop module (PE32 DLL, `.act` extension) -------
+# Spawns the crush-depth damage loop thread from DllMain and runs it alongside
+# the game (no function hooks). The live-value resolver (issue 01) plugs in
+# behind the IGameState seam.
 add_library(ape_act SHARED
   src/ape_act/dllmain.cpp
+  src/ape_act/damage_loop.cpp
 )
-target_link_libraries(ape_act PRIVATE ape_core ape_config minhook)
+target_link_libraries(ape_act PRIVATE ape_core ape_config)
 set_target_properties(ape_act PROPERTIES
   PREFIX ""            # no "lib" prefix
   OUTPUT_NAME "ape"

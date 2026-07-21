@@ -1,6 +1,6 @@
 # ape.act damage-loop install, live wiring, and debug logging
 
-Status: ready-for-agent
+Status: ready-for-agent (offline scaffold DONE; remainder blocked on issue 01 — see Comments)
 
 ## Parent
 
@@ -56,5 +56,49 @@ AOB scanning and memory access run on the thread, never under the DLL loader loc
 ## Blocked by
 
 - 01 (live-value anchors: player boat/HP, current depth, CDT, mission clock)
-- 03 (damage-band decision function — pivot rework)
-- 04 (config loading — pivot rework)
+  — **only the real resolver + live verification remain blocked**
+- 03 (damage-band decision function — pivot rework) — ✅ DONE
+- 04 (config loading — pivot rework) — ✅ DONE
+
+## Comments
+
+**OFFLINE SCAFFOLD COMPLETE (2026-07-21, Windows 11).** Everything in this ticket
+that does not require the live game is built and compiling as PE32/x86; only issue
+01's resolver and the in-game verification remain.
+
+Delivered:
+- **`src/ape_act/game_state.hpp`** — the `IGameState` seam (`resolve` / `resolved`
+  / `sample` → `Readings` / `write_hull_hp`) plus `UnresolvedGameState`, a stub that
+  never resolves so the loop **fails inert** until issue 01 wires the real
+  AOB-anchored resolver behind this interface. This is the single insertion point
+  for issue 01 — the loop needs no further change.
+- **`src/ape_act/damage_loop.{hpp,cpp}`** — the loop: resolve-with-retry, sample,
+  plausibility gates (`LoopLimits`: HP/depth/CDT ranges + `dt_max_step`), `dt =
+  Δ(mission clock)` with pause (`dt==0` → no damage), discontinuity guard
+  (`dt<0` or `>dt_max_step` → skip + re-baseline, so a save-load jump can't one-shot
+  the hull), applies `hp -= select_band(...).rate * dt` (writing `[boat+0xB8]` via
+  the seam) only at/below crush depth, clamps HP at 0, and logs every
+  damage-applying iteration (depth, %-under, band, rate, dt, hp before→after).
+  Fail-inert lines are de-duped.
+- **`src/ape_act/dllmain.cpp`** — rewritten for the pivot: spawns the loop thread on
+  attach, signals+joins on detach, no work under the loader lock. Loads `ape.cfg`
+  from `<game root>\data\Cfg\ape.cfg`; logs to `<game root>\ape_act.log`.
+- **`src/ape_act/log.hpp`** — tiny thread-safe append logger (no-op if the file
+  can't be opened; logging must never take the game down).
+- **CMake**: `ape_act` no longer links MinHook and the `third_party/minhook`
+  subdirectory add was removed (criterion "MinHook no longer linked" ✅). Verified
+  `ape.act` still builds as **PE32 (machine 0x014C, magic 0x010B)**; `ape_tests`
+  green.
+
+Note on the test seam: I kept to the PRD's "exactly one automated-test seam"
+decision — the loop is orchestration and is manually verified. The gate/dt logic is
+factored into small pure helpers (`gate_reason`, the dt block) so it *could* be
+promoted to a tested seam later; flagging that as a decision for the human, not
+taken unilaterally.
+
+Still blocked on issue 01 (all need the live game):
+- [ ] Replace `UnresolvedGameState` with the real AOB-anchored resolver.
+- [ ] Verify anchors resolve / miss-fails-inert against real OAE sh3.exe.
+- [ ] Verify dt (0 paused, scales with time compression), band arithmetic in the
+      log, HP write at `[boat+0xB8]`, plausibility rejections — via the debug-log +
+      CE-forced-depth loop.
