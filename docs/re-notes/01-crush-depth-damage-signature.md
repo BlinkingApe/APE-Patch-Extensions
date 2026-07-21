@@ -8,9 +8,14 @@ damage function, we now need **AOB-anchored pointer chains for four live values*
 each recorded per OAE build (ADR-0003). The old "find the damage function / its
 generator" hunt is **closed** — see §3 for why (retained as context).
 
-**OAE build:** `4B6BEE20` (see `oae-builds.md`)
-**Verified on:** _TBD (date)_
-**Tools:** Cheat Engine (dynamic discovery) + x32dbg (disassembly confirmation)
+**OAE build:** `4B6BEE20` (see `oae-builds.md`; SHA-256 re-confirmed against the
+`C:\games\OneAlex Extended 1.5.2_pre-release\sh3.exe` install on 2026-07-21)
+**Static confirmation done:** 2026-07-21 (code anchors + AOB signatures)
+**Dynamic discovery:** _still pending_ (player pointer chains, CDT, mission clock — see §4)
+**Tools:** Cheat Engine (dynamic discovery) + static disassembly. Binary Ninja is
+GUI/personal here (no headless API), so the static pass was scripted with Python
+`pefile` + `capstone` (`scratchpad/*.py`, method in §5); use the BN GUI for
+interactive cross-referencing when walking the chains found dynamically.
 
 ---
 
@@ -22,10 +27,17 @@ ASLR/heap moves the live objects):
 
 | # | Value | Offset / chain | Status |
 |---|-------|----------------|--------|
-| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | offset known; need AOB anchor + chain to `boat` |
-| 2 | **Current depth** | `[movementObj + 0x54]` | offset known; need AOB anchor + chain to `movementObj` |
-| 3 | **CDT (crush depth)** | TBD | **location unknown — main hunt** |
-| 4 | **Mission clock** | TBD | **new hunt** (drives game-second `dt`; see PRD timing) |
+| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) still needs the dynamic chain-walk (§4). |
+| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer still needs the dynamic chain-walk (§4). |
+| 3 | **CDT (crush depth)** | TBD | **location unknown — dynamic hunt (§4)** |
+| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** (drives game-second `dt`; see PRD timing) |
+
+**Static pass complete (2026-07-21).** Both code anchors are located and carry a
+verified-unique AOB signature (§1). What remains is all **dynamic** (needs the live
+game + a human diving the boat): rooting the two player pointer chains, and finding
+CDT + the mission clock (§4). The AOB signatures are the self-verification handles
+ADR-0003 calls for — once CE gives a static→object chain, the matching AOB confirms
+the field offset (`+0xB8` / `+0x54`) is still valid for this build.
 
 Plus one **non-memory** task: find which OAE **data file** holds the per-unit
 `CrashSpeed` so we can author the `CrashSpeed`=0 edit for each playable u-boat class
@@ -90,10 +102,63 @@ For each: AOB signature (wildcarded), the static operand extracted, the offset
 chain to the value, uniqueness check (exactly 1 match over sh3.exe), and any
 volatile-byte notes.
 
-- **#1 Player boat / hull HP:** _TBD_
-- **#2 Current depth:** _TBD_
-- **#3 CDT:** _TBD_
-- **#4 Mission clock:** _TBD_
+### #1 Player boat / hull HP — CODE ANCHOR DONE
+
+The hull-HP getter/HUD-mirror store (stock code; ECX = the object being updated,
+which is the player when the mirror is refreshed):
+
+```
+004E1C99  8B 81 B8 00 00 00   mov eax,[ecx+0xB8]      ; ecx = boat, +0xB8 = hull HP (float)
+004E1C9F  A3 28 6A 56 00      mov [0x566A28],eax      ; store into static HP mirror
+```
+
+- **AOB (literal, 11 bytes):** `8B 81 B8 00 00 00 A3 28 6A 56 00`
+- **Uniqueness:** exactly **1** match across `.text`. ✅
+- **No wildcards needed:** the offset `0xB8` and the absolute mirror address
+  `0x00566A28` are both stable static values (image is non-ASLR, never recompiled).
+- **Static operands extracted:** hull-field offset `+0xB8`; HP-value mirror
+  `0x00566A28`.
+- **HP mirror `0x00566A28` (float):** written here every frame, read at `004FC27E`
+  (`mov eax,[0x566A28]`). It is a **read-only copy of the player's hull HP at a
+  fixed address** — APE can read player HP with *no pointer chain*. (Writing it does
+  nothing useful: the engine overwrites it from `[boat+0xB8]` each frame. Use it for
+  the plausibility-gated read / "am I the player, am I damaged" check; the damage
+  *write* still targets `[boat+0xB8]`.)
+- **Getter function** `004E1C00`, **single call site** `004F9559`, where
+  `ecx = ebp = [esp+0x1C]` — i.e. the object currently being updated, **not** a
+  static-rooted pointer. The boat pointer for the *write* must be rooted dynamically
+  (§4-A).
+
+### #2 Current depth — CODE ANCHOR DONE
+
+The depth setter and the depth compare (both on the movement object; ECX =
+`movementObj`):
+
+```
+00513FE9  8B 54 24 14   mov edx,[esp+0x14]
+00513FED  8B C2         mov eax,edx
+00513FEF  89 51 54      mov [ecx+0x54],edx     ; +0x54 = current depth (float)
+00513FF2  89 41 58      mov [ecx+0x58],eax     ; +0x58 = paired/ordered depth
+...
+00513FFD  D9 44 24 14   fld  [esp+0x14]
+00514001  D8 59 54      fcomp [ecx+0x54]       ; compare against current depth
+00514004  DF E0         fnstsw ax
+00514006  F6 C4 41      test ah,0x41
+00514009  0F 85 41 01 00 00  jne 0x514150
+```
+
+- **AOB anchor (depth-compare site, jne rel32 wildcarded):**
+  `D9 44 24 14 D8 59 54 DF E0 F6 C4 41 0F 85 ?? ?? ?? ??`
+- **Uniqueness:** exactly **1** match across `.text`. ✅ (The bare setter
+  `89 41 54` = `mov [ecx+0x54],eax` alone occurs 8×, too common to anchor on.)
+- **Static operand extracted:** current-depth field offset `+0x54` (float);
+  `+0x58` is a paired depth slot set alongside it.
+- **Setter function** `00513FC0`, **single call site** `0051457A`
+  (`ecx = esi = this` of the method at ~`00514560`) — again a `this`, so
+  `movementObj` must be rooted dynamically (§4-A).
+
+### #3 CDT — pending (dynamic, §4-B)
+### #4 Mission clock — pending (dynamic, §4-C)
 
 ## 2. Value locations found so far (heap addrs are per-launch; offsets are stable)
 
@@ -107,6 +172,16 @@ volatile-byte notes.
   physics/render sites — fallback depth source for the target-#3 trace.
 - **Crush depth ≈ 221 m** (±0.5) by damage-onset; too many static value-candidates
   to isolate by value → use the differential access-trace above.
+- **Static singleton roots (candidate chain anchors, from the 2026-07-21 pass):**
+  - `0x005449B0` — a heavily-used static singleton **pointer** (`mov reg,[0x5449B0]`
+    appears 823×). `[[0x5449B0]+0xD8]` is a large **manager/"god" object** (offset
+    `+0x83C` dereferenced 641×, `+0x7EC` 45×, …) — it is **not** the player movement
+    object, so don't expect `+0x54`/`+0xB8` directly off it. It's the likely root to
+    *start* a dynamic walk from, but the exact offset path to the player is a
+    haystack statically.
+  - `0x0055408C`, `0x005543DC` — other static singletons used as `this`/guards in the
+    depth-handling function region (`00514180`+, `00514560`+). Worth testing as
+    alternative chain roots in CE.
 
 ## 3. CLOSED context — why we don't hook a damage function
 
@@ -139,3 +214,50 @@ APE instead runs alongside and writes HP directly, and neutralizes stock by sett
 per-unit `CrashSpeed`=0 in data (so the generic-solver pressure path contributes
 nothing). This note's live targets (§ START HERE) replace the abandoned
 function/generator hunt.
+
+## 4. Remaining DYNAMIC worklist (needs the live game + a human)
+
+Static analysis has taken §1 as far as it goes: the code anchors and their AOB
+signatures are fixed. Everything below needs Cheat Engine on the running game
+(dive the boat, watch/trace live). The BN GUI is useful here for reading the
+functions the CE traces land in.
+
+**§4-A — root the two player pointer chains.** For each of HP (`[boat+0xB8]`) and
+depth (`[movementObj+0x54]`):
+1. In CE, find the live field: HP via the static mirror `[0x566A28]` (read it, then
+   "find what writes"/"find what accesses" to reach `boat`); depth via an
+   Exact-Value float scan on the gauge → `[movementObj+0x54]`.
+2. Right-click the live address → **Pointer scan** (or "find what accesses" and read
+   the base register) to recover a `[static + off + off …]` path. Prefer paths
+   rooted at the singletons in §2 (`0x5449B0` / `0x55408C` / `0x5543DC`); re-verify
+   the path survives a relaunch.
+3. Record the full chain. The AOB signatures in §1 then serve as the build-check:
+   they confirm the field offsets (`+0xB8`, `+0x54`) are unchanged for this build.
+
+**§4-B — CDT (crush depth).** Differential depth **access-trace** (unchanged from
+the recipe above): "find what accesses" the current-depth field; note baseline
+readers above crush depth; dive **below** crush depth and watch for a *new* reader —
+that instruction compares depth against CDT, and its other operand **is** the CDT
+value. Record CDT's address + offset chain. Read live (mods randomize it), never
+hardcode. Fallback: run the same trace on world-space Z `[obj+0x10]` if no new
+reader appears on `+0x54`.
+
+**§4-C — mission clock.** Exact/Increased-Value scans while running; confirm it
+freezes on pause and accelerates under time compression. Record address, chain, and
+**format/resolution** (float seconds vs. date-time struct) — the loop needs
+`dt = Δ(clock)` in game-seconds.
+
+**§4-D — `CrashSpeed` data file (non-debugger).** Identify which OAE data file
+(`.sim`/`.cfg`/per-unit) holds `CrashSpeed` for each playable u-boat class, for the
+`CrashSpeed`=0 neutralization edits (hand-off to issue 07).
+
+## 5. Static-analysis method (reproducible)
+
+The 2026-07-21 static pass used Python `pefile` + `capstone` (Binary Ninja is
+GUI/personal on this machine — no headless API to script). Image base `0x00400000`,
+primary code section `.text` VA `0x00401000`–`0x0051D000`. Scripts are in the
+session scratchpad (`sh3re.py` AOB + uniqueness, `chains.py` xref/func-start/callers,
+`probe.py` singleton-offset tally); re-run against a new build by pointing `EXE=` at
+its `sh3.exe`. AOB uniqueness = count matches over `.text` only. Caution: raw
+4-byte-immediate scans yield false "refs" (e.g. `add eax, 0x566A28`); filter to
+instructions whose *memory operand* disp equals the target (as `chains.py` does).
