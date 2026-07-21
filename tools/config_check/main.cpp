@@ -32,7 +32,7 @@ void expect_eq(const char* what, double got, double want) {
 void print_config(const ape::BandConfig& c) {
   std::printf("  light : window=%g rate=%g\n", c.light_window, c.light_rate);
   std::printf("  medium: window=%g rate=%g\n", c.medium_window, c.medium_rate);
-  std::printf("  heavy : window=%g rate=%g\n", c.heavy_window, c.heavy_rate);
+  std::printf("  heavy : (open-ended) rate=%g\n", c.heavy_rate);
 }
 
 // Self-check against an embedded sample exercising comments, blank lines,
@@ -49,7 +49,6 @@ int self_check() {
       "LIGHT_DAMAGE_RATE    = 0.5    # case-insensitive key\n"
       "medium_damage_window = 0.10\n"
       "medium_damage_rate   = 2.0\n"
-      "heavy_damage_window  = 0.15\n"
       "heavy_damage_rate    = 6.0\n"
       "unknown_future_key   = 42     ; ignored, not an error\n";
 
@@ -65,7 +64,6 @@ int self_check() {
   expect_eq("light_rate", cfg.light_rate, 0.5);
   expect_eq("medium_window", cfg.medium_window, 0.10);
   expect_eq("medium_rate", cfg.medium_rate, 2.0);
-  expect_eq("heavy_window", cfg.heavy_window, 0.15);
   expect_eq("heavy_rate", cfg.heavy_rate, 6.0);
 
   // A file missing a required key must be rejected with a clear message.

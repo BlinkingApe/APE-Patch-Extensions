@@ -64,7 +64,6 @@ bool parse_band_config(std::istream& in, BandConfig& out, std::string& error) {
   const KeyBinding bindings[] = {
       {"light_damage_window", &BandConfig::light_window},
       {"medium_damage_window", &BandConfig::medium_window},
-      {"heavy_damage_window", &BandConfig::heavy_window},
       {"light_damage_rate", &BandConfig::light_rate},
       {"medium_damage_rate", &BandConfig::medium_rate},
       {"heavy_damage_rate", &BandConfig::heavy_rate},

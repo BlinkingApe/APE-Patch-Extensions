@@ -1,6 +1,6 @@
 # Damage-band decision function + unit tests
 
-Status: ready-for-agent (reopened — pivot rework, see Comments)
+Status: ready-for-human (pivot rework COMPLETE — see Comments)
 
 ## Parent
 
@@ -59,3 +59,25 @@ alongside" changes this function's contract. Required rework:
   boundary fractions (1/8, 1/4, 1/2) so edge tests stay deterministic.
 - Coordinate with issue 04: dropping `heavy_window` removes the
   `heavy_damage_window` config key.
+
+**PIVOT REWORK COMPLETE (2026-07-21, Windows 11).** `src/core/damage_band.{hpp,cpp}`:
+- `BandConfig` now carries five fields — `light_window`, `medium_window`,
+  `light_rate`, `medium_rate`, `heavy_rate`. `heavy_window` removed.
+- `Band` is `{Light, Medium, Heavy}`; `Band::PastHeavy` removed. `BandResult`
+  is `{Band band; double rate;}` — `defer_to_stock` removed.
+- Heavy is open-ended: past the medium edge, `select_band` always returns
+  `{Heavy, heavy_rate}`. Header/impl document the rate as HP-per-game-second;
+  the loop caller multiplies by `dt = Δ(mission clock)`.
+- Tests (`tests/damage_band_test.cpp`): the "past heavy → defer_to_stock" case
+  is replaced by "far below crush depth stays in the open-ended heavy band"
+  (checks both the medium edge at 1/2 under and 10× crush depth). Binary-exact
+  boundary fractions kept (edges 1/8, 1/4; 1/2 as a deep heavy point). Full
+  `ctest`/`ape_tests` green under the x86-debug MSVC/Ninja preset.
+
+Coordinated **issue-04** edits made here to keep the tree building (04 still
+owns its own closure): dropped the `heavy_damage_window` binding/doc in
+`src/core/config.{hpp,cpp}`, updated `tools/config_check/main.cpp` (embedded
+sample + assertions + `print_config`), and reworked the shipped
+`data/Cfg/ape.cfg` (removed the key; documented open-ended heavy + HP-per-
+game-second rates + pause/time-compression behavior). `config_check` self-check
+PASSED and the real `ape.cfg` loads with the expected values.

@@ -1,6 +1,6 @@
 # Config loading for ape.cfg [CrushDepthDamage]
 
-Status: ready-for-agent (reopened — pivot rework, see Comments)
+Status: ready-for-human (pivot rework COMPLETE — see Comments)
 
 ## Parent
 
@@ -34,3 +34,18 @@ Not in scope here / deferred to **05**: actually calling `load_band_config` from
 - **Drop the `heavy_damage_window` key** and its mapping — the heavy band is open-ended, so `BandConfig` no longer has `heavy_window`. Five required keys remain.
 - **Rate keys are HP per game-second** — update the units in the shipped `ape.cfg` comments and the key-doc text (were "damage-per-tick"). Also document the pause / time-compression behavior for tuners (damage accrues in game-time).
 - Re-run the `config_check` harness against the updated `ape.cfg`.
+
+**PIVOT REWORK COMPLETE (2026-07-21, Windows 11), done alongside issue 03.**
+- Dropped the `heavy_damage_window` binding in `src/core/config.cpp` and the
+  six-key doc in `src/core/config.hpp` (now five required keys:
+  `light_damage_window`, `medium_damage_window`, `light_damage_rate`,
+  `medium_damage_rate`, `heavy_damage_rate`). Unknown keys are still ignored,
+  so a leftover `heavy_damage_window` in an old cfg is harmless.
+- `data/Cfg/ape.cfg`: removed the key; rewrote the section comment to state APE
+  owns 100% (runs alongside, stock bleed neutralized), the heavy band is
+  open-ended, rates are **HP per game-second**, and damage accrues in game-time
+  (scales with time compression, stops while paused).
+- `tools/config_check/main.cpp`: embedded sample, assertions, and
+  `print_config` updated for the five-key shape. Ran it against the shipped
+  `ape.cfg` — self-check PASSED, real file parses to
+  light(0.05/0.5) medium(0.10/2) heavy(open/6).

@@ -11,23 +11,20 @@ BandResult select_band(double depth, double crush_depth, const BandConfig& cfg) 
     if (fraction < 0.0) fraction = 0.0;
   }
 
-  // Cumulative upper edges of each band.
+  // Cumulative upper edges of the two bounded bands. Heavy is open-ended.
   const double light_edge = cfg.light_window;
   const double medium_edge = light_edge + cfg.medium_window;
-  const double heavy_edge = medium_edge + cfg.heavy_window;
 
-  // Each band owns [lower_edge, upper_edge); a zero-width band collapses to an
-  // empty interval and is skipped because the next comparison starts equal.
+  // Each bounded band owns [lower_edge, upper_edge); a zero-width band
+  // collapses to an empty interval and is skipped because the next comparison
+  // starts equal. Anything past the medium edge is the open-ended heavy band.
   if (fraction < light_edge) {
-    return {Band::Light, cfg.light_rate, false};
+    return {Band::Light, cfg.light_rate};
   }
   if (fraction < medium_edge) {
-    return {Band::Medium, cfg.medium_rate, false};
+    return {Band::Medium, cfg.medium_rate};
   }
-  if (fraction < heavy_edge) {
-    return {Band::Heavy, cfg.heavy_rate, false};
-  }
-  return {Band::PastHeavy, 0.0, true};
+  return {Band::Heavy, cfg.heavy_rate};
 }
 
 }  // namespace ape

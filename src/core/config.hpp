@@ -20,8 +20,9 @@
 namespace ape {
 
 // Parse INI content from `in`, reading the [CrushDepthDamage] section into
-// `out`. All six keys are required:
-//   light_damage_window / medium_damage_window / heavy_damage_window
+// `out`. All five keys are required (the heavy band is open-ended, so there is
+// no heavy_damage_window):
+//   light_damage_window / medium_damage_window
 //   light_damage_rate   / medium_damage_rate   / heavy_damage_rate
 // Section and key names are matched case-insensitively; surrounding whitespace
 // and ';'/'#' comments (whole-line or trailing) are ignored.
