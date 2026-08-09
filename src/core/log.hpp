@@ -1,5 +1,5 @@
-#ifndef APE_ACT_LOG_HPP
-#define APE_ACT_LOG_HPP
+#ifndef APE_CORE_LOG_HPP
+#define APE_CORE_LOG_HPP
 
 // Minimal append-only debug logger for ape.act.
 //
@@ -46,4 +46,4 @@ class Logger {
 
 }  // namespace ape
 
-#endif  // APE_ACT_LOG_HPP
+#endif  // APE_CORE_LOG_HPP

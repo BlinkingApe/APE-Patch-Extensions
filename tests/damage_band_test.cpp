@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "core/damage_band.hpp"
+#include "mods/crush_depth_damage/damage_band.hpp"
 
 using ape::Band;
 using ape::BandConfig;

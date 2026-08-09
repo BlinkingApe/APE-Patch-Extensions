@@ -15,8 +15,8 @@
 #include <sstream>
 #include <string>
 
-#include "core/config.hpp"
-#include "core/damage_band.hpp"
+#include "mods/crush_depth_damage/config.hpp"
+#include "mods/crush_depth_damage/damage_band.hpp"
 
 namespace {
 

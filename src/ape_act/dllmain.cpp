@@ -14,11 +14,11 @@
 #include <atomic>
 #include <string>
 
-#include "ape_act/damage_loop.hpp"
-#include "ape_act/game_state.hpp"
-#include "ape_act/log.hpp"
-#include "core/config.hpp"
-#include "core/damage_band.hpp"
+#include "core/log.hpp"
+#include "mods/crush_depth_damage/config.hpp"
+#include "mods/crush_depth_damage/damage_band.hpp"
+#include "mods/crush_depth_damage/damage_loop.hpp"
+#include "mods/crush_depth_damage/game_state.hpp"
 
 namespace {
 

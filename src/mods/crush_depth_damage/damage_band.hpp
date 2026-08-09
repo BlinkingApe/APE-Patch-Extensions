@@ -1,5 +1,5 @@
-#ifndef APE_CORE_DAMAGE_BAND_HPP
-#define APE_CORE_DAMAGE_BAND_HPP
+#ifndef APE_MODS_CRUSH_DEPTH_DAMAGE_DAMAGE_BAND_HPP
+#define APE_MODS_CRUSH_DEPTH_DAMAGE_DAMAGE_BAND_HPP
 
 // The crush-depth damage-band decision function.
 //
@@ -47,4 +47,4 @@ BandResult select_band(double depth, double crush_depth, const BandConfig& cfg);
 
 }  // namespace ape
 
-#endif  // APE_CORE_DAMAGE_BAND_HPP
+#endif  // APE_MODS_CRUSH_DEPTH_DAMAGE_DAMAGE_BAND_HPP

@@ -1,5 +1,5 @@
-#ifndef APE_CORE_CONFIG_HPP
-#define APE_CORE_CONFIG_HPP
+#ifndef APE_MODS_CRUSH_DEPTH_DAMAGE_CONFIG_HPP
+#define APE_MODS_CRUSH_DEPTH_DAMAGE_CONFIG_HPP
 
 // Loading of the [CrushDepthDamage] section of data/Cfg/ape.cfg into the
 // BandConfig struct the damage-band decision function consumes.
@@ -15,7 +15,7 @@
 #include <iosfwd>
 #include <string>
 
-#include "core/damage_band.hpp"
+#include "mods/crush_depth_damage/damage_band.hpp"
 
 namespace ape {
 
@@ -39,4 +39,4 @@ bool load_band_config(const std::string& path, BandConfig& out,
 
 }  // namespace ape
 
-#endif  // APE_CORE_CONFIG_HPP
+#endif  // APE_MODS_CRUSH_DEPTH_DAMAGE_CONFIG_HPP

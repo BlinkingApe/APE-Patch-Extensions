@@ -1,4 +1,4 @@
-#include "core/config.hpp"
+#include "mods/crush_depth_damage/config.hpp"
 
 #include <cctype>
 #include <cstdlib>

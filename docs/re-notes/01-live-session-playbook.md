@@ -95,9 +95,10 @@ from setup step 4.
 
 The loop and its seam are already built and fail inert. To wire the results:
 
-1. Add `src/ape_act/live_game_state.cpp` implementing `ape::IGameState`
-   (`src/ape_act/game_state.hpp`): `resolve()` runs the AOB scans (signatures
-   above) + roots the chains recorded in §1; `sample()` reads depth/CDT/HP/clock;
+1. Add `src/mods/crush_depth_damage/live_game_state.cpp` implementing
+   `ape::IGameState` (`src/mods/crush_depth_damage/game_state.hpp`):
+   `resolve()` runs the AOB scans (signatures above) + roots the chains
+   recorded in §1; `sample()` reads depth/CDT/HP/clock;
    `write_hull_hp()` writes `[boat+0xB8]`. Keep the plausibility ranges in
    `LoopLimits` honest to the real magnitudes you observed (esp. depth/CDT units and
    the clock's `dt` scale).

@@ -1,5 +1,5 @@
-#ifndef APE_ACT_DAMAGE_LOOP_HPP
-#define APE_ACT_DAMAGE_LOOP_HPP
+#ifndef APE_MODS_CRUSH_DEPTH_DAMAGE_DAMAGE_LOOP_HPP
+#define APE_MODS_CRUSH_DEPTH_DAMAGE_DAMAGE_LOOP_HPP
 
 // APE's crush-depth damage loop (post-pivot: runs alongside, never hooks).
 //
@@ -11,9 +11,9 @@
 
 #include <atomic>
 
-#include "ape_act/game_state.hpp"
-#include "ape_act/log.hpp"
-#include "core/damage_band.hpp"
+#include "mods/crush_depth_damage/game_state.hpp"
+#include "core/log.hpp"
+#include "mods/crush_depth_damage/damage_band.hpp"
 
 namespace ape {
 
@@ -52,4 +52,4 @@ void run_damage_loop(std::atomic<bool>& stop, IGameState& game,
 
 }  // namespace ape
 
-#endif  // APE_ACT_DAMAGE_LOOP_HPP
+#endif  // APE_MODS_CRUSH_DEPTH_DAMAGE_DAMAGE_LOOP_HPP

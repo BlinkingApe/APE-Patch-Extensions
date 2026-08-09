@@ -1,5 +1,5 @@
-#ifndef APE_ACT_GAME_STATE_HPP
-#define APE_ACT_GAME_STATE_HPP
+#ifndef APE_MODS_CRUSH_DEPTH_DAMAGE_GAME_STATE_HPP
+#define APE_MODS_CRUSH_DEPTH_DAMAGE_GAME_STATE_HPP
 
 // The seam between APE's damage loop and live OAE sh3.exe memory.
 //
@@ -75,4 +75,4 @@ class UnresolvedGameState : public IGameState {
 
 }  // namespace ape
 
-#endif  // APE_ACT_GAME_STATE_HPP
+#endif  // APE_MODS_CRUSH_DEPTH_DAMAGE_GAME_STATE_HPP
