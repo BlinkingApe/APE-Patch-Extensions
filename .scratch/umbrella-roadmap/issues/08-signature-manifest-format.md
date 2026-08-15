@@ -5,7 +5,10 @@ Status: open
 
 ## Blocked by
 
-None
+09 — ticket 04 found that `hsie.act` overwrites 24 `.pconst` addresses at load
+from `hsie.ini`, which verify-before-write cannot detect. Whether the manifest
+must carry a forbidden-write region (and whether that region is hardcoded or
+parsed from a user-editable ini) is decided in 09, and it changes the schema.
 
 ## Question
 

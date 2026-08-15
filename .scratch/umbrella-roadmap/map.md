@@ -34,6 +34,23 @@ each new goal can start its own implementation-issue tracker.
 - **Read the install, not just the repo.** Ticket 05's biggest wins came from
   `C:\games\OneAlex Extended 1.5.2` — `HSIEContents.txt`, `hsie.ini`, and
   `Support/Stiebler4C_V16B1/`. Check there before treating something as unknown.
+  **Ticket 04 doubled down:** `hsie.ini` states the diesel damage formula in a
+  comment, and its `AdrN` table maps every parameter to its address. Also mine
+  `data/Menu/en_menu.txt` — h.sie's `push <id>; call 0x6371D4` message calls
+  resolve to plain strings there, and two of them settled what the diesel cave
+  was doing.
+- **Ask the user for h.sie's manual before concluding a mod lacks a feature.**
+  Ticket 04's first pass concluded from the bytes that there was no timing
+  component; h.sie's V16 manual §21 has a whole T50 table. Both were true, but
+  the user had the document and the agent did not. When a mod's *intent* is in
+  question, the docs are primary — and the user has them.
+- **Check the precision of the code path before committing to a constant.** Ticket
+  04's reopening picked a probability ~5,000× smaller than h.sie's, which put it
+  under float32 epsilon; one `fstp dword` in a helper quantized it onto a lattice
+  and made everything below `2.98e-8` silently do nothing. Nothing in the formula
+  or the docs hints at this — only disassembling the arithmetic does. **Any h.sie
+  parameter retuned by more than an order of magnitude needs its code path checked
+  for representability**, not just its documented range.
 - Existing precedent for a fully-specified mod effort: `.scratch/crush-depth-damage/`
   (PRD.md + numbered issues). New goals should land in a directory of the same
   shape once scoped.
@@ -84,6 +101,32 @@ each new goal can start its own implementation-issue tracker.
   range** (min=max=0 is "off") delivered by a **static GUI patcher** in the style
   of hsieOptions — **not** `ape.cfg`, which is dropped entirely (reverses
   ADR-0004). Site write-up: `docs/re-notes/03-utanker-hull-repair-signature.md`.
+- [Diesel-damage patch: scope](issues/04-diesel-damage-patch-scope.md) —
+  **reopened and re-resolved 2026-08-15** on a new premise from the user (via a
+  historian): a **very low chance of damage anytime the diesels run, at any
+  speed** — once or twice per ~10,000-hour career. This **flattens h.sie's
+  formula to a single constant** (Exponent `0.0`, Factor `1.0` for all damage
+  counts, so `p_ds = p_dso`), and dissolves the previous resolution's eight-hour
+  overload gate along with **the save/reload persistence problem** and **all
+  runtime flag writing**. ⚠ **A float32 trap in `0x635818`** rounds `(1-p)` onto a
+  2⁻²⁴ lattice, flooring the constants-only rate at 2.15 events/career and making
+  anything below `2.98e-8` **silently inert** — so APE **rewrites that function**
+  (21 bytes into 38) as a clamped `p × TC`, restoring the user's `1.5`/career
+  target and continuous tuning. Damage amount collapses to a **single
+  `rand(0.15…0.55)` band** on the historian's "must stay repairable" constraint,
+  replacing h.sie's escalated `0.30…1.00` which destroys outright ~43% of the
+  time. Ships via **two write targets** — 8 `ValN` keys in `hsie.ini` plus 5
+  `.pcode` sites in `sh3.exe` — with **rate and damage band as GUI input fields**.
+  No `ape.act` code and **no separate `.scratch/` effort**: it is a line item in
+  ticket 07, and now the candidate exercising the most of the patcher's
+  architecture. Site write-up: `docs/re-notes/04-diesel-damage-signature.md`.
+- [May APE write h.sie's flag table in live memory?](issues/10-ape-writing-hsie-flags-at-runtime.md)
+  — **moot, closed without adjudication.** The conflict existed only because
+  ticket 04's first resolution needed APE to flip `0x63CF13`; the reopened ticket
+  removes that mechanism entirely. **Ticket 05's rule stands unmodified** — APE
+  reads h.sie's flag table and never writes it. The boundary was vacated, not
+  argued, so reopen this rather than citing it if a future feature needs runtime
+  flag writing.
 - [Repo layout for a multi-mod umbrella](issues/01-repo-layout-for-multi-mod-umbrella.md) —
   `src/mods/<mod_name>/` per subsystem, shared infra in `src/core/`, DLL
   entrypoint stays in `src/ape_act/`; `.scratch/` and `docs/` unchanged.
@@ -111,11 +154,21 @@ each new goal can start its own implementation-issue tracker.
   deleting or repurposing. Ticket 06 decides the mechanism; the actual removal is
   execution work that follows, and may want its own effort rather than a ticket
   here.
-- **The `0x5543DC` singleton.** Read by both the u-tanker mod's block 1 and the
+- **The `0x5543DC` singleton.** Read by the u-tanker mod's block 1, the
   diesel-damage cave, and listed as an unidentified guard in
-  `01-crush-depth-damage-signature.md` §2. Identifying it once would serve three
-  efforts; too small to ticket on its own, likely absorbed by whichever comes
-  first.
+  `01-crush-depth-damage-signature.md` §2 — plus **55 xrefs in stock `.text`**, so
+  it is an engine-level object, not a h.sie invention. Ticket 04 added two more
+  unknown fields on it (`+0x18`/`+0x1C`, summed and tested against zero — a
+  surfaced check?) and confirmed `+4→+0x30C` is the two-diesel damage pair and
+  `+4→+0x320` the machine telegraph. Identifying it once would serve three
+  efforts; still too small to ticket, likely absorbed by whichever comes first.
+- ~~**Persisting APE state across save/reload.**~~ **Dissolved 2026-08-15** by
+  ticket 04's reopening. It was fog only because the eight-hour overload
+  accumulator would have been trivially save-scummed; the flat wear model is
+  memoryless and holds no state at all. **No live feature needs a persistence
+  mechanism.** Kept as one line because the underlying gap is real — APE still has
+  no save-game hook and no sidecar state file (ticket 02 killed `ape.cfg`) — so
+  the next feature that wants durable state re-raises this from scratch.
 - **Documentation debt from ticket 05's reversals.** Three documents now state
   things the map has decided against: `CONTEXT.md`'s JSGME glossary entry
   ("APE packages its end-user deliverable as a JSGME-installable folder"),
@@ -124,11 +177,14 @@ each new goal can start its own implementation-issue tracker.
   the C#/C++ toolchain split, and the manifest generation step. This is execution
   work following settled decisions, not a decision itself; likely folded into
   whichever effort starts building the patcher.
-- **Does `hsie.ini` still do anything?** h.sie's numeric parameters sit as a float
-  array at VA `0x63C074`, but the live values don't obviously correspond to
-  `hsie.ini`'s (`Val1=60.0`, `Val2=0.5` vs `3.5, 1.0, …`). Whether the ini is
-  applied at patch time, read live by `hsie.act`, or simply stale is unknown.
-  Only matters if APE ever wants to *read* h.sie's settings; not on the route yet.
+- ~~**Does `hsie.ini` still do anything?**~~ **Answered 2026-08-15 by ticket 04 —
+  and it is on the route after all.** `hsie.act` reads `./hsie.ini` at load,
+  `VirtualProtect`s `.pconst`, and writes 24 floats over `0x63C000`–`0x63C0E8`
+  from the ini's `ValN`/`AdrN` table. Proven by disagreement: the exe holds
+  0.15/0.10/0.03 where the ini holds 0.35/0.20/0.05, and the ini wins in play.
+  This is not a curiosity — it means **static patcher writes to those 24
+  addresses are silently overwritten at runtime, and verify-before-write cannot
+  detect it.** Graduated to ticket 09.
 - **Which builds are supported, and is `4B6BEE20` still one of them?** Four
   installs are now surveyed (`docs/re-notes/oae-builds.md`) spanning two h.sie
   versions, and **none of them is the registered `4B6BEE20`**. Ticket 08 decides
@@ -152,3 +208,7 @@ each new goal can start its own implementation-issue tracker.
   `HsieOptionsSelector` remains the owner of h.sie's own toggles. Taking on 22
   patches APE hasn't reverse-engineered sits past this map's destination.
   (Previously carried in **Not yet specified**; graduated to a decision, then out.)
+  ~~⚠ Under tension since ticket 04.~~ **Tension gone, 2026-08-15.** The reopened
+  ticket 04 no longer writes `0x63CF13` or any other flag, so
+  [ticket 10](issues/10-ape-writing-hsie-flags-at-runtime.md) closed as moot and
+  this line stands exactly as originally written.
