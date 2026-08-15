@@ -45,6 +45,19 @@ each new goal can start its own implementation-issue tracker.
 
 ## Decisions so far
 
+- [Settings model for the GUI patcher](issues/02-shared-config-file-strategy.md) —
+  **`ape.cfg` is genuinely gone, not renamed.** The patched binaries are the only
+  store: the patcher **reads current values back out of `sh3.exe`/`ape.act`** to
+  populate the GUI, exactly as `HsieOptionsSelector` does with h.sie's sliders,
+  and keeps **no sidecar state file**. Each manifest site splits into **invariant
+  context bytes** (verified before write) and a **mutable field** (read back,
+  overwritten) — which is what lets verification and user-editable values coexist.
+  **Revert is just unchecking**: no uninstall flow and no whole-file backup — the
+  same way a user undoes a h.sie edit. Surgical, so hsieOptions choices made later
+  survive. ⚠ "APE off" (original bytes restored, h.sie's stock behaviour returns)
+  is **not** the same state as "feature off" (APE applied, range set to zero).
+  UI groups by feature, never by write target. Fully supersedes ADR-0004 and kills
+  `src/core/config.{hpp,cpp}` outright.
 - [GUI patcher tool: scope](issues/05-gui-patcher-scope.md) — the tool's **shape**
   is settled, its **v1 feature list deliberately deferred** (now ticket 07).
   **APE-only scope** — APE **reads** h.sie's flag table but never writes it, so

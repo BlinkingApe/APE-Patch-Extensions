@@ -47,6 +47,15 @@ Decide:
 - **What retiring `src/core/config.{hpp,cpp}` costs.** It is shipped, tested code
   with a `config_check` target. Is it deleted, or repurposed as the struct the
   patcher writes into?
+  **Narrowed by ticket 02 (resolved 2026-08-15):** expect **deletion, not
+  repurposing**. 02 decided the binary is the sole store and the patcher **reads
+  values back out of `ape.act`**, so what is needed is a magic-markered,
+  fixed-layout struct the patcher can locate and both read and write — not a
+  config *reader*. That is a different artifact from `config.{hpp,cpp}`.
+- **Read-back applies here too.** 02's rule is not `sh3.exe`-only: the patcher must
+  be able to read APE's current constants out of `ape.act` to populate the GUI,
+  with no sidecar. Whatever mechanism this ticket picks has to support **read**,
+  not just write.
 - **ADR.** This reverses ADR-0004 (config format and location). Write the
   superseding ADR as part of resolving this.
 
