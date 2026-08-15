@@ -61,6 +61,24 @@ Delivery is already decided in principle: static bytes written by the GUI patche
 expressible as patchable operands — if any must vary with live game state, that
 is a genuine exception worth raising against 05/06.
 
+## ⚠ The patch is disabled in every install surveyed (2026-08-15)
+
+Found while resolving ticket 05. Flag `0x63CF13` (entry #20, "Diesel Damage Fix")
+is `0x00` — **off** — in all four installs on the dev machine: OAE 1.5.2,
+OAE 1.5.3.7, KC2.5, and the GWX folder. See `docs/re-notes/oae-builds.md`.
+
+This bears on the ticket directly:
+
+- **Confirm the user actually wants this patch running at all.** The whole goal is
+  "patch the h.sie diesel-damage mod so there's a chance of damage after eight
+  hours" — but nobody surveyed is currently running it. Establish whether it is
+  off deliberately (disliked behaviour) or incidentally (never enabled). If the
+  former, the goal may be to *replace* it rather than tune it.
+- APE's patcher will show this feature **disabled with an explanation** until the
+  user enables the h.sie patch in `HsieOptionsSelector` (ticket 05, decision A-2).
+- Any RE done against `data/exe_with_hsie_patches/sh3_Diesel_Damage.exe` is still
+  valid — that variant has the flag on — but it does not reflect any live install.
+
 ## Caveats inherited
 
 - Verified against the sibling-build variant set in `data/exe_with_hsie_patches/`,

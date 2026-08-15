@@ -35,16 +35,77 @@ The patches do **not** live in `hsie.act`. h.sie appended four sections to
 
 At **VA `0x0063CF00`** (file `0x0014EF00`), one byte per patch,
 `0xFF` = enabled, `0x00` = disabled. Tested as `cmp byte ptr [0x63CFxx], 0xff`.
-20 flags observed (`0x63CF00`–`0x63CF13`), each with at least one code gate.
+**22** flags, not the 20 originally observed (`0x63CF00`–`0x63CF15`).
 
-| Flag VA | File offset | Patch |
-|---|---|---|
-| `0x0063CF0A` | `0x0014EF0A` | Move WO (left on for compatibility) |
-| `0x0063CF0C` | `0x0014EF0C` | **U-Tanker** |
-| `0x0063CF13` | `0x0014EF13` | Diesel Damage |
+### The full table is documented — no diffing required
 
-To identify any other patch's flag: build a variant with only that patch enabled
-and diff against `sh3_vanilla.exe`. The one differing byte is the flag.
+**Corrected 2026-08-15.** The variant-diff method below still works, but is no
+longer necessary: Stiebler's `HsieOptionsSelector` ships a plain-text data file,
+`HSIEContents.txt`, in the OAE install root, which **declares the flag table's
+file offset and names every patch in table order**. Its header reads:
+
+```
+:1371904:flags          // 0x14EF00 — where the flags are (00 or FF)
+:1371136:V 1.6E1        // 0x14EC00 — h.sie version string, used as a version test
+:1368180:slider values. // 0x14E074 — first numeric parameter; each next is +4
+```
+
+Entry *n* is at VA `0x63CF00 + (n-1)`. Three entries derived independently by
+diffing (`0x63CF0A`, `0x63CF0C`, `0x63CF13`) all match this ordering exactly,
+which is what validates the table:
+
+| # | Flag VA | File offset | Patch | Install `51d14ca3` |
+|---|---|---|---|---|
+| 1 | `0x0063CF00` | `0x0014EF00` | Realistic Repair Times | ON |
+| 2 | `0x0063CF01` | `0x0014EF01` | WO Range Inaccuracy | ON |
+| 3 | `0x0063CF02` | `0x0014EF02` | WP Range Inaccuracy | ON |
+| 4 | `0x0063CF03` | `0x0014EF03` | Snorkelling Fix | off |
+| 5 | `0x0063CF04` | `0x0014EF04` | Periscopes Fix | off |
+| 6 | `0x0063CF05` | `0x0014EF05` | Hydrophone Fix | off |
+| 7 | `0x0063CF06` | `0x0014EF06` | Fog Warning | ON |
+| 8 | `0x0063CF07` | `0x0014EF07` | CrashDive Blues Bugfix | ON |
+| 9 | `0x0063CF08` | `0x0014EF08` | External Torpedo Reload | ON |
+| 10 | `0x0063CF09` | `0x0014EF09` | Internal Torpedo Reload | ON |
+| 11 | `0x0063CF0A` | `0x0014EF0A` | Move 1WO to bridge | ON |
+| 12 | `0x0063CF0B` | `0x0014EF0B` | Oxygen supply Fix | ON |
+| 13 | `0x0063CF0C` | `0x0014EF0C` | **U-Tanker Fix** | ON |
+| 14 | `0x0063CF0D` | `0x0014EF0D` | BDU Messages | ON |
+| 15 | `0x0063CF0E` | `0x0014EF0E` | War News Fix | ON |
+| 16 | `0x0063CF0F` | `0x0014EF0F` | Radar Bugfix | ON |
+| 17 | `0x0063CF10` | `0x0014EF10` | Wolfpack Mod | ON |
+| 18 | `0x0063CF11` | `0x0014EF11` | Wolfpk less contact reports | ON |
+| 19 | `0x0063CF12` | `0x0014EF12` | Torpedo Failure Fix | ON |
+| 20 | `0x0063CF13` | `0x0014EF13` | **Diesel Damage Fix** | **off** |
+| 21 | `0x0063CF14` | `0x0014EF14` | Night Vision Fix | off |
+| 22 | `0x0063CF15` | `0x0014EF15` | Bad Weather Fix | off |
+
+The right-hand column is the live state of `C:\games\OneAlex Extended 1.5.2\sh3.exe`
+(sha256 `51d14ca3…`, 1,417,216 bytes), read 2026-08-15. **Note Diesel Damage is
+disabled in that install** — relevant to the diesel-damage effort, which targets
+a patch the user is not currently running.
+
+Two further facts from the same source:
+
+- **h.sie's numeric parameters** ("slider values") are a float array at VA
+  `0x63C074` (file `0x14E074`), 4 bytes apiece. Live values read
+  `[3.5, 1.0, 0.25, 0.4, 0.15, 0.1, 0.03, 0.25, 0.1, 0.02, 0.98, 0.0]`. These do
+  **not** obviously correspond to `hsie.ini`'s `Val1=60.0`, `Val2=0.5` — whether
+  `hsie.ini` is applied at patch time, read at runtime, or stale here is
+  **unresolved** and worth a look before trusting either source.
+- **A version string** `v 1.6E1` sits at VA `0x63CC00` (file `0x14EC00`), which
+  `HSIEContents.txt` states is "used as a test for the correct version".
+
+### Fallback method (still valid)
+
+To identify a flag without the data file: build a variant with only that patch
+enabled and diff against `sh3_vanilla.exe`. The one differing byte is the flag.
+
+### What writes these bytes
+
+`Support/Stiebler4C_V16B1/HsieOptionsSelector_V16C.exe`. Its readme is explicit
+that it "alters the ON-OFF switches in the patched SH3.exe" — **flag bytes only**.
+It does not rewrite caves or constants, so edits to patch-cave operands survive a
+subsequent `HsieOptionsSelector` run.
 
 ## 3. Docking detection — sets the gate variable
 
@@ -174,9 +235,14 @@ patcher rather than `ape.cfg`.
 ## 6. Not yet established
 
 - Block 1's field identity (fuel?) — needs a live read or a second xref route.
-- Whether `0x63CF0C` gates anything beyond `0x63374F`; a **separate** flag
+- ~~Whether `0x63CF0C` gates anything beyond `0x63374F`; a **separate** flag
   `0x63CF05` (gates `0x63353D`, `0x633575`) also reads the docking variable
-  `[0x63E164]`/`[0x63E15C]` — so "the U-Tanker mod" may span more than one flag.
+  `[0x63E164]`/`[0x63E15C]` — so "the U-Tanker mod" may span more than one
+  flag.~~ **Resolved 2026-08-15 by the flag table in §2**: `0x63CF05` is entry
+  #6, **Hydrophone Fix** — a different patch that merely *consumes* the same
+  docking state (plausibly to alter hydrophone behaviour in port). The U-Tanker
+  mod is `0x63CF0C` alone. Note Hydrophone Fix is `0x00`/off in the live install,
+  so those two caves are inert there.
 - Hash/verification against an actual OAE install binary (`4B6BEE20` or current).
 - AOB signatures with wildcards + uniqueness proof, per ADR-0003 — this note
   records absolute VAs from one variant set only, which is **not** yet

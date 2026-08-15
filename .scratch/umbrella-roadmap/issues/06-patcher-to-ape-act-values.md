@@ -16,10 +16,22 @@ computed live (HP-per-game-second bands while below crush depth) and cannot be
 expressed as a static byte patch to `sh3.exe`. So APE-owned constants still have
 to reach a running `ape.act` somehow, with no config file to read.
 
-⚠ **Verify the premise first.** This reading — "drop `ape.cfg`" means drop the
-file, not the runtime logic — was recorded by the resolving agent, not stated by
-the user. If the intent was in fact to make crush-depth damage itself static,
-this ticket is void and the crush-depth model needs re-opening instead.
+✅ **Premise confirmed 2026-08-15** while resolving `05-gui-patcher-scope.md`.
+The user was put the choice directly and chose two write targets: dropping
+`ape.cfg` drops the config *file*, **not** `ape.act`'s runtime logic. Crush-depth
+damage stays live-computed. **This ticket is not void** and the crush-depth model
+does not need re-opening. The ⚠ that stood here is discharged.
+
+Also settled by 05, and constraining the answer below:
+
+- The patcher is **C# WinForms on .NET Framework 4.x**, writing into a PE32 DLL
+  that APE itself builds — so APE controls `ape.act`'s layout completely, and the
+  patcher needs no PE parsing to find a marked struct.
+- `ape.act` lives in the **game root folder**; APE is not a JSGME mod, so there is
+  no MODS-source-vs-installed-copy question to answer.
+- Patch definitions live in a **generated manifest embedded in the patcher**
+  (see 08), so wherever the constants land, the locating rule is manifest data —
+  not hardcoded offsets in C#.
 
 Decide:
 
