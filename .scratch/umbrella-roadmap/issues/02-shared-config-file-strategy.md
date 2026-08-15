@@ -1,29 +1,43 @@
-# Shared ape.cfg strategy across subsystems
+# Settings model for the GUI patcher (supersedes: shared ape.cfg strategy)
 
 Type: grilling
 Status: open
 
 ## Blocked by
 
-None
+05
 
 ## Question
 
-`ape.cfg` today carries crush-depth-damage's band config only (`docs/adr/0004-config-format-and-location.md`,
-`src/core/config.{hpp,cpp}`). Two of the new candidate goals have stretch
-goals that make settings config-driven: hull-repair amount (item 2) and
-diesel-damage chance/amount/timer (item 3). Decide:
+**Superseded 2026-08-15** by the hull-repair scope resolution
+(`03-hull-repair-patch-scope.md`). This ticket originally asked how subsystems
+share one `ape.cfg`. That question is moot: `ape.cfg` is being **dropped**, and
+every APE setting becomes a static byte written by a shipped GUI patcher.
 
-- Does every subsystem get its own top-level section in one shared `ape.cfg`,
-  or does each subsystem ship its own config file (loaded the same way)?
-- Naming/namespacing convention for keys so sections don't collide as
-  subsystem count grows (e.g. `[crush_depth]`, `[hull_repair]`, `[diesel_damage]`).
-- Whether `src/core/config.{hpp,cpp}` stays one shared parser returning one
-  struct (extended per subsystem) or moves to a per-subsystem parse step over
-  a shared low-level reader.
-- Backward compatibility: does the shipped `data/Cfg/ape.cfg` need a version
-  marker or migration note once it grows multiple sections?
+The successor question — settings still need a model, just a different one:
 
-Answer should be concrete enough that hull-repair's and diesel-damage's
-stretch-goal config keys can be named and typed without re-opening this
-question.
+- **What is a "setting" now?** Three kinds have already surfaced and may not want
+  the same treatment: (a) an h.sie flag-table byte at `0x63CF00` — pure on/off;
+  (b) an operand or constant inside a patch cave, e.g. hull repair's roll floor
+  and width; (c) an APE-owned runtime constant that `ape.act` computes with, e.g.
+  crush-depth band rates. Does the patcher present these uniformly, or does the
+  UI distinguish them?
+- **Where does the user's chosen value persist between patcher runs?** The
+  patched `sh3.exe` is the source of truth for what is *currently applied*, but
+  reading values back out of patched bytes to repopulate the GUI is awkward.
+  Does the patcher keep its own sidecar state file — and if so, has `ape.cfg`
+  been reinvented under another name?
+- **Re-patching and idempotency.** OAE and h.sie already byte-patch `sh3.exe`.
+  Applying APE's patcher twice, or over an OAE update, must not corrupt or
+  double-apply. Verify-expected-old-byte (patch1337 style) or full
+  detect-and-rewrite?
+- **Uninstall/revert.** JSGME expects a clean disable. Does the patcher keep a
+  backup of the original bytes, and where?
+
+Answer should be concrete enough that the patcher's UI and file layout can be
+designed without re-opening it.
+
+## Notes
+
+Depends on the patcher's overall scope (05) — take that first.
+The ADR-0004 reversal this implies is tracked in the map's Decisions-so-far.

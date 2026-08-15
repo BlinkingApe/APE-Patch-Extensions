@@ -15,6 +15,13 @@ from scratch.
   short fingerprint so "which binary was this true for?" is never ambiguous.
 - One file per value-anchor set / patch site, e.g.
   `01-crush-depth-damage-signature.md`, `02-ape-act-load-call-site.md`.
+- `02-hsie-patch-identification-method.md` — reusable technique (not a per-target
+  note) for locating h.sie/Stiebler patch entry points, ahead of anchoring a
+  specific target. ⚠ Carries a correction banner: its original `hsie.act` premise
+  and its debugger-based steps are both superseded by static diffing.
+- `03-utanker-hull-repair-signature.md` — the u-tanker mod fully mapped (h.sie's
+  appended `sh3.exe` sections, the patch flag table at `0x63CF00`, and the
+  hull-repair site). Also the worked example of the static-diff method.
 
 ## Conventions
 
