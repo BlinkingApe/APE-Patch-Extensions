@@ -1,7 +1,7 @@
 # `hsie.ini` clobbers `.pconst` at load — what does the patcher do about it?
 
 Type: grilling
-Status: open
+Status: resolved
 
 ## Blocked by
 
@@ -88,3 +88,76 @@ now sharper rather than answered:
 Still open here, and untouched by ticket 04: whether the address list is hardcoded
 or parsed at patch time, and whether *other* runtime writers besides `hsie.act`
 need ruling out.
+
+## Answer
+
+Resolved 2026-08-16 via `/grilling`, working from the worked precedent ticket 04
+already supplies for diesel damage.
+
+**The general rule: no blanket redirect, decided per-site by where the write
+actually sticks.** Diesel damage itself already demonstrates why a blanket rule
+would be wrong — its two GUI fields split across *different* mechanisms for
+*different reasons*, not because one rule was chosen for the feature:
+
+- **Damage probability/rate** (`Val9`–`Val16`) is inside the clobber list
+  (`0x63C0A4`–`0x63C0C0`, `.pconst`) — a static write there is real on disk but
+  inert in play, silently overwritten the instant `hsie.act` loads. The only
+  store that is actually effective is **`hsie.ini`'s `ValN` keys**, so that is
+  where the patcher writes it. No `.pconst` write is made for this field —
+  it would do nothing but sit there as a decoy.
+- **Damage range** (`0.15…0.55`) is four inline immediates in `sh3.exe`'s
+  `.pcode` at `0x6351B1`/`0x6351B6`/`0x6351C3`/`0x6351CA` — a **different
+  section entirely**, outside the clobber list. A static write there sticks,
+  so that is where the patcher writes it. `hsie.ini` has no key for this value
+  at all (h.sie left damage amount un-tunable from his config), so there is no
+  second store to even consider.
+
+So the same feature panel has one field that must avoid `.pconst` (clobbered)
+and one that must avoid `hsie.ini` (no key exists, and it doesn't need one — the
+`.pcode` write is already effective). **Each field is written to exactly the
+store where it is functionally necessary, and never mirrored into a store that
+would just be overwritten or is irrelevant.** This generalizes cleanly: a future
+feature's fields are routed the same way, decided per-site against the clobber
+list and against what `hsie.ini` actually exposes a key for, not by a single
+feature-wide policy.
+
+**Forbidden-write region: hardcoded per h.sie version in the manifest.**
+Authored once from a real `hsie.ini` — the same authoring-time method ticket 05
+already established for every other version-keyed fact, not re-derived live at
+patch time. h.sie's own `>>> STOP — NEVER DO ANY CHANGES BELOW THIS LINE <<<`
+banner over the `Adr`/`Typ` table (confirmed in the live install's `hsie.ini`)
+makes this table exactly as stable, by his own convention, as the `.pcode`
+offsets APE already treats as fixed per version. Its purpose is an
+authoring-time and build-time check — flagging "this site's address falls
+inside the clobber list, don't route it to a `.pconst` write" — not a runtime
+lookup the patcher performs against the user's install.
+
+**Manifest gains a third write target: `hsie.ini`, keyed by name, not offset.**
+Ticket 08's schema needs a site kind for it distinct from `sh3.exe`/`ape.act`
+sites: located by matching the `ValN=` key line (INI has no fixed byte offsets),
+not a context/field byte split. The **complete original line text** is stored
+per site (mirroring ticket 02's revert requirement) so unchecking a feature
+restores the exact line — comment, spacing, and all — not just the number. A
+**comment-preserving, key-surgical INI writer is a required patcher component**:
+OAE's `hsie.ini` is heavily hand-tuned outside APE's own keys (torpedo failure,
+weather, snorkelling, collision, repair times, periscopes), and the writer must
+touch only the lines it owns.
+
+**Ticket 02's "the binary is the only store" is restated, not carved out.**
+Generalized: *each written value has exactly one effective store, and the
+manifest records which one for that site.* `sh3.exe`, `ape.act` (ticket 06), and
+now `hsie.ini` are all valid stores; which one applies is a per-site fact, not a
+per-feature or global one. Read-back for the GUI is per-field: it reads whichever
+store that field's site names, not always the same file for every field in a
+panel.
+
+**Does this generalize beyond `hsie.act`?** Left as fog, not a ticket. Only
+`hsie.act`'s `hsie.ini`-at-load overlay is proven; nothing else (`sh5.act`/NSAP)
+has been reverse-engineered for similar behavior, and nothing currently needs
+that question answered. Revisit if a future feature's write target sits in
+NSAP/`sh5.act` territory.
+
+**Known unaffected, restated for the manifest:** the hull-repair site
+(`0x63C404`, and the `push 0x10`/`add eax, 5` operands at
+`0x633650`/`0x633655`) is outside the clobber list — ticket 03 stands
+unchanged, plain `sh3.exe` write, no `hsie.ini` involvement.

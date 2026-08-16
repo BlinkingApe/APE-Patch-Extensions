@@ -62,6 +62,42 @@ each new goal can start its own implementation-issue tracker.
 
 ## Decisions so far
 
+- [`hsie.ini` clobbers `.pconst` at load — what does the patcher do about it?](issues/09-hsie-ini-runtime-clobber.md)
+  — **No blanket redirect — decided per-site by where the write actually
+  sticks.** Diesel damage's own two fields prove why: the **rate** (`Val9`–
+  `Val16`) is inside the clobber list, so it goes to **`hsie.ini`**'s keys (a
+  `.pconst` write there would be silently overwritten at load and do nothing);
+  the **damage range** is four `.pcode` immediates **outside** the clobber
+  list, with no `hsie.ini` key at all, so it goes to **`sh3.exe`** directly.
+  Each field is written to exactly its one effective store, never mirrored
+  into an inert one. **The clobber list itself is hardcoded per h.sie version
+  in the manifest**, authored from a real `hsie.ini` like every other
+  version-keyed fact — not parsed live — and exists as an authoring/build-time
+  check, not a runtime lookup. **`hsie.ini` becomes a third manifest write
+  target** alongside `sh3.exe` and `ape.act`, keyed by `ValN=` line match (not
+  byte offset), storing the **complete original line** for revert; a
+  comment-preserving, key-surgical INI writer is now a required patcher
+  component. **Ticket 02's "binary is the only store" is restated**: each
+  written value has exactly one effective store, recorded per-site in the
+  manifest — `sh3.exe`, `ape.act`, or now `hsie.ini`. Whether anything besides
+  `hsie.act` overlays values at runtime is left as fog, not a ticket — nothing
+  currently needs that answered.
+- [How patcher-set values reach ape.act's runtime logic](issues/06-patcher-to-ape-act-values.md)
+  — **`ape.act` becomes a patcher-deployed artifact, not a pre-installed one.**
+  APE's build still produces it, but as a **template embedded as a resource in
+  the C# patcher exe**; the patcher copies it into the game root and patches it
+  **only when a runtime feature is enabled**, and **deletes it again** when the
+  last one is unchecked (mirrors ticket 02's "revert is just unchecking").
+  Constants live in a **magic-marked struct in `ape.act`'s own `.data`, one per
+  mod** — not read from `sh3.exe` — located via a **build-recorded offset in the
+  manifest**, verified before write like every other site. **Read-back** falls
+  back to the patcher's own embedded template when no `ape.act` is deployed yet.
+  `ape.act` **verifies its own marker at startup and fails inert on mismatch**
+  (ADR-0003 posture). `config.{hpp,cpp}` and `tools/config_check` are confirmed
+  **dead, not repurposed**. ⚠ Left open: whether `sh3.exe`'s `LoadLibrary` call
+  site for `ape.act` (ADR-0002) tolerates a missing file — flagged for whichever
+  ticket implements that patch, not resolved here. Superseding ADR:
+  `docs/adr/0006-ape-act-owned-constants-live-in-a-marked-struct-the-patcher-deploys.md`.
 - [Settings model for the GUI patcher](issues/02-shared-config-file-strategy.md) —
   **`ape.cfg` is genuinely gone, not renamed.** The patched binaries are the only
   store: the patcher **reads current values back out of `sh3.exe`/`ape.act`** to
@@ -137,6 +173,14 @@ each new goal can start its own implementation-issue tracker.
 
 ## Not yet specified
 
+- **Does `sh3.exe`'s `LoadLibrary` call site for `ape.act` tolerate a missing
+  file?** Surfaced 2026-08-16 by ticket 06: reverting APE's last runtime
+  feature now deletes `ape.act` from the game root, which only works if that
+  call site is fire-and-forget like h.sie's/NSAP's own (ADR-0002 assumes this
+  by design but nobody has disassembled *this* specific site to confirm it).
+  Not a ticket yet because implementing the `sh3.exe` patch for that call site
+  is itself still unticketed execution work — this rides along with whichever
+  effort builds it, not the current frontier.
 - **Pseudo-dock mod (item 4).** Docking triggers "other events in-game" — still
   too open-ended to ticket (the candidate trigger events remain unnamed, and that
   is the blocker, not the mechanism). But the fog thinned considerably on

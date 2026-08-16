@@ -1,7 +1,7 @@
 # How patcher-set values reach ape.act's runtime logic
 
 Type: grilling
-Status: open
+Status: resolved
 
 ## Blocked by
 
@@ -63,3 +63,54 @@ Decide:
 
 Use `/domain-modeling` — this changes what "config" means across the whole
 project, and the term is currently defined around a runtime file.
+
+## Answer
+
+Resolved 2026-08-16 via `/grilling`. Superseding ADR:
+`docs/adr/0006-ape-act-owned-constants-live-in-a-marked-struct-the-patcher-deploys.md`.
+
+**Mechanism.** Constants live in a magic-marked struct baked into `ape.act`'s own
+`.data` — not read from `sh3.exe`. But the framing that surfaces this decision
+changed along the way: `ape.act` is no longer assumed to already sit in the game
+root waiting to be edited. It becomes something **the patcher deploys**. APE's
+C++ build still produces `ape.act`, but as a *template* embedded as a resource
+inside the C# patcher exe. The patcher copies that template into the game root
+and patches it **only when at least one runtime feature is enabled** — no
+runtime feature enabled means no DLL installed at all. Unchecking the last such
+feature **deletes `ape.act`** from the game root, mirroring ticket 02's "revert
+is just unchecking."
+
+**Locating the struct.** Magic-marker struct, offset recorded in the manifest at
+APE's own build time (it already knows the offset — it just linked the DLL).
+The patcher seeks to that offset in its embedded template copy and verifies the
+marker before writing, same context/field verify-before-write shape as every
+`sh3.exe` site. No runtime AOB scanning — consistent with ticket 05.
+
+**Struct scope.** One struct per mod, each separately magic-marked. Not a
+shared, versioned mega-struct — a future mod needing live constants just adds
+its own struct alongside crush-depth damage's, and the manifest gains another
+entry.
+
+**Read-back.** When a deployed `ape.act` exists in the game root, the GUI reads
+current values from it. When it doesn't (nothing enabled yet, or just
+reverted), the GUI reads the same struct out of the patcher's own embedded
+template instead — same offset, different source file.
+
+**Defaults and failure mode.** `ape.act` verifies its own marker at startup and
+**fails inert on mismatch** — consistent with ADR-0003 and the existing
+`UnresolvedGameState` fallback in `dllmain.cpp`. A struct that doesn't check out
+means the loop for that mod doesn't run, the same way a missing `ape.cfg`
+currently makes it log and return.
+
+**What retiring `config.{hpp,cpp}` costs.** Confirmed deletion, not
+repurposing: `src/mods/crush_depth_damage/config.{hpp,cpp}` (the file ticket 02
+called `src/core/config.{hpp,cpp}` before the reorg settled its real location)
+and `tools/config_check` are dead once this is implemented. A magic-markered,
+read-and-write struct is a different artifact from an INI reader.
+
+**Left open, not blocking this ticket.** Whether `sh3.exe`'s dedicated
+`LoadLibrary` call site for `ape.act` (ADR-0002) tolerates `ape.act` being
+absent has not been RE'd — h.sie's/NSAP's own call sites are fire-and-forget,
+which is why ADR-0002 mirrors that shape, but nobody has disassembled *this*
+call site to confirm it discards the result the same way. Flagged for whichever
+ticket implements the actual `sh3.exe` patch for that call site.

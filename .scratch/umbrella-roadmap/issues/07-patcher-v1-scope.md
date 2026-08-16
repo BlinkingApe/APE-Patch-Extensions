@@ -9,9 +9,11 @@ Status: open
 list**, and as the cheapest candidate on it. See the update below; the earlier
 note here, that diesel became an `ape.act` runtime feature, is withdrawn).
 
-09 — a feature whose constants sit in `hsie.act`'s runtime-clobbered region
-cannot ship as a static patch at all, so 09 decides which candidates are even
-eligible for the v1 list.
+~~09~~ — resolved 2026-08-16: no candidate is excluded outright. Diesel damage's
+rate field routes to `hsie.ini`, its damage-range field routes to `sh3.exe`
+`.pcode`; nothing in the v1 candidate list needs a `.pconst` write. This *does*
+confirm the three-way write-target count in the update below is final, not
+provisional.
 
 11 — diesel damage must not enter the v1 list until the surfaced gate is proven;
 a negative result redesigns the feature rather than delaying it.
