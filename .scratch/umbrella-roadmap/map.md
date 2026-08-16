@@ -62,6 +62,27 @@ each new goal can start its own implementation-issue tracker.
 
 ## Decisions so far
 
+- [Manifest format and the version allowlist](issues/08-signature-manifest-format.md)
+  — **two-level schema: a patch groups sites, each site is one field with one
+  store.** Patch carries id, display name, and an optional h.sie-flag
+  dependency (drives ticket 05's disabled+explained gating). Site carries id,
+  `store` (`sh3.exe`/`ape.act`/`hsie.ini`), `field encoding`
+  (`byte`/`float32`/`operand-immediate`/**`fixed-rewrite`**, the last added
+  mid-ticket for diesel-damage's 21-byte function rewrite, which has no
+  tunable value at all), valid range + default (absent for `fixed-rewrite`),
+  invariant context bytes, and the complete original byte run/line for exact
+  revert. **Locator shape is kind-specific**: `sh3.exe` gets a **per-site
+  per-version offset map** (option A — one manifest, not one file per
+  version); `ape.act` gets a single build-recorded offset, not version-keyed;
+  `hsie.ini` gets a `ValN=` key name, no byte offset. **Version allowlist
+  bar**: a version's offset is admitted per-site only after independently
+  re-proving it against a real binary of that version — verify-before-write
+  is a runtime safety net, not a substitute. **Stale-manifest guard**: the
+  C# build re-runs the `tools/re-static/` generator and diffs it against the
+  checked-in manifest, failing the build on drift. One ADR is still owed for
+  this ticket's departure from ADR-0003 (fixed offsets + authoring-time proof
+  here vs. runtime signature scanning, which stays right for `ape.act`'s own
+  live anchors) — tracked in **Not yet specified**, not resolved here.
 - [`hsie.ini` clobbers `.pconst` at load — what does the patcher do about it?](issues/09-hsie-ini-runtime-clobber.md)
   — **No blanket redirect — decided per-site by where the write actually
   sticks.** Diesel damage's own two fields prove why: the **rate** (`Val9`–
@@ -218,9 +239,12 @@ each new goal can start its own implementation-issue tracker.
   ("APE packages its end-user deliverable as a JSGME-installable folder"),
   ADR-0005 (whose whole premise is a JSGME package), and `src/patcher/main.cpp`
   plus its CMake target (superseded by the C# tool). Two new ADRs are also owed —
-  the C#/C++ toolchain split, and the manifest generation step. This is execution
-  work following settled decisions, not a decision itself; likely folded into
-  whichever effort starts building the patcher.
+  the C#/C++ toolchain split, and **[ticket 08](issues/08-signature-manifest-format.md)'s
+  departure from ADR-0003** (fixed offsets + authoring-time signature proof for
+  the patcher, vs. ADR-0003's runtime signature scanning, which remains right for
+  `ape.act`'s own live anchors). This is execution work following settled
+  decisions, not a decision itself; likely folded into whichever effort starts
+  building the patcher.
 - ~~**Does `hsie.ini` still do anything?**~~ **Answered 2026-08-15 by ticket 04 —
   and it is on the route after all.** `hsie.act` reads `./hsie.ini` at load,
   `VirtualProtect`s `.pconst`, and writes 24 floats over `0x63C000`–`0x63C0E8`
