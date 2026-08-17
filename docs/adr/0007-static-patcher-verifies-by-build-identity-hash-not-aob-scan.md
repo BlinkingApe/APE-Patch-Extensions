@@ -68,7 +68,10 @@ Beta testing against real installs exercised both paths of the identity check:
 - **Negative.** KC 2.5 (h.sie `v 1.6B1`, `a7b5fc03…`) was refused as unsupported with no
   writes — the case that matters most, since KC shares h.sie's flag-table, slider-array and
   version-string offsets with the supported build and would likely have *appeared* to patch
-  correctly under a looser check.
+  correctly under a looser check. (`a7b5fc03…` is KC's *plain* file hash as the window
+  displays it, not its identity; the identity is `361eaaa0…`, and KC's plain hash has since
+  moved to `ab85d6e2…` on a flag flip that left the identity unchanged — the model working
+  as designed. See `docs/re-notes/05-kc25-admission-evidence.md`.)
 
 ## Left open
 

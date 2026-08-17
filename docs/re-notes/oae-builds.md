@@ -22,13 +22,21 @@ line, the version string.
 |---|---|---|---|---|
 | `C:\games\OneAlex Extended 1.5.2` | `v 1.6E1` | 1,417,216 | `51d14ca3…` | **off** |
 | `C:\games\OneAlex_1_5_3_7` | `v 1.6B1` | 1,384,448 | `1b6a5823…` | **off** |
-| `C:\games\KC2.5` | `v 1.6B1` | 1,384,448 | `a7b5fc03…` | **off** |
+| `C:\games\KC2.5` | `v 1.6B1` | 1,384,448 | `a7b5fc03…` → `ab85d6e2…` | **ON** since 2026-08-17 |
 | `C:\games\GWX 3.0 Gold` | `v 1.6E1` | 1,417,216 | `79a5321d…` | **off** (all 22 off) |
 
 **The newer OAE ships the older h.sie.** A version allowlist is therefore needed
 to support OAE alone, not merely to be inclusive of KC/GWX.
 
-⚠ **Diesel Damage is disabled in every install surveyed.**
+⚠ **Diesel Damage was disabled in every install surveyed** — no longer true of
+KC 2.5, where it was enabled on 2026-08-17 ahead of the KC compatibility spike.
+That flip is the only difference between KC's `a7b5fc03…` and `ab85d6e2…`, which
+is why both rows are one build; see `05-kc25-admission-evidence.md`.
+
+⚠ **The hashes in this table are plain file hashes, not build identities.** The
+identity APE keys its allowlist on is the *normalised* hash — APE's own sites
+reset and the flag table zeroed (ADR-0007). For KC 2.5 that is `361eaaa0…`, for
+OAE 1.5.3.7 `6769bc4f…`, for OAE 1.5.2 `36d66176…`.
 
 ⚠ **The "GWX 3.0 Gold" exe is byte-identical to OAE 1.5.2's** across stock `.text`
 and h.sie `.pcode` (0 differing bytes in 1.36 MB); it differs *only* in the flag
