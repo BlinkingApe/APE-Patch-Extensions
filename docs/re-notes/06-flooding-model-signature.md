@@ -1,6 +1,10 @@
 # SH3 flooding model — static pass (ticket 10, depth-pressure-stress)
 
-Target for `.scratch/depth-pressure-stress/issues/10-sh3-flooding-model.md`. **Static
+Target for `.scratch/depth-pressure-stress/issues/10-sh3-flooding-model.md`. For a
+one-glance status of every depth-pressure-stress live value (not just this one),
+see `01-crush-depth-damage-signature.md`'s "NEXT SESSION — START HERE" table.
+
+**Static
 only, one pass, 2026-08-17.** This ticket started from zero — "no anchor and no
 offset exist for this today" — so this note begins there too: two real leads found,
 neither confirmed. The mechanism decision, the value anchor, and the target

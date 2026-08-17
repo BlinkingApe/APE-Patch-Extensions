@@ -25,28 +25,30 @@ interactive cross-referencing when walking the chains found dynamically.
 tier-model pivot recorded in `.scratch/depth-pressure-stress/map.md`. CDT is now
 **dead** (the new model never reads crush depth); astern seepage and the
 electric-engine damage float were added as live-value hunts. The current, complete
-worklist for **depth-pressure-stress** is:
+worklist for **depth-pressure-stress** — kept current here as a single glance-view
+across all four open tickets (`08`–`11`); findings themselves stay in their source
+notes (this file §1–§9, or `06-flooding-model-signature.md` for flooding) and are
+not restated below, only gisted:
 
-| # | Value | Offset / chain | Status |
-|---|-------|----------------|--------|
-| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) — **fully static chain found 2026-08-17 (second pass, §7): `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C`**, cross-referenced from the u-tanker hull-repair cave, which already writes `[boat+0xB8]` through it in shipped code. Live confirmation (§7) still needed for the acceptance-criteria bar, but the chain-discovery half of ticket `09` is done without a debugger. |
-| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer needs the dynamic chain-walk (§4) — **no static root exists (§8 confirms, exhaustively): the depth-setter's caller has zero direct callers, reached only via an untraceable vtable slot.** A from-scratch CE pointer-scan is required; no further static session should look for a shortcut. |
-| 3 | ~~CDT (crush depth)~~ | — | **dead.** Tier model never reads crush depth (map, Out of scope). |
-| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** (drives game-second `dt`) — no static candidate found in two passes (§6, §8); §8 ruled out and reassigned the one candidate double-field pair. Needs a live Exact/Increased-Value scan from scratch. |
-| 5 | **Astern seepage / flooding trigger** | TBD | **dynamic hunt.** No static candidate found yet — see issue `10`; SH3's flooding model itself is unmapped. |
-| 6 | **Electric-engine damage float** | `[[0x5543DC]+4]+0x??` (exact offset TBD) | **dynamic hunt, but strongly narrowed by §6** — same object and same array region as the diesel pair at `+0x30C`; a handful of neighbouring offsets are the short list to try first in CE (issue `11`). |
+| # | Value | Offset / chain | Status | Ticket |
+|---|-------|----------------|--------|--------|
+| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) — **fully static chain found (§7): `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C`**, cross-referenced from the u-tanker hull-repair cave, which already writes `[boat+0xB8]` through it in shipped code. Chain-discovery is done without a debugger; live confirmation (write sticks under `ape.act`, one depth-charge delta) still needed. | `09` |
+| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer needs the dynamic chain-walk (§4) — **no static root exists (§8 confirms, exhaustively): the depth-setter's caller has zero direct callers, reached only via an untraceable vtable slot.** A from-scratch CE pointer-scan is required; no further static session should look for a shortcut. | `08` |
+| 3 | ~~CDT (crush depth)~~ | — | **dead.** Tier model never reads crush depth (map, Out of scope). | — |
+| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** — no static candidate found in two passes (§6, §8); §8 ruled out and reassigned the one candidate double-field pair. Needs a live Exact/Increased-Value scan from scratch. | `08` |
+| 5 | **Astern seepage / flooding trigger** | TBD | **dynamic hunt, two unconfirmed leads (`06-flooding-model-signature.md`):** SH3's own interior-camera data tags its sternmost compartment `"DIESEL ENGINE ROOM;InteriorAft"` (evidence for which compartment is astern); a flooding-message read/compare (`[ecx+0x1C]` vs `0.35` at `0x436BE4`) has an unresolved `ecx` worth watching live. No h.sie precedent to borrow, unlike hull repair/diesel damage — genuine discovery, not confirmation. | `10` |
+| 6 | **Electric-engine damage float** | `[[0x5543DC]+4]+0x358`/`+0x360` (lead, unconfirmed) | **dynamic hunt.** §6's original offset survey was mostly a scan artifact — corrected in §9: most "unidentified" offsets belong to *other* objects, and the two real remaining candidates (`+0x438`/`+0x440`; UI strings 462/463) are both ruled out. `+0x358`/`+0x360` (a bounded max/current double accumulator, §8) is the only static lead left — unconfirmed, not the diesel pair's shape (doubles, not two floats). | `11` |
 
-**Static pass complete (2026-07-21), extended (2026-08-17).** The original two code
-anchors (§1) are located with a verified-unique AOB signature. A follow-up static
-pass (§6) surveyed the `0x5543DC` singleton across both `.text` and h.sie's `.pcode`
-region and found it directly implicated in **both** #1 and #2's code, plus the
-diesel-damage cave (#6's neighbour) and the u-tanker hull-repair cave — making it
-the single most promising static root to test first in CE, ahead of a blind
-pointer-scan. Mission clock (#4) and the flooding trigger (#5) still have **no**
-static candidate; they remain open-ended dynamic hunts. The AOB signatures are the
-self-verification handles ADR-0003 calls for — once CE gives a static→object chain,
-the matching AOB confirms the field offset (`+0xB8` / `+0x54`) is still valid for
-this build.
+**Static pass complete (2026-07-21), extended across five follow-up passes
+(2026-08-17, §6–§9 plus `06-flooding-model-signature.md`).** The original two code
+anchors (§1) are located with verified-unique AOB signatures. Ticket `09`'s pointer
+chain is fully resolved statically (§7). Tickets `08` and `11` have been run down as
+far as static analysis goes — `08` has **no** shortcut (confirmed, not just
+unfound); `11` has one unconfirmed lead left after most of its candidate offsets
+turned out to be scan artifacts (§9). Ticket `10` started from zero and has two
+open leads. The AOB signatures are the self-verification handles ADR-0003 calls
+for — once CE gives a static→object chain, the matching AOB confirms the field
+offset is still valid for this build.
 
 Plus one **non-memory** task: find which OAE **data file** holds the per-unit
 `CrashSpeed` so we can author the `CrashSpeed`=0 edit for each playable u-boat class
