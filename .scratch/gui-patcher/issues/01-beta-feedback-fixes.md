@@ -166,9 +166,11 @@ identical across them — but `.pcode` diverges 1.16–2.87% between versions, s
 nothing is assumed.
 
 Two consequences of the identity-hash model (ADR-0007) that shape this: APE keys
-on **build**, not h.sie version, so KC 2.5 (`a7b5fc03…`) and OAE 1.5.3.7
-(`1b6a5823…`) are two separate allowlist entries despite both being `v 1.6B1` —
-admitting one does not admit the other. And KC's slowest telegraph is `AheadSlow
+on **build**, not h.sie version, so KC 2.5 (identity `361eaaa0…`) and OAE 1.5.3.7
+(identity `6769bc4f…`) are two separate allowlist entries despite both being
+`v 1.6B1` — admitting one does not admit the other. (`a7b5fc03…` and `1b6a5823…`
+are plain file hashes, not identities — see the 2026-08-17 amendment below.) And
+KC's slowest telegraph is `AheadSlow
 = 0.40` against OAE's `0.20`; ticket 12 already checked the idle cutoff against
 that figure (99.09% at 0.40), so the cutoff needs no rework, but this should be
 re-confirmed once KC is actually patchable.
@@ -263,3 +265,43 @@ editing the patcher. It is specced here because it is beta feedback and belongs
 with the rest of the record, but if the other four land first that is a good
 outcome, not a partial one. Ticket 07's v1 scope decision is not overturned by this
 spec — it is a v1 decision, and this is what comes after.
+
+## Amendment 2026-08-17 — KC 2.5 admitted (stories 16–19); OAE 1.5.3.7 still not
+
+Landed the RE bar the spike (`docs/re-notes/05-kc25-admission-evidence.md`) already
+cleared: every site re-proven against a real KC 2.5 binary at the OAE 1.5.2
+offsets, all exact matches.
+
+- **`tools/re-static/gen_manifest.py` now authors more than one admitted build.**
+  `exe_site()` no longer hardcodes a single `VERSION_ID` into `offsets` — every
+  site gets an offset entry for each id in `ALL_VERSION_IDS` (currently OAE 1.5.2
+  and KC 2.5, both proven to share the same offsets). `verify_against_reference()`
+  no longer asserts one hardcoded `v 1.6E1` stamp against every reference binary;
+  it matches each reference file to whichever admitted version's
+  `referenceSha256` it holds and checks that version's own stamp and offsets.
+  `src/patcher_gui/Manifest.cs` needed no change — `Identify()` already looped
+  every admitted version generically.
+- **KC 2.5's `identitySha256` is `361eaaa088b71b103580a9e7101009c8ddd43387749cc54fdd5bb0d9e115926c`**,
+  the full normalised hash from the spike. `referenceSha256` is left `null`: the
+  spike only recorded KC's plain file hash truncated (`ab85d6e2…`), and
+  `a7b5fc03…` — quoted in this ticket's Solution section and in ADR-0007 — is a
+  stale plain hash from before the identity model existed and before a flag flip
+  changed it. Neither is usable, and the field is documentary only.
+- **OAE 1.5.3.7 is not admitted.** Its identity is on record only truncated
+  (`6769bc4f…`, `docs/re-notes/05-kc25-admission-evidence.md`) — the spike
+  explicitly did not admit it ("this note does not admit it"). Admitting it needs
+  the same live spike run against a real OAE 1.5.3.7 binary to get its full
+  identity hash; nothing here should invent one.
+- Story 20 (APE says when h.sie's own Diesel Damage switch is off) needed no code
+  — `MainForm.cs`'s `Sync()` already renders that state from `Install.Available`
+  generically, so it covers KC once KC is an admitted build.
+- Tests added under `tests/patcher_gui/PatchSessionTests.cs`
+  (`ASecondAdmittedBuildAppliesAndRevertsByteForByte`,
+  `SharingAnHsieVersionDoesNotShareAdmission`,
+  `AnUnsupportedBuildRefusalNamesEveryAdmittedBuild`), against synthetic fixtures
+  the same way the existing OAE 1.5.2 admission is tested — a real KC binary is
+  still not checked into the repo, so the fixture proves the multi-version
+  *mechanism*, not the specific real KC hash (that is the spike's job, and it is
+  done).
+- **Stories 1–15 (rate ceiling, commit atomicity, foreign-write detection,
+  applied-state detection) are still open.** Not touched by this pass.

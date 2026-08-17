@@ -98,15 +98,25 @@ namespace ApePatcher.Tests
         /// writes -- i.e. an install with neither feature applied.</summary>
         public static Install Stock(bool dieselFlagOn)
         {
+            return StockBuild(dieselFlagOn, "OAE 1.5.2", "v 1.6E1");
+        }
+
+        /// <summary>The same shape of install, but stamped as a different h.sie
+        /// version and admitted as a second, separately-identified build sharing
+        /// OAE 1.5.2's site offsets -- the same relationship KC 2.5 and OAE 1.5.3.7
+        /// have to the shipped build (docs/re-notes/05-kc25-admission-evidence.md):
+        /// same offsets, different identity because the version stamp differs.</summary>
+        public static Install StockBuild(bool dieselFlagOn, string buildName, string hsieVersionStamp)
+        {
             Install install = new Install();
             install.Dir = TempDir();
             install.Manifest = Manifest.Embedded();
 
-            byte[] exe = BuildStockExe(install.Manifest, dieselFlagOn);
+            byte[] exe = BuildStockExe(install.Manifest, dieselFlagOn, hsieVersionStamp);
             File.WriteAllBytes(install.Sh3Exe, exe);
             File.Copy(HsieIniPath(), install.HsieIni);
 
-            Admit(install.Manifest, exe);
+            Admit(install.Manifest, exe, buildName, hsieVersionStamp);
             return install;
         }
 
@@ -121,11 +131,11 @@ namespace ApePatcher.Tests
             return install;
         }
 
-        static byte[] BuildStockExe(Manifest m, bool dieselFlagOn)
+        static byte[] BuildStockExe(Manifest m, bool dieselFlagOn, string hsieVersionStamp)
         {
             byte[] exe = new byte[Sh3ExeLength];
 
-            System.Text.Encoding.ASCII.GetBytes("v 1.6E1")
+            System.Text.Encoding.ASCII.GetBytes(hsieVersionStamp)
                 .CopyTo(exe, m.VersionStringOffset);
 
             byte[] flags = (byte[])FlagTable.Clone();
@@ -147,10 +157,38 @@ namespace ApePatcher.Tests
             return m.Versions[0].Id;
         }
 
-        static void Admit(Manifest m, byte[] exe)
+        /// <summary>Two installs sharing the same h.sie version (`v 1.6B1`, KC
+        /// 2.5's and OAE 1.5.3.7's real stamp) but distinct build identities,
+        /// both admitted into one manifest -- the shape ticket 01 story 19 tests:
+        /// sharing an h.sie version must not imply sharing an allowlist entry.</summary>
+        public static Install[] TwoBuildsSharingAnHsieVersion()
+        {
+            Install kc = StockBuild(true, "KC 2.5", "v 1.6B1");
+            Install oae = StockBuild(true, "OAE 1.5.3.7", "v 1.6B1");
+
+            // Real KC 2.5 and OAE 1.5.3.7 differ in bytes outside every site APE
+            // owns and outside the flag table -- 2.87% of .pcode, per the spike
+            // (docs/re-notes/05-kc25-admission-evidence.md) -- which is exactly
+            // what makes them separately-identified builds despite sharing an
+            // h.sie version and every offset APE reads. Nothing else about the
+            // synthetic fixture varies the two, so mutate one far byte to stand
+            // in for that divergence.
+            byte[] exe = oae.ExeBytes();
+            exe[0x2000] ^= 0xFF;
+            File.WriteAllBytes(oae.Sh3Exe, exe);
+
+            SupportedVersion second = kc.Manifest.AddVersionSharingOffsets(
+                "test-synthetic-oae1537", "OAE 1.5.3.7", "v 1.6B1", ShippedVersionId(kc.Manifest));
+            second.IdentitySha256 = kc.Manifest.IdentityOf(exe, "test-synthetic-oae1537");
+
+            oae.Manifest = kc.Manifest;
+            return new[] { kc, oae };
+        }
+
+        static void Admit(Manifest m, byte[] exe, string buildName, string hsieVersionStamp)
         {
             SupportedVersion v = m.AddVersionSharingOffsets(
-                TestVersionId, "OAE 1.5.2", "v 1.6E1", ShippedVersionId(m));
+                TestVersionId, buildName, hsieVersionStamp, ShippedVersionId(m));
             v.ReferenceSha256 = Sha256(exe);
             v.IdentitySha256 = m.IdentityOf(exe, TestVersionId);
         }

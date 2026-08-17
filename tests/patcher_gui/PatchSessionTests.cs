@@ -92,6 +92,71 @@ namespace ApePatcher.Tests
             Check.Equal("Val9=2e-4", IniLine(fx, "Val9"), "hsie.ini was not touched for it");
         }
 
+        // -- 1b. admitting a second build (umbrella ticket 01 stories 16-19) ---
+
+        public static void Test_ASecondAdmittedBuildAppliesAndRevertsByteForByte()
+        {
+            // The same round trip Test_UncheckingBothFeaturesRestoresBothFilesByteForByte
+            // covers for the shipped v 1.6E1 build, run against a build stamped
+            // v 1.6B1 (KC 2.5's h.sie version) and admitted as its own allowlist
+            // entry sharing the shipped build's offsets -- ticket 01 story 18.
+            Fixtures.Install fx = Fixtures.StockBuild(true, "KC 2.5", "v 1.6B1");
+            Check.True(fx.Session().Install.Supported, "the second build is admitted");
+            Check.Equal("KC 2.5", fx.Session().Install.BuildName, "and named correctly");
+            Check.Equal("v 1.6B1", fx.Session().Install.HsieVersion, "reading its own h.sie stamp");
+
+            byte[] exeBefore = fx.ExeBytes();
+            byte[] iniBefore = File.ReadAllBytes(fx.HsieIni);
+
+            PatchSession session = fx.Session();
+            PatchState want = Both(session);
+            want.Rate = 4.0;
+            Check.True(session.Apply(want).Ok, "applying against the second build");
+            Check.False(Same(exeBefore, fx.ExeBytes()), "sh3.exe really changed");
+
+            PatchSession applied = fx.Session();
+            PatchState offAgain = applied.Current.Clone();
+            offAgain.HullApplied = false;
+            offAgain.DieselApplied = false;
+            Check.True(applied.Apply(offAgain).Ok, "unchecking both features");
+
+            Check.Bytes(exeBefore, fx.ExeBytes(), "sh3.exe is byte-identical to the start");
+            Check.Bytes(iniBefore, File.ReadAllBytes(fx.HsieIni), "hsie.ini is byte-identical too");
+        }
+
+        public static void Test_SharingAnHsieVersionDoesNotShareAdmission()
+        {
+            // Ticket 01 story 19: KC 2.5 and OAE 1.5.3.7 both report h.sie
+            // "v 1.6B1", but they are different builds and admitting one must not
+            // admit the other by side effect.
+            Fixtures.Install[] builds = Fixtures.TwoBuildsSharingAnHsieVersion();
+            Fixtures.Install kc = builds[0];
+            Fixtures.Install oae1537 = builds[1];
+
+            Check.True(kc.Session().Install.Supported, "KC 2.5 is admitted on its own identity");
+            Check.Equal("KC 2.5", kc.Session().Install.BuildName, "and identified as itself");
+
+            Check.True(oae1537.Session().Install.Supported,
+                "OAE 1.5.3.7 is admitted on its own identity, separately");
+            Check.Equal("OAE 1.5.3.7", oae1537.Session().Install.BuildName, "and identified as itself");
+        }
+
+        public static void Test_AnUnsupportedBuildRefusalNamesEveryAdmittedBuild()
+        {
+            // Ticket 01 story 17: a refusal keeps naming every build APE does
+            // support, not just the first one admitted.
+            Fixtures.Install[] builds = Fixtures.TwoBuildsSharingAnHsieVersion();
+            Fixtures.Install fx = builds[0];
+            byte[] exe = fx.ExeBytes();
+            exe[0x1000] ^= 0xFF;                // nowhere near any site
+            File.WriteAllBytes(fx.Sh3Exe, exe);
+
+            InstallReport install = fx.Session().Install;
+            Check.False(install.Supported, "a mutated sh3.exe is not admitted");
+            Check.Contains("KC 2.5", install.SupportedBuilds, "names the first admitted build");
+            Check.Contains("OAE 1.5.3.7", install.SupportedBuilds, "and the second");
+        }
+
         // -- 2. read-back ------------------------------------------------------
 
         public static void Test_AStockInstallReportsBothFeaturesUnapplied()
