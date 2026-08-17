@@ -106,6 +106,15 @@ write target is unlocated is not specified.
   h.sie's caves have no flooding/pump precedent to borrow, unlike hull repair or
   diesel damage. Two leads handed off; the mechanism decision, value anchor, and
   compartment identity all remain fully HITL.
+- **Static pass 2026-08-17, fifth round** (`docs/re-notes/01-crush-depth-damage-signature.md`
+  §9): chased ticket `11` (electric-engine float) directly. Found most of §6.3's
+  offset survey was mis-attributed by a register-reuse scan artifact — corrected
+  the table. Ruled out both remaining candidates (`+0x438`/`+0x440`: a
+  torpedo-reload flag, not a damage float; string IDs 462/463: zero occurrences
+  anywhere in the binary, unlike diesel/flooding/torpedo). `+0x358`/`+0x360`
+  (fourth-round pass, above) remains the only lead, neither promoted nor demoted.
+  Ticket `11` is otherwise unchanged — a from-scratch live scan, now with a
+  cleaner map of what's already been ruled out.
 
 ## Decisions so far
 

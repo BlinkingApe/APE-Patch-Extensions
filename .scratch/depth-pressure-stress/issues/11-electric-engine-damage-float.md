@@ -63,6 +63,35 @@ shape), but close enough in structure to be worth a look before the from-scratch
 scan this ticket already calls for. Full disassembly:
 `docs/re-notes/01-crush-depth-damage-signature.md` §8.
 
+## Static lead (2026-08-17, second pass targeting this ticket directly): most of the offset survey was mis-attributed; `+0x358`/`+0x360` remains the only lead
+
+Re-walked the `0x5543DC` offset survey with a stricter register tracker and found
+most of the "unidentified" offsets in the first static-leads note above **don't
+actually belong to this object** — `+0x84`/`+0xA4` and `+0x4A0`/`+0x4A4` are off two
+different singletons entirely (a stale-register scan artifact), `+0xD8` never
+existed, `+0x83C` is the already-known god-object field, and `+0x14` is the
+already-known liveness-tolerance field under a different guise. Corrected list:
+`+0x000/+0x004/+0x008/+0x30C/+0x320/+0x358/+0x360/+0x438/+0x440` are the only real
+fields off `[[0x5543DC]+4]`.
+
+Chased the two remaining new candidates directly:
+
+- **`+0x438`/`+0x440`**, structurally the most diesel-like shape left (a pair 8
+  bytes apart) — ruled out. `+0x440` is a byte flag, not a float; `+0x438` is
+  force-set to a fixed `0.5` on one transition, no clamp idiom. It's a
+  torpedo-reload state patch (nearest message: "Reloading external torpedoes"), not
+  engine damage.
+- **String IDs 462/463** ("Stb/Port Electric Engine") — searched every `push`/`mov`
+  form used elsewhere in these caves for message strings. **Zero hits anywhere in
+  the binary**, unlike diesel's `460`/`461` (3 hits) or the flooding/torpedo
+  messages found in other tickets' passes. There is no UI-string anchor to chase
+  for electric engines in this build.
+
+**Net: `+0x358`/`+0x360` (flagged in the ticket-08 pass above) remains the only
+static lead, neither promoted nor demoted by this pass.** Everything else on the
+shared object is now ruled out for a specific, citable reason rather than left
+open. Full writeup: `docs/re-notes/01-crush-depth-damage-signature.md` §9.
+
 ## Acceptance criteria
 
 - [ ] Electric-engine damage float located; anchor/chain/offset recorded.

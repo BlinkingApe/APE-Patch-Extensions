@@ -521,3 +521,80 @@ Value scan from the start, same as always planned.
 from-scratch CE pointer-scan/value-scan; no static shortcut exists for either. This
 is a genuinely negative result, recorded so a future session doesn't re-spend time
 looking for one.
+
+## 9. Static lead (2026-08-17, fourth pass): §6.3's offset table corrected — most entries were mis-attributed by register reuse
+
+Follow-up static pass chasing ticket `11` (electric-engine damage float), against
+the same unchanged build (`eeef8595…`). Re-walked every `mov reg,[0x5543DC]` →
+`mov reg,[reg+4]` pair with a **stricter** tracker that stops following a register
+the instant it's reloaded from anything other than itself. §6.3's original tally
+did not do this, and it shows: **most of that table's "unidentified" offsets do not
+actually belong to `[[0x5543DC]+4]`.**
+
+### 9.1 Corrected offset list
+
+The only offsets genuinely dereferenced off `[[0x5543DC]+4]` in `.text`+`.pcode`:
+
+`+0x000, +0x004, +0x008, +0x30C` (diesel pair, confirmed), `+0x320` (telegraph,
+confirmed), `+0x358`/`+0x360` (§8's wear-ratio doubles, still the only live lead),
+`+0x438`, `+0x440`.
+
+**Struck from §6.3's table — confirmed to belong to *other* objects, traced by
+hand:**
+
+- `+0x084`/`+0x0A4` (`00637153`): `eax` is reloaded from a **different singleton,
+  `[0x6307BC]+4]`**, before these offsets are touched — §6.3's tally kept the stale
+  "off `0x5543DC`" label past the reload. `+0xA4` is a generic virtual dispatch
+  (`call [vtable+0xA4]`, passing the telegraph value and `-1`) — a method call, not
+  a data field, and not on this object at all.
+- `+0x0D8` (`00635640`): never actually referenced in that function — a scan
+  artifact.
+- `+0x4A0`/`+0x4A4` (`00635640`): actually off **yet another singleton,
+  `[0x5546C4]+4]+4]`** (a double `+4` hop, not `0x5543DC`), guarded by flag
+  `0x63CF04`, zeroing an unrelated `[ebx+0xB4]` ("max" field, u-tanker-chain
+  convention) on two object pointers — a different h.sie patch entirely.
+- `+0x83C` (`00635640`): the already-known god-object field off `[0x5449B0]+0xD8]`
+  (§2/§7) — 600+ real hits across stock `.text` alone, a generic property slot, not
+  engine-specific, and not actually off `0x5543DC`.
+- `+0x014` (`0063521E`): re-traced as `[0x5543DC]+0x10` directly (the already-known
+  liveness-tolerance field, §6.2), inside an unrelated counter/gate block (caps a
+  tick counter at 10, resets a flag) — no adjacent damage float, and not a distinct
+  `+0x14` offset at all.
+
+### 9.2 `+0x438`/`+0x440` ruled out — a torpedo-reload flag, not electric engines
+
+```
+006355F1  mov eax,[0x5543DC]; mov eax,[eax+4]
+006355F9  mov bh, byte [eax+0x440]        ; BYTE flag, not a float
+006355FF  mov bl, byte [0x63E130]         ; cached previous value
+00635605  cmp bx, 1                       ; new=0, old=1 -> transition off
+0063560A  jne 0x635616
+0063560C  mov dword [eax+0x438], 0x3F000000  ; hard-set to exactly 0.5
+00635616  mov byte [0x63E130], bh
+```
+
+`+0x440` is a byte flag, not a float; `+0x438` is force-set to a fixed `0.5` on one
+specific transition — no clamp idiom, no `0.0..1.0` accumulation, flag+float rather
+than the diesel pair's two-adjacent-floats shape. The nearest message block above it
+(string `0x12D3` = "Reloading external torpedoes") places this in a torpedo-reload
+state patch. **Ruled out.**
+
+### 9.3 String IDs 462/463 ("Stb/Port Electric Engine") — negative, and solidly so
+
+Searched `.text`+`.pcode` for both `push imm32` (the diesel/torpedo message
+convention, e.g. `push 0x131D` for string 4893, §2) and `mov reg32,imm32` (used
+elsewhere in these caves for string IDs like `0x12D2`/`0x12CE`) pushing `0x1CE`
+(462) or `0x1CF`(463). **Zero hits, either form, anywhere in the binary.** Diesel's
+`460`/`461` do turn up 3× in stock `.text` (not `.pcode` — likely the
+damage-control station-list UI, not a cave) — electric engines have no comparable
+occurrence at all. Unlike diesel, flooding (§ note 06), or torpedo reload, **there
+is no UI-string anchor to chase for electric engines in this build.**
+
+### 9.4 Net for ticket `11`
+
+`+0x358`/`+0x360` (§8) remains the **only** static lead — unchanged, not promoted
+or demoted by this pass. Everything else chased this session was ruled out for a
+specific, citable reason rather than left an open question. The offset survey
+table in §6.3 should be treated as corrected by this section, not superseded
+wholesale — the confirmed fields (`+0x30C`, `+0x320`) and the still-live lead
+(`+0x358`/`+0x360`) are unchanged.
