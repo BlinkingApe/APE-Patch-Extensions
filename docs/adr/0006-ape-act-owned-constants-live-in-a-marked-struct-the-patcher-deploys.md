@@ -1,5 +1,20 @@
 # ape.act-owned constants live in a marked struct inside a patcher-deployed ape.act, not a config file
 
+> **Status note (2026-08-17): unimplemented, deferred to crush-depth damage.** The beta
+> patcher (`src/patcher_gui/`, commit `9165c5b`) implements none of this — no embedded
+> `ape.act` template, no marked struct, no deploy-on-enable or delete-on-revert. That is
+> intentional: this ADR exists to solve how APE-owned constants reach a *running* `ape.act`,
+> and the only feature that needs one is crush-depth damage, which is not in the beta. Hull
+> repair and diesel damage are static value edits to `sh3.exe` and `hsie.ini`, so the beta's
+> two site kinds are enough. Revisit when crush-depth damage is picked up.
+>
+> Two consequences of the deferral, worth naming so they aren't mistaken for oversights:
+> the `src/mods/crush_depth_damage/config.{hpp,cpp}` and `tools/config_check` code this ADR
+> calls dead is **still built**, because the replacement it assumes doesn't exist yet; and
+> the `ape.act` site kind is declared in ticket 08's manifest schema but has no sites and no
+> patcher support behind it. See also **ADR-0007**, which records the identity-hash
+> verification the beta patcher actually uses.
+
 Ticket 02 (`.scratch/umbrella-roadmap/issues/02-shared-config-file-strategy.md`) killed
 `data/Cfg/ape.cfg` outright: the patched binaries are APE's only store, values are read
 back out of them to populate the GUI, and there is no sidecar state file. That covers
