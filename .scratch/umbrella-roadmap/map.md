@@ -12,6 +12,15 @@ issues dir), the same way `crush-depth-damage` already works. Reaching the end
 means: the layout is decided and applied, and nothing is left to decide before
 each new goal can start its own implementation-issue tracker.
 
+**Status 2026-08-16 — reached. No open tickets remain.** The layout was applied
+(ticket 01) and the last open decision closed with ticket 07. Hull repair and
+diesel damage are scoped and discharged together into one new effort,
+`.scratch/gui-patcher/`, which is where work continues — starting with a
+`/prototype` session. The docking mod remains fog and would be charted as a fresh
+effort if picked up. Everything still listed below under **Not yet specified** is
+either deferred past v1 or belongs to another effort; none of it blocks work
+starting.
+
 ## Notes
 
 - Domain: OAE sh3.exe / `.act` DLL modding — see `CONTEXT.md` at repo root.
@@ -51,6 +60,14 @@ each new goal can start its own implementation-issue tracker.
   or the docs hints at this — only disassembling the arithmetic does. **Any h.sie
   parameter retuned by more than an order of magnitude needs its code path checked
   for representability**, not just its documented range.
+- **Hash the running exe before trusting a live CE session against RE notes.**
+  Ticket 11's live session (2026-08-16) burned real playtime on addresses that
+  never resolved sensibly, including a breakpoint on a static VA that didn't
+  fire despite the exact behavior it should gate being observed moments later —
+  and the running `sh3.exe`'s build was never checked against the one the notes
+  were derived from (`01-live-session-playbook.md` names it and says explicitly
+  to re-verify if the hash doesn't match). **Confirm the SHA-256 first**, every
+  session, before spending CE time on absolute VAs from these notes.
 - Existing precedent for a fully-specified mod effort: `.scratch/crush-depth-damage/`
   (PRD.md + numbered issues). New goals should land in a directory of the same
   shape once scoped.
@@ -61,6 +78,83 @@ each new goal can start its own implementation-issue tracker.
   feature effort under `.scratch/<feature-slug>/`.
 
 ## Decisions so far
+
+- [Patcher v1 scope: which patches ship first](issues/07-patcher-v1-scope.md) —
+  **v1 is hull repair + diesel damage, on two write targets and one build.**
+  Hull repair goes **first as the tracer bullet** (one `sh3.exe` operand range,
+  no derived values, no INI writer); diesel damage follows and brings the INI
+  writer, the 21-byte `fixed-rewrite`, the derived `Val10`, and ticket 05's
+  disabled-with-explanation path. **`ape.act` is deferred whole** — its only
+  candidate, crush-depth constants, is blocked on crush-depth issue 01's four
+  *dynamic* CE hunts, so including it would gate the release on unfinished RE
+  rather than on build effort. **This drops the LoadLibrary call-site patch from
+  v1 too** (nothing loads `ape.act`), retiring ticket 06's ⚠ as a v1 concern.
+  Allowlist is **exactly one build — OAE 1.5.2 / `v 1.6E1`**, the one every site
+  was derived on and ticket 12 was played on; everything else refuses to write.
+  **One new effort, `.scratch/gui-patcher/`**, covers the tool, the manifest
+  generator, and both features — neither feature carries a PRD alone. Its first
+  move is a **`/prototype` session**, not implementation: ticket 05 settled the
+  architecture but nothing has settled what the tool is like to *use*, and the
+  diesel panel's two fields have consequences illegible from the inputs.
+  **Done bar: the shipped patcher writes both features on the real install,
+  effects observed in play, unchecking restores bytes identical to the backups** —
+  ticket 12 proved the levers by hand, which is a different claim from proving
+  the tool. ⚠ That install is still in ticket 12's test state and must be
+  reverted before it can be a clean baseline. Deferred to a later version, not
+  out of scope: `ape.act` + crush-depth constants, the LoadLibrary patch,
+  `v 1.6B1`, docking.
+
+- [Black-box test: prove APE controls diesel-damage magnitude and timing](issues/12-diesel-levers-blackbox-test.md)
+  — **PASS, in play, 2026-08-16.** Band forced to `rand(1.0, 1.0)` in `sh3.exe`
+  `.pcode` + rate to `p_ds = 0.01`/game-second in `hsie.ini` → diesel destroyed
+  outright at **~6 in-game minutes**, an outcome h.sie's stock first-hit band
+  (`0.01…0.59`) *cannot* produce, so the result is only reachable via APE's
+  written bytes. **Both levers are APE's.** Two consequences beyond the levers:
+  **ticket 09's per-site store routing is confirmed on a real install** — one
+  feature, two stores (`hsie.ini` keys for the clobbered rate, `.pcode`
+  immediates for the band), both stuck; and the **hash-first discipline paid
+  off** — the backup matched `51d14ca3…` exactly, the live exe differed by
+  precisely the Diesel Damage flag byte, and every address from the RE notes
+  resolved first try, the exact opposite of ticket 11's 2nd session.
+  **Ticket 07's blocker on diesel damage is lifted.** Not proven, and
+  deliberately: the rate *curve* (one sample only — and none needed, since rate
+  ships as a user field), carried to fog.
+  **Four further conditions were then played in the same session, and returned
+  two findings bigger than the test itself:**
+  **(A) `pow(0, 0) = 1` — ticket 04's flat exponent fires at full rate at all
+  stop.** Surfaced + all stop destroyed an engine; the model has no idle case at
+  all. Fixed without any code patch by pairing a *small positive* exponent with
+  a derived threshold — `Val14/15/16 = 0.01`, `Val10 = p_dso × 0.977237` — which
+  turns h.sie's existing `p_ds > Val10` test into an exact **telegraph > 0.1**
+  cutoff while keeping the rate flat to **1.6%** across 0.20→1.00. Clears OAE's
+  slowest telegraph (0.20) and KC's (0.40). ⚠ This makes **`Val10` the first
+  *derived* manifest site** — recomputed from the rate field on every write, not
+  user-facing (tickets 07/08). Ticket 04 amended.
+  **(B) The surfaced gate is real, works, and counts snorkelling** — see the
+  fog entry below; this substantially retires ticket 11's accepted risk.
+  **Both then confirmed in play**: the idle cutoff suppresses all stop while
+  every real telegraph setting still damages, and **a destroyed (`1.0`) diesel
+  cannot be repaired at sea** — answering ticket 11's last side question and
+  turning ticket 04's "damage must stay repairable" from a preference into a
+  proven constraint. ⚠ Left for the feature's own tuning work: APE's
+  `0.15…0.55` band still reaches `1.0` on two unrepaired hits 3.1% of the time,
+  now known to cost an engine for the patrol.
+  ⚠ The OAE 1.5.2 install is **left in test state** — revert from `sh3_BACKUP.exe` /
+  `hsie_BACKUP.ini` before playing normally.
+
+- [Prove the surfaced gate before shipping always-on diesel wear](issues/11-surfaced-gate-proof.md)
+  — **resolved by scope pivot, not by proof.** Two sessions of RE (static
+  exhausted; live broke on an unverified binary hash and a breakpoint that
+  never fired) hit diminishing returns on the gate's identity
+  (`[0x5543DC+0x18]`/`+0x1C` at `0x6350CA`). Decision: stop chasing RE proof,
+  trust h.sie's developer got the gate and damage model right, and replace
+  the pre-ship check with a narrower, directly testable claim — that APE's
+  own patched values (damage magnitude, timing) take effect as intended,
+  independent of the gate debate. Risk accepted explicitly, not dismissed:
+  the frozen, identical gate-field readings observed live are suggestive of
+  a dead/always-pass gate, just not confirmed. Carried forward in **Not yet
+  specified**. Replacement pre-ship gate is
+  [ticket 12](issues/12-diesel-levers-blackbox-test.md).
 
 - [Manifest format and the version allowlist](issues/08-signature-manifest-format.md)
   — **two-level schema: a patch groups sites, each site is one field with one
@@ -194,6 +288,51 @@ each new goal can start its own implementation-issue tracker.
 
 ## Not yet specified
 
+- **The diesel surfaced-gate's true identity — accepted as a named risk, not
+  resolved.** Ticket 11 closed by scope pivot rather than RE proof: whether
+  `[0x5543DC+0x18]`/`+0x1C` at `0x6350CA` genuinely means "surfaced" (vs.
+  always-pass/dead) is still unknown. The 2nd live session found both fields
+  reading a frozen, identical raw value across a surface→periscope-depth
+  dive — suggestive of a dead gate, not confirmed (binary hash unchecked that
+  session). Not a ticket, because there's nothing left to specify — the
+  question is exactly ticket 11's, already fully written up there. Revisit
+  from ticket 11's history if [ticket 12](issues/12-diesel-levers-blackbox-test.md)'s
+  black-box test or later play surfaces evidence of submerged wear (and
+  especially if that happens while provably not snorkeling).
+  **Status 2026-08-16 — largely retired by black-box play, without ever
+  identifying the fields.** Ticket 12's follow-up ran four conditions. The
+  decisive pair is **surfaced + all stop (damage) vs submerged + stationary (no
+  damage)**: under the exponent-0 rig the probability term was *identical* in
+  both, so only the gate at `0x6350CA` can have suppressed the second. Therefore
+  the gate is **not dead and not always-pass** — the reading the 2nd live
+  session's frozen field values had suggested, from a session run against an
+  unverified binary hash. Submerged on electrics: **no damage**, which is
+  precisely the risk this entry was accepting, so **that risk is retired by
+  observation.** Submerged on diesels (snorkel): damage — so **snorkelling
+  counts as diesel running time**, answering ticket 11's explicit sub-question.
+  ⚠ What remains genuinely open is only the **identity** of `[+0x18]`/`[+0x1C]`,
+  which nothing now depends on, plus the assumption that case 4 was snorkelling
+  (the only way SH3 runs diesels below the surface — worth confirming, since a
+  no-snorkel diesel run flips that case from confirming to contradicting).
+  Stays fog, not a ticket, and ticket 11 stays closed.
+- ~~**Is a diesel at exactly `1.0` repairable at sea?**~~ **Answered 2026-08-16
+  by ticket 12: no.** Crew assignment does not move the damage float off `1.0`;
+  destruction is terminal for the patrol. Whether **base repair** clears it is
+  untested — SH3's convention says yes, but nothing here distinguishes "dead
+  until port" from "dead forever". Kept as one line because it feeds the open
+  tuning question below, not because the mechanic is still unknown.
+- ~~**Should APE's damage band be capped so two hits cannot destroy?**~~
+  **Graduated 2026-08-16 into `.scratch/gui-patcher/`** by ticket 07 — it is
+  tuning work for the v1 diesel feature's own scope, alongside the hull-repair
+  default range, and no longer belongs to this map. Original note kept below for
+  the numbers. Surfaced by
+  ticket 12's repair result. Ticket 04 chose `0.15…0.55` knowing two unrepaired
+  hits reach `1.0` about 3.1% of the time; that tail is now known to cost an
+  engine for the rest of the patrol rather than merely hurt. Capping `hi` below
+  `0.5` makes two hits mathematically unable to sum to `1.0` — but only defers
+  it, since three hits still can. Not a ticket: it is a tuning judgement that
+  belongs to the diesel feature's own scope work, and the number is a
+  user-facing GUI field regardless of the default chosen.
 - **Does `sh3.exe`'s `LoadLibrary` call site for `ape.act` tolerate a missing
   file?** Surfaced 2026-08-16 by ticket 06: reverting APE's last runtime
   feature now deletes `ape.act` from the game root, which only works if that
@@ -202,6 +341,11 @@ each new goal can start its own implementation-issue tracker.
   Not a ticket yet because implementing the `sh3.exe` patch for that call site
   is itself still unticketed execution work — this rides along with whichever
   effort builds it, not the current frontier.
+  **Status 2026-08-16 — deferred out of v1 with the rest of the `ape.act` path.**
+  Ticket 07 ships no runtime feature, so nothing loads `ape.act` and the call
+  site is not patched at all in v1. This question returns with the first version
+  that ships an `ape.act` feature — which in practice means it is blocked behind
+  crush-depth issue 01's dynamic CE hunts, not behind anything on this map.
 - **Pseudo-dock mod (item 4).** Docking triggers "other events in-game" — still
   too open-ended to ticket (the candidate trigger events remain unnamed, and that
   is the blocker, not the mechanism). But the fog thinned considerably on
@@ -244,7 +388,9 @@ each new goal can start its own implementation-issue tracker.
   the patcher, vs. ADR-0003's runtime signature scanning, which remains right for
   `ape.act`'s own live anchors). This is execution work following settled
   decisions, not a decision itself; likely folded into whichever effort starts
-  building the patcher.
+  building the patcher — **as of 2026-08-16 that effort has a name:
+  `.scratch/gui-patcher/`** (ticket 07). Note `src/patcher/main.cpp` is
+  superseded rather than ported: v1's tool is the C# one.
 - ~~**Does `hsie.ini` still do anything?**~~ **Answered 2026-08-15 by ticket 04 —
   and it is on the route after all.** `hsie.act` reads `./hsie.ini` at load,
   `VirtualProtect`s `.pconst`, and writes 24 floats over `0x63C000`–`0x63C0E8`
@@ -260,6 +406,12 @@ each new goal can start its own implementation-issue tracker.
   which of OAE 1.5.2 (`v 1.6E1`) and OAE 1.5.3.7 (`v 1.6B1`) is the user's actual
   play target, which matters because all RE to date was done against the
   `v 1.6E1`-sized variant set.
+  **Sidestepped for v1, 2026-08-16 by ticket 07:** the allowlist admits **only
+  OAE 1.5.2 / `v 1.6E1`** — the build every site was derived on and ticket 12 was
+  played on — and every other build is refused outright. So v1 does not need the
+  play-target answered. It stays fog because adding `v 1.6B1` later still means
+  re-proving every site against a real 1.5.3.7 binary at ticket 08's bar, and
+  `4B6BEE20` remains unaccounted for.
 - **Is the "GWX 3.0 Gold" exe genuine?** It is byte-identical to OAE 1.5.2's
   across stock `.text` and h.sie `.pcode`, differing only in flag bytes (all
   `0x00`), and the folder has no `hsie.act` or `HSIEContents.txt`. Probably an

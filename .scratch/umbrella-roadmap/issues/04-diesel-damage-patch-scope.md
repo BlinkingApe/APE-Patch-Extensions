@@ -440,3 +440,41 @@ though not before it starts.
   not registered build `4B6BEE20`.
 - VAs are absolute; ADR-0003 wants wildcarded AOB signatures with uniqueness
   proofs. Not yet done for this cave.
+
+## Amendment 2026-08-16 — the flat exponent needs a companion idle cutoff
+
+Found by black-box play in
+[ticket 12](12-diesel-levers-blackbox-test.md), not by RE.
+
+This ticket's resolution sets **Speed-Exponent = 0.0** so that wear is
+independent of speed ("any time the diesels run"). In play that also fires at
+**all stop, at the full flank rate**: the formula evaluates `pow(0.0, 0.0)`,
+which CRT `pow` returns as **`1.0`** per IEEE-754/C99. There is no "engines
+idle" case in the model at all.
+
+**Amended model — exponent `0.01`, threshold derived:**
+
+| Key | Was (this ticket) | Now |
+|---|---|---|
+| `Val14/15/16` Speed-Exponent | `0.0` | **`0.01`** |
+| `Val10` threshold | `1e-6` (h.sie's) | **`p_dso × 0.977237`** (derived) |
+
+`Speed^0.01` is monotonic, so `p_ds > Val10` ⟺ `telegraph > 0.1` exactly —
+reusing h.sie's existing threshold test at `0x635129` with **no code patch**.
+The cutoff sits below OAE's slowest telegraph (`AheadSlow = 0.20`) and KC's
+(`0.40`), and above any not-quite-zero idle value. Flatness is preserved: the
+rate varies **1.6% across telegraph 0.20 → 1.00**, against this ticket's intent
+of a speed-independent rate. Full table and the precision argument are in
+ticket 12.
+
+Everything else in this ticket's resolution stands: Factors still `1.0`, the
+`0x635818` rewrite still required, the `rand(0.15…0.55)` band unchanged.
+
+⚠ Two knock-ons:
+
+- **`Val10` becomes a derived site, not a constant** — the patcher must
+  recompute it from the rate field on every write (tickets 07/08).
+- **Both defects found in this ticket's retuning were endpoint defects** — the
+  `2.98e-8` float32 lattice floor and now `pow(0, 0)`. Both were invisible at
+  h.sie's tuning. The map's standing note about checking a retuned parameter's
+  *code path* should be read as also covering its **range endpoints**.
