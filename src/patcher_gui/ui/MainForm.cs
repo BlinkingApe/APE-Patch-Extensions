@@ -36,6 +36,7 @@ namespace ApePatcher.Ui
         CheckBox dieselOn;
         Label dieselTitle, dieselState, dieselState2, dieselNote;
         NumericUpDown rate, bandLo, bandHi;
+        Label rateUnitLabel;
         FlowLayoutPanel statsBox;
         Panel dieselFields;
 
@@ -193,7 +194,7 @@ namespace ApePatcher.Ui
             dieselState2.Margin = new Padding(22, 0, 0, 4);
             column.Controls.Add(dieselState2);
 
-            rate = Widgets.Num((decimal)desired.Rate, 0.1m, 1000m, 1, 0.1m, 72);
+            rate = Widgets.RateSpinner((decimal)desired.Rate, 0.1m, (decimal)PatchState.RateCeiling, 72);
             rate.ValueChanged += delegate { if (!binding) { desired.Rate = (double)rate.Value; Sync(); } };
             bandLo = Widgets.Num((decimal)desired.BandLo, 0.01m, 0.99m, 2, 0.01m, 64);
             bandHi = Widgets.Num((decimal)desired.BandHi, 0.01m, 0.99m, 2, 0.01m, 64);
@@ -209,8 +210,8 @@ namespace ApePatcher.Ui
             stack.WrapContents = false;
             stack.AutoSize = true;
             stack.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            stack.Controls.Add(Fields(new Control[] {
-                rate, Widgets.Label("events per 10,000 hours of running", Look.Base, Look.Dim) }));
+            rateUnitLabel = Widgets.Label("events per 10,000 hours of running", Look.Base, Look.Dim);
+            stack.Controls.Add(Fields(new Control[] { rate, rateUnitLabel }));
             stack.Controls.Add(Fields(new Control[] {
                 bandLo,
                 Widgets.Label("to", Look.Base, Look.Dim),
@@ -415,15 +416,27 @@ namespace ApePatcher.Ui
                         dieselState.Width);
                     dieselState2.Visible = false;
 
+                    rateUnitLabel.Text = desired.IsTestRate
+                        ? "events per 10,000 hours — test range, not a play value"
+                        : "events per 10,000 hours of running";
+                    rateUnitLabel.ForeColor = desired.IsTestRate ? Look.Warn : Look.Dim;
+
                     string dieselProblem =
                         !desired.BandValid ? "The band needs a low end above 0 and below the high end."
-                        : !desired.RateValid ? "The rate must be above 0."
+                        : !desired.RateValid ? "The rate must be above 0 and at or below "
+                              + Fmt.Int((int)PatchState.RateCeiling) + "."
                         : desired.UnderFloat32Epsilon
                             ? "That rate is finer than the game could otherwise resolve. It works "
                               + "only because APE replaces h.sie's probability helper."
+                        : desired.IsTestRate
+                            ? "That rate is a test value, far above anything a real patrol would "
+                              + "produce -- it exists to run the blackbox procedure through APE, "
+                              + "not to ship with."
                         : "";
                     Widgets.SetWrappedText(dieselNote, dieselProblem, dieselNote.Width);
-                    dieselNote.ForeColor = desired.DieselValid ? Look.Dim : Look.Warn;
+                    dieselNote.ForeColor = !desired.DieselValid ? Look.Warn
+                        : desired.IsTestRate ? Look.Warn
+                        : Look.Dim;
                     dieselNote.Visible = dieselProblem.Length > 0;
 
                     RenderStats();
@@ -554,6 +567,32 @@ namespace ApePatcher.Ui
                 MessageBox.Show(this, e.Message, "APE could not apply your changes",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
+            }
+
+            if (!report.Ok && report.ForeignWrite)
+            {
+                DialogResult choice = MessageBox.Show(this, report.Message + Environment.NewLine
+                    + Environment.NewLine + "Apply anyway, overwriting your edit with APE's value?",
+                    "hsie.ini holds a value APE did not write",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                if (choice == DialogResult.Yes)
+                {
+                    try
+                    {
+                        report = session.Apply(desired, true);
+                    }
+                    catch (Exception e)
+                    {
+                        MessageBox.Show(this, e.Message, "APE could not apply your changes",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                }
+                else
+                {
+                    Reopen();
+                    return;
+                }
             }
 
             if (!report.Ok)

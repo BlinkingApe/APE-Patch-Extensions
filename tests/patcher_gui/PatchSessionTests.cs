@@ -456,6 +456,192 @@ namespace ApePatcher.Tests
             Check.Equal(iniBefore, fx.IniText(), "hsie.ini untouched");
         }
 
+        // -- 7. the rate ceiling, enforced at the seam (ticket 01 story 3) -----
+
+        public static void Test_ARateAtTheCeilingIsAcceptedAndBeyondItIsRefused()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+
+            PatchState atCeiling = Both(session);
+            atCeiling.Rate = PatchState.RateCeiling;
+            Check.True(session.Apply(atCeiling).Ok, "the ceiling itself is accepted");
+
+            PatchSession second = fx.Session();
+            PatchState overCeiling = second.Current.Clone();
+            overCeiling.DieselApplied = true;
+            overCeiling.Rate = PatchState.RateCeiling + 1.0;
+            WriteReport report = second.Apply(overCeiling);
+            Check.False(report.Ok, "just above the ceiling is refused");
+            Check.Contains("360000", report.Message, "the refusal names the limit");
+        }
+
+        // -- 8. commit atomicity (ticket 01 stories 4-6, 14) --------------------
+
+        public static void Test_AnHsieIniWriteFailureLeavesSh3ExeByteIdentical()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            byte[] exeBefore = fx.ExeBytes();
+            string iniBefore = fx.IniText();
+
+            PatchSession session = fx.Session();
+            session.SaveIni = delegate { throw new IOException("hsie.ini is read-only"); };
+            WriteReport report = session.Apply(Both(session));
+
+            Check.False(report.Ok, "the commit is refused");
+            Check.Contains("hsie.ini", report.Message, "and says which file failed");
+            Check.Bytes(exeBefore, fx.ExeBytes(), "sh3.exe was rolled back to byte-identical");
+            Check.Equal(iniBefore, fx.IniText(), "hsie.ini was never touched");
+        }
+
+        public static void Test_AnHsieIniWriteFailureAndARollbackFailureReportsBothFilesAndRecovery()
+        {
+            // The case the header comment used to promise could not happen: the
+            // ini write fails, and putting sh3.exe back fails too. The player
+            // must be told both files' actual states rather than seeing only the
+            // ini error while sh3.exe sits silently patched.
+            Fixtures.Install fx = Fixtures.Stock(true);
+            byte[] exeBefore = fx.ExeBytes();
+
+            PatchSession session = fx.Session();
+            int exeWrites = 0;
+            session.WriteExeBytes = delegate(string path, byte[] bytes)
+            {
+                exeWrites++;
+                if (exeWrites == 1) File.WriteAllBytes(path, bytes);   // the real, forward write
+                else throw new IOException("disk went away mid-rollback");   // the rollback
+            };
+            session.SaveIni = delegate { throw new IOException("hsie.ini is read-only"); };
+
+            WriteReport report = session.Apply(Both(session));
+
+            Check.False(report.Ok, "the commit does not claim success");
+            Check.Equal(0, report.SitesWritten.Count, "and claims no sites written");
+            Check.Contains("sh3.exe", report.Message, "the report names sh3.exe");
+            Check.Contains("hsie.ini", report.Message, "and hsie.ini");
+            Check.Contains("inconsistent", report.Message, "and says the install is inconsistent");
+            Check.Contains("To recover", report.Message, "and tells the player how to recover");
+            Check.False(Same(exeBefore, fx.ExeBytes()),
+                "sh3.exe really is left holding APE's change -- the rollback truly failed");
+        }
+
+        // -- 9. foreign-write detection on hsie.ini (ticket 01 stories 7-9, 12) -
+
+        public static void Test_AHandEditedHsieIniValueIsRefusedAndNamesTheKeyAndBothValues()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            string text = fx.IniText().Replace("Val9=2e-4", "Val9=9.9e-4");
+            File.WriteAllBytes(fx.HsieIni, System.Text.Encoding.GetEncoding(28591).GetBytes(text));
+
+            byte[] exeBefore = fx.ExeBytes();
+            string iniBefore = fx.IniText();
+
+            PatchSession session = fx.Session();
+            WriteReport report = session.Apply(Both(session));
+
+            Check.False(report.Ok, "the commit is refused");
+            Check.True(report.ForeignWrite, "and flagged as the overridable foreign-write refusal");
+            Check.Contains("Val9", report.Message, "the refusal names the key");
+            Check.Contains("9.9e-4", report.Message, "and shows the value found");
+            Check.Contains("2e-4", report.Message, "and h.sie's original");
+            Check.Bytes(exeBefore, fx.ExeBytes(), "sh3.exe is untouched");
+            Check.Equal(iniBefore, fx.IniText(), "hsie.ini is untouched, including the hand-edit");
+        }
+
+        public static void Test_TheForeignWriteRefusalCanBeOverriddenDeliberately()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            string text = fx.IniText().Replace("Val9=2e-4", "Val9=9.9e-4");
+            File.WriteAllBytes(fx.HsieIni, System.Text.Encoding.GetEncoding(28591).GetBytes(text));
+
+            PatchSession session = fx.Session();
+            PatchState want = Both(session);
+            want.Rate = 1.5;
+            Check.False(session.Apply(want).Ok, "refused without the override");
+
+            WriteReport overridden = session.Apply(want, true);
+            Check.True(overridden.Ok, "the override lets the commit through");
+            Check.Equal("4.1667e-08", IniFile.Load(fx.HsieIni).Value("Val9"),
+                "APE's value replaced the hand-edit");
+        }
+
+        public static void Test_AnApeWrittenHsieIniValueStillVerifiesOnASecondCommit()
+        {
+            // The regression this check most risks: APE's own previous write
+            // must never be mistaken for a foreign one on the next commit.
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession first = fx.Session();
+            PatchState want = Both(first);
+            want.Rate = 2.5;
+            Check.True(first.Apply(want).Ok, "first commit lands");
+
+            PatchSession second = fx.Session();
+            PatchState again = second.Current.Clone();
+            again.Rate = 5.0;
+            WriteReport report = second.Apply(again);
+            Check.True(report.Ok, "a second commit over APE's own hsie.ini value still verifies");
+            Check.Close(5.0, fx.Session().Current.Rate, 0.1, "and lands the new rate");
+        }
+
+        public static void Test_HsiesOwnOriginalHsieIniValueStillVerifies()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+            WriteReport report = session.Apply(Both(session));
+            Check.True(report.Ok, "h.sie's stock hsie.ini lines verify cleanly");
+        }
+
+        // -- 10. applied-state detection (ticket 01 stories 10-11) --------------
+
+        public static void Test_AForeignEditToHsieIniDoesNotReadAsApplied()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            string text = fx.IniText().Replace("Val9=2e-4", "Val9=9.9e-4");
+            File.WriteAllBytes(fx.HsieIni, System.Text.Encoding.GetEncoding(28591).GetBytes(text));
+
+            PatchSession session = fx.Session();
+            Check.False(session.Install.Applied(Manifest.DieselPatchId),
+                "a value neither APE nor h.sie wrote must not read as an APE patch");
+        }
+
+        public static void Test_AForeignEditToAnSh3ExeSitesContextDoesNotReadAsApplied()
+        {
+            // The sh3.exe counterpart to the hsie.ini case above: a site whose
+            // invariant context has moved is someone else's edit, not APE's, even
+            // though its field now differs from h.sie's original too. Hull repair
+            // has exactly two sites and no hsie.ini sites, so corrupting both
+            // contexts leaves nothing else that could still read as applied.
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+            PatchState want = session.Current.Clone();
+            want.HullApplied = true;
+            want.HullMin = 30;
+            want.HullMax = 50;
+            Check.True(session.Apply(want).Ok, "apply so both fields really differ");
+
+            Site width = Find(fx.Manifest, Manifest.HullPatchId, "hull-roll-width");
+            Site floor = Find(fx.Manifest, Manifest.HullPatchId, "hull-roll-floor");
+            byte[] exe = fx.ExeBytes();
+            exe[width.OffsetFor(Fixtures.TestVersionId)] = 0x90;   // corrupt only the context byte
+            exe[floor.OffsetFor(Fixtures.TestVersionId)] = 0x00;
+            File.WriteAllBytes(fx.Sh3Exe, exe);
+
+            PatchSession reopened = fx.Session();
+            Check.False(reopened.Install.Applied(Manifest.HullPatchId),
+                "a site whose context another edit moved must not read as an APE patch");
+        }
+
+        public static void Test_AnUnreadableInstallReportsUnreadableAndNoPatchReadsAsApplied()
+        {
+            string dir = Fixtures.TempDir();
+            PatchSession session = PatchSession.Open(dir, Manifest.Embedded());
+
+            Check.False(session.Install.Supported, "an empty directory cannot be identified");
+            Check.Contains("sh3.exe", session.Install.RefusalReason, "unreadable, not silently patched");
+            Check.False(session.Install.Applied(Manifest.HullPatchId), "no patch reads as applied");
+            Check.False(session.Install.Applied(Manifest.DieselPatchId), "for either feature");
+        }
+
         // -- helpers -----------------------------------------------------------
 
         static string IniLine(Fixtures.Install fx, string key)

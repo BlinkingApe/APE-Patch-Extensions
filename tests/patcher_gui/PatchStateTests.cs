@@ -115,6 +115,38 @@ namespace ApePatcher.Tests
             Check.Close(0.0, s.PercentTwoHitsDestroy, 1e-12, "no chance at exactly the threshold");
         }
 
+        // -- the rate ceiling (ticket 01 stories 1-3) --------------------------
+
+        public static void Test_TheRateCeilingReachesTheBlackboxProcedure()
+        {
+            // The blackbox test's p_dso = 0.01/s is 360,000 events per 10,000
+            // hours exactly -- the documented procedure has to be reachable at
+            // the top of the range and nothing beyond it is needed.
+            PatchState s = Default();
+            s.Rate = 360000.0;
+            Check.True(s.RateValid, "the ceiling itself is accepted");
+            Check.Close(0.01, s.Pdso, 1e-15, "and it really is p_dso = 0.01/s");
+
+            s.Rate = 360000.01;
+            Check.False(s.RateValid, "just above the ceiling is refused");
+        }
+
+        public static void Test_RatesFarAboveRealisticPlayAreMarkedAsTestValues()
+        {
+            PatchState s = Default();
+            s.Rate = 4.0;
+            Check.False(s.IsTestRate, "an ordinary play rate is not a test value");
+
+            s.Rate = 1000.0;
+            Check.False(s.IsTestRate, "the old play-range ceiling itself is not a test value");
+
+            s.Rate = 1000.01;
+            Check.True(s.IsTestRate, "just above it is marked as a test value");
+
+            s.Rate = 360000.0;
+            Check.True(s.IsTestRate, "and so is the new technical ceiling");
+        }
+
         // -- validation --------------------------------------------------------
 
         public static void Test_BandMustBeStrictlyIncreasing()

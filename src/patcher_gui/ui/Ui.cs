@@ -136,6 +136,56 @@ namespace ApePatcher.Ui
             n.TextAlign = HorizontalAlignment.Right;
             return n;
         }
+
+        /// <summary>A spinner for the diesel rate field: five orders of magnitude
+        /// separate the shipping default (1.5) from the test ceiling (360,000), so
+        /// a fixed additive step is unusable at one end or the other. The up/down
+        /// buttons and arrow keys move proportionally instead -- about 40 clicks
+        /// end to end -- while typing an exact value directly still works exactly
+        /// as any NumericUpDown's text box does (ticket 01 story 3).</summary>
+        public static NumericUpDown RateSpinner(decimal value, decimal min, decimal max, int width)
+        {
+            RateUpDown n = new RateUpDown();
+            n.Minimum = min;
+            n.Maximum = max;
+            n.DecimalPlaces = 2;
+            n.Increment = 0.1m;   // used only as the smallest step floor
+            n.Value = value < min ? min : (value > max ? max : value);
+            n.Width = width;
+            n.TextAlign = HorizontalAlignment.Right;
+            return n;
+        }
+    }
+
+    /// <summary>Proportional step spinner backing <see cref="Widgets.RateSpinner"/>.
+    /// See that method's comment for why a linear step does not work here.</summary>
+    class RateUpDown : NumericUpDown
+    {
+        const decimal Factor = 1.5m;
+
+        public override void UpButton()
+        {
+            Value = ClampToRange(Step(Value, Factor));
+        }
+
+        public override void DownButton()
+        {
+            Value = ClampToRange(Step(Value, 1m / Factor));
+        }
+
+        decimal Step(decimal v, decimal factor)
+        {
+            decimal next = v * factor;
+            decimal min = Increment;   // the smallest step, so 0.1 does not stall at 0.1
+            return factor > 1m
+                ? Math.Max(next, v + min)
+                : Math.Min(next, v - min);
+        }
+
+        decimal ClampToRange(decimal v)
+        {
+            return v < Minimum ? Minimum : (v > Maximum ? Maximum : v);
+        }
     }
 
     /// <summary>The header's product name, drawn in runs.

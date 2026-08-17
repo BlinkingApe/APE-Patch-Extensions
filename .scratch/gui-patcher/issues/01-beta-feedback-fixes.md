@@ -1,7 +1,7 @@
 # Beta feedback fixes: commit atomicity, foreign-write detection, and the rate ceiling
 
 Type: task
-Status: partially resolved — stories 16-20 (KC 2.5 admission) done 2026-08-17, see Amendment; stories 1-15 (rate ceiling, commit atomicity, foreign-write detection, applied-state detection) still open
+Status: resolved — stories 16-20 (KC 2.5 admission) done 2026-08-17; stories 1-15 (rate ceiling, commit atomicity, foreign-write detection, applied-state detection) done 2026-08-17, see Amendments
 
 ## Blocked by
 
@@ -305,3 +305,54 @@ offsets, all exact matches.
   done).
 - **Stories 1–15 (rate ceiling, commit atomicity, foreign-write detection,
   applied-state detection) are still open.** Not touched by this pass.
+
+## Amendment 2026-08-17 — stories 1-15 landed
+
+All within the existing seam, per the Implementation Decisions.
+
+- **Rate ceiling** (`PatchState.cs`): raised to `RateCeiling = 360000.0`, exactly
+  the blackbox procedure's `p_dso = 0.01`/s. The old `1000.0` ceiling survives as
+  `RealisticRateCeiling`, the line `IsTestRate` uses to mark a rate as a test
+  value rather than a shipping one. `PatchSession.Apply` refuses a rate (or band,
+  or hull range) the model itself calls invalid, naming the ceiling in the
+  message -- the UI already disabled Apply on this, but the seam that writes
+  cannot rely on a caller above it having checked first.
+- **The rate control** (`ui/Ui.cs`'s `RateUpDown`, `Widgets.RateSpinner`): steps
+  proportionally (x1.5 per click, ~40 clicks end to end) instead of by a fixed
+  amount, since a linear step cannot reach both 0.1 and 360,000 usably. Typing an
+  exact value still works exactly as any `NumericUpDown`'s text box does. The
+  unit label and note switch to test-range wording once `IsTestRate` is true.
+- **Commit atomicity** (`PatchSession.cs`): `Apply` no longer discards a
+  rollback's own failure. Two write-boundary seams --
+  `WriteExeBytes`/`SaveIni`, both defaulting to the real file calls -- let a test
+  inject a failure at the ini write, and separately at the rollback's exe write,
+  without a read-only disk. A rollback failure produces `InconsistentState`,
+  naming both files' actual states and how to recover, replacing the old
+  "cannot happen" comment with code that makes it true.
+- **hsie.ini foreign-write detection** (`PatchSession.Verify`): presence
+  checking replaced by `IniLineIsRecognised` -- a line is accepted if it is
+  h.sie's original, or matches APE's own format (its fixed literal for a literal
+  site, or a number that round-trips through `Fmt.Sci` for a derived one).
+  Anything else refuses, naming the key and both values. `Apply(desired,
+  allowForeignWrite: true)` lets a player proceed past the refusal deliberately;
+  `MainForm.Commit` offers this as a Yes/No prompt keyed off the new
+  `WriteReport.ForeignWrite` flag. This makes the hsie.ini path exactly as strict
+  as the sh3.exe context-byte path (story 12), which needed no change.
+- **Applied-state detection** (`PatchSession.IsApplied`): now asks "does this
+  site hold what APE would write" rather than "does this site differ from the
+  original," for both stores. For hsie.ini that means `IniLineIsRecognised`; for
+  sh3.exe it means the site's invariant context still matches what APE was
+  proven against (the same test `Verify` uses), with only the field differing --
+  reused as `ContextMatches`. A site another mod touched no longer reads as
+  applied in either store. A site that cannot be read is skipped rather than
+  counted either way; in practice this only reaches a missing hsie.ini key, since
+  a supported build's sh3.exe offsets are proven in range before this ever runs.
+  An unreadable whole install already reported itself unreadable and applied no
+  patch, needing no change.
+- **Exponent format**: left exactly as ticket 01 originally described --
+  unproven in both directions until one live patch through the GUI against a
+  real install settles whether h.sie's parser accepts APE's two-digit exponent.
+  Not something a fixture can prove.
+- Tests added under `tests/patcher_gui/PatchSessionTests.cs` and
+  `PatchStateTests.cs` cover every bullet in the Testing Decisions' "Covered"
+  list for stories 1-15, each written to fail before its fix.

@@ -67,6 +67,12 @@ namespace ApePatcher
         public bool Ok;
         public string Message = "";
         public List<string> SitesWritten = new List<string>();
+
+        /// <summary>True when the refusal is specifically that a hsie.ini site
+        /// holds a value APE did not write -- the one refusal a player can
+        /// deliberately proceed past (ticket 01 story 9), by calling Apply again
+        /// with allowForeignWrite: true.</summary>
+        public bool ForeignWrite;
     }
 
     /// <summary>One site whose target bytes differ from what is on disk. The unit
@@ -111,6 +117,12 @@ namespace ApePatcher
         readonly string dir;
         byte[] exe;          // null when the install could not be read
         IniFile ini;
+
+        /// <summary>The file-write boundary, seamed so tests can inject a write
+        /// failure -- including a rollback's own write -- without a real
+        /// read-only disk (ticket 01 story 14). Defaults to the real thing.</summary>
+        internal Action<string, byte[]> WriteExeBytes = File.WriteAllBytes;
+        internal Action<IniFile, string> SaveIni = delegate(IniFile f, string p) { f.Save(p); };
 
         public InstallReport Install { get; private set; }
 
@@ -224,23 +236,71 @@ namespace ApePatcher
             return at < exe.Length && exe[at] == 0xFF;
         }
 
+        /// <summary>Does this feature hold what APE would write, as opposed to
+        /// merely differing from h.sie's original? A site another mod touched
+        /// differs from the original too, but it is not APE's, so it must not
+        /// read as applied (ticket 01 story 10). For sh3.exe that means the same
+        /// test Verify uses to trust a value APE itself wrote: the invariant
+        /// context bytes still match what APE was proven against, with only the
+        /// mutable field differing -- a site whose context has moved is someone
+        /// else's edit, not APE's, whatever its field holds. A site that cannot
+        /// be read at all is skipped rather than counted either way (story 11) --
+        /// in practice this only reaches a hsie.ini key missing from the file,
+        /// since a supported build's sh3.exe offsets are proven in range by
+        /// Manifest.Identify before this ever runs.</summary>
         bool IsApplied(Patch p)
         {
+            bool foundApeValue = false;
             foreach (Site s in p.Sites)
             {
                 if (s.Store == SiteStore.Sh3Exe)
                 {
                     byte[] onDisk = ReadRun(s);
-                    if (onDisk == null || !Same(onDisk, s.Original)) return true;
+                    if (onDisk == null) continue;
+                    if (!ContextMatches(s, onDisk)) continue;
+                    if (!Same(onDisk, s.Original)) foundApeValue = true;
                 }
                 else
                 {
                     string line = ini.Line(s.Key);
-                    if (line == null || !string.Equals(line, s.OriginalLine, StringComparison.Ordinal))
-                        return true;
+                    if (line == null) continue;
+                    if (string.Equals(line, s.OriginalLine, StringComparison.Ordinal)) continue;
+                    if (IniLineIsRecognised(s, line)) foundApeValue = true;
                 }
             }
-            return false;
+            return foundApeValue;
+        }
+
+        /// <summary>True when a run's invariant context bytes match what APE was
+        /// proven against -- the same check Verify performs before writing,
+        /// reused here so "holds what APE would write" means the same thing in
+        /// both places.</summary>
+        static bool ContextMatches(Site s, byte[] run)
+        {
+            foreach (KeyValuePair<int, byte[]> ctx in s.Context)
+                for (int i = 0; i < ctx.Value.Length; i++)
+                    if (run[ctx.Key + i] != ctx.Value[i]) return false;
+            return true;
+        }
+
+        /// <summary>True when a hsie.ini line is either h.sie's original or
+        /// something APE itself could have written -- its fixed literal for a
+        /// literal site, or a number that round-trips through APE's own
+        /// scientific-notation formatting for a derived one. Anything else is a
+        /// player's hand-edit or a foreign tool, which APE must not silently
+        /// treat as its own (tickets 01 stories 7, 10, 12).</summary>
+        static bool IniLineIsRecognised(Site s, string line)
+        {
+            if (string.Equals(line, s.OriginalLine, StringComparison.Ordinal)) return true;
+            if (s.Source == Source.Literal)
+                return string.Equals(line, s.Key + "=" + s.LiteralValue, StringComparison.Ordinal);
+
+            int eq = line.IndexOf('=');
+            if (eq < 0) return false;
+            string raw = line.Substring(eq + 1).Trim(' ', '\t');
+            double value;
+            if (!Fmt.TryParse(raw, out value)) return false;
+            return string.Equals(raw, Fmt.Sci(value), StringComparison.Ordinal);
         }
 
         void ReadBack()
@@ -445,6 +505,16 @@ namespace ApePatcher
 
         public WriteReport Apply(PatchState desired)
         {
+            return Apply(desired, false);
+        }
+
+        /// <summary>allowForeignWrite lets a player proceed past a refusal that a
+        /// hsie.ini site holds a value APE did not write -- their own hand-edit,
+        /// deliberately overwritten with APE's value (ticket 01 story 9). It has
+        /// no effect on the sh3.exe context check, which stays absolute: that
+        /// refusal means APE cannot prove what it would be writing over.</summary>
+        public WriteReport Apply(PatchState desired, bool allowForeignWrite)
+        {
             WriteReport report = new WriteReport();
 
             if (!Install.Supported)
@@ -460,13 +530,37 @@ namespace ApePatcher
                 return report;
             }
 
+            // The UI disables Apply on an invalid model, but PatchSession is the
+            // seam that actually writes -- it must not trust a caller above it to
+            // have checked first (ticket 01 story 3).
+            if (desired.DieselApplied && !desired.RateValid)
+            {
+                report.Message = "APE refused to write: the rate must be above 0 and at or below "
+                    + Fmt.Int((int)PatchState.RateCeiling) + " events per 10,000 hours.";
+                return report;
+            }
+            if (desired.DieselApplied && !desired.BandValid)
+            {
+                report.Message = "APE refused to write: the damage band needs a low end above 0 "
+                    + "and below the high end, which must itself be below 1.";
+                return report;
+            }
+            if (desired.HullApplied && !desired.HullValid)
+            {
+                report.Message = "APE refused to write: the hull repair minimum must not be above "
+                    + "the maximum.";
+                return report;
+            }
+
             // Verify every site of every feature APE is responsible for, before a
             // single byte is written. One mismatch aborts the whole commit --
             // including the other store's -- so nothing is ever half-patched.
-            string failure = Verify();
+            bool foreignWrite;
+            string failure = Verify(allowForeignWrite, out foreignWrite);
             if (failure != null)
             {
                 report.Message = failure;
+                report.ForeignWrite = foreignWrite;
                 return report;
             }
 
@@ -501,7 +595,7 @@ namespace ApePatcher
             byte[] exeBackup = exe;
             try
             {
-                if (exeChanged) File.WriteAllBytes(ExePath, newExe);
+                if (exeChanged) WriteExeBytes(ExePath, newExe);
             }
             catch (Exception e)
             {
@@ -511,15 +605,29 @@ namespace ApePatcher
             }
             try
             {
-                if (iniChanged) newIni.Save(IniPath);
+                if (iniChanged) SaveIni(newIni, IniPath);
             }
-            catch (Exception e)
+            catch (Exception iniFailure)
             {
                 // Put sh3.exe back rather than leave the install half-patched.
-                try { if (exeChanged) File.WriteAllBytes(ExePath, exeBackup); }
-                catch { }
+                // A rollback that itself throws is not swallowed: the player is
+                // told exactly which files are in which state and how to recover
+                // (ticket 01 stories 5-6), instead of seeing only the ini error
+                // while sh3.exe sits silently patched.
                 report.SitesWritten.Clear();
-                report.Message = CannotWrite(HsieIniName, e);
+                if (exeChanged)
+                {
+                    try
+                    {
+                        WriteExeBytes(ExePath, exeBackup);
+                    }
+                    catch (Exception rollbackFailure)
+                    {
+                        report.Message = InconsistentState(iniFailure, rollbackFailure);
+                        return report;
+                    }
+                }
+                report.Message = CannotWrite(HsieIniName, iniFailure);
                 return report;
             }
 
@@ -541,6 +649,27 @@ namespace ApePatcher
                 + "or move the game somewhere you can write to.";
         }
 
+        /// <summary>The one outcome the header comment used to promise could not
+        /// happen: sh3.exe was written, hsie.ini was not, and putting sh3.exe back
+        /// failed too. Names both files' actual states and what to do about it,
+        /// rather than discarding the rollback's own failure (ticket 01 stories
+        /// 5-6, 14).</summary>
+        static string InconsistentState(Exception iniFailure, Exception rollbackFailure)
+        {
+            return "APE could not write " + HsieIniName + " (" + iniFailure.Message + "), and then "
+                + "could not restore " + Sh3ExeName + " to what it was before this attempt ("
+                + rollbackFailure.Message + ")."
+                + Environment.NewLine + Environment.NewLine
+                + "Your install is now inconsistent: " + Sh3ExeName + " holds the change APE just "
+                + "made, but " + HsieIniName + " does not."
+                + Environment.NewLine + Environment.NewLine
+                + "To recover: close APE, make sure " + HsieIniName + " is writable (not read-only, "
+                + "not open in another program, not synced by a cloud backup tool), then run APE "
+                + "again and apply the same change -- that finishes writing " + HsieIniName + " so "
+                + "it agrees with " + Sh3ExeName + ". If it fails again, restore both files from a "
+                + "backup or reinstall h.sie's hardcode fixes before trying once more.";
+        }
+
         static string Describe(WritePlan plan)
         {
             Dictionary<string, int> byPatch = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -557,12 +686,18 @@ namespace ApePatcher
             return "Written: " + string.Join(", ", parts.ToArray()) + ".";
         }
 
-        /// <summary>Check every site's invariant context bytes, never its mutable
-        /// field -- that is what lets a value APE itself wrote coexist with
-        /// verify-before-write. Returns null when everything checks out, or a
-        /// message naming the first offending site and what was found there.</summary>
-        string Verify()
+        /// <summary>Check every site's invariant context bytes for sh3.exe, never
+        /// its mutable field -- that is what lets a value APE itself wrote
+        /// coexist with verify-before-write. For hsie.ini, check the whole line
+        /// against both h.sie's original and APE's own recognisable formats,
+        /// which makes the same promise the context-byte check makes: a value
+        /// neither APE nor h.sie put there is not silently overwritten (ticket 01
+        /// stories 7, 12). Returns null when everything checks out, or a message
+        /// naming the first offending site and what was found there; foreignWrite
+        /// is true only for the one refusal a caller can proceed past.</summary>
+        string Verify(bool allowForeignWrite, out bool foreignWrite)
         {
+            foreignWrite = false;
             foreach (Patch p in manifest.Patches)
             {
                 if (!Install.Available(p.Id)) continue;
@@ -594,11 +729,25 @@ namespace ApePatcher
                     }
                     else
                     {
-                        if (ini.Has(s.Key)) continue;
-                        return "APE refused to write. " + s.Describe()
-                            + " is not in this " + HsieIniName + "."
+                        string have = ini.Line(s.Key);
+                        if (have == null)
+                            return "APE refused to write. " + s.Describe()
+                                + " is not in this " + HsieIniName + "."
+                                + Environment.NewLine
+                                + "Nothing was written, in either file.";
+                        if (IniLineIsRecognised(s, have)) continue;
+                        if (allowForeignWrite) continue;
+                        foreignWrite = true;
+                        return "APE refused to write. hsie.ini " + s.Key + " holds a value APE did "
+                            + "not write:"
                             + Environment.NewLine
-                            + "Nothing was written, in either file.";
+                            + "  found in your file   " + have
+                            + Environment.NewLine
+                            + "  h.sie's original      " + s.OriginalLine
+                            + Environment.NewLine
+                            + "Nothing was written, in either file. This is usually your own edit to "
+                            + HsieIniName + " -- APE will not overwrite it silently. Keep it as it "
+                            + "is, or apply again to proceed and let APE write its own value over it.";
                     }
                 }
             }

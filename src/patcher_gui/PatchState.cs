@@ -110,7 +110,23 @@ namespace ApePatcher
             get { return 0.0 < BandLo && BandLo < BandHi && BandHi < 1.0; }
         }
 
-        public bool RateValid { get { return Rate > 0.0 && Rate <= 1000.0; } }
+        // The rate ceiling a real damage model can express: 360,000 events per
+        // 10,000 hours is the blackbox procedure's p_dso = 0.01/s exactly
+        // (umbrella ticket 12), and nothing beyond it is needed.
+        public const double RateCeiling = 360000.0;
+
+        // The old ceiling, before the blackbox procedure needed more headroom.
+        // It was a taste judgement about realistic play, not a model constraint,
+        // so it survives as the line between a play-range rate and a test-range
+        // one rather than being deleted (ticket 01 stories 1-2).
+        public const double RealisticRateCeiling = 1000.0;
+
+        public bool RateValid { get { return Rate > 0.0 && Rate <= RateCeiling; } }
+
+        /// <summary>True once the rate is so far above realistic play that it can
+        /// only be a deliberate test value -- the blackbox procedure's territory,
+        /// not a shipping setting a player would choose.</summary>
+        public bool IsTestRate { get { return Rate > RealisticRateCeiling; } }
 
         /// <summary>The crew-repairable guarantee the whole band decision rests
         /// on: a single hit cannot reach 1.0 while the maximum is below it.
