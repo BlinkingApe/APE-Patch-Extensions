@@ -547,9 +547,14 @@ is blocked by §0.
   umbrella-roadmap ticket 11; also decides whether snorkelling counts as diesel
   running time.
 - `[0x547080]` — the byte gate at `0x635080`, compared against `1`.
-- The `[0x5543DC]` singleton itself, still unidentified — read here, by the
-  u-tanker mod's block 1, and listed as an unknown guard in
-  `01-crush-depth-damage-signature.md` §2.
+- The `[0x5543DC]` singleton itself — read here, by the u-tanker mod's block 1,
+  and listed as an unknown guard in `01-crush-depth-damage-signature.md` §2.
+  **2026-08-17: working hypothesis added** (not proven) — single writer at
+  `0x004A2966` looks like a unit-registration site, and it's read directly inside
+  both of stock's depth-handling functions. See
+  `01-crush-depth-damage-signature.md` §6 for the full offset survey off
+  `[[0x5543DC]+4]`, including the `+0x83C` overlap with the `[0x5449B0]+0xD8`
+  "god object" candidate.
 - Whether the two engine floats at `[[0x5543DC]+4]+0x30C` map to port/starboard
   in a fixed order.
 - AOB signatures with wildcards + uniqueness proofs per ADR-0003 — this note

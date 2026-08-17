@@ -1,12 +1,12 @@
 # Retire the superseded crush-depth model's artifacts
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: none
 
 ## Parent
 
-.scratch/crush-depth-damage/map.md
+.scratch/depth-pressure-stress/map.md
 
 ## Question
 
@@ -54,7 +54,40 @@ sessions that resolve 08–11.
 
 ## Acceptance criteria
 
-- [ ] The four dead issue files deleted.
-- [ ] Old issue `01` amended: CDT hunt marked dead, remaining hunts cross-referenced.
-- [ ] `CONTEXT.md`'s band entry replaced with a tier entry.
-- [ ] An ADR written for the model reversal and the poll-and-amplify limitation.
+- [x] The four dead issue files deleted.
+- [x] Old issue `01` amended: CDT hunt marked dead, remaining hunts cross-referenced.
+- [x] `CONTEXT.md`'s band entry replaced with a tier entry.
+- [x] An ADR written for the model reversal and the poll-and-amplify limitation.
+
+## Answer
+
+Resolved 2026-08-17.
+
+- Deleted `03-damage-band-decision-function.md`, `04-ape-cfg-config-loading.md`,
+  `06-sh3exe-patcher-tool.md`, `07-jsgme-packaging-and-distribution.md`.
+- Amended `01-re-crush-depth-damage-signature.md`: CDT hunt and the `CrashSpeed`
+  data-file task marked dead; the boat/depth pointer-chain hunts pointed at tickets
+  `08`/`09`; static-pass write-up kept as still-valid, still-cited context.
+- `CONTEXT.md`: `damage window`/`band` entry replaced with a `depth tier` entry
+  (absolute depth, multiplier + seep + wear, tier 3 untouched); `_Avoid_` line
+  inverted (was "avoid tier", now "avoid damage window/band"). Also corrected the
+  `crush depth` and `AOB pattern scan` entries, which still asserted APE
+  reads/anchors CDT.
+- Wrote `docs/adr/0008-depth-effects-hand-crush-depth-back-to-stock.md`: records the
+  reversal from "APE owns 100% below crush depth" to "tier 3 is stock's, untouched",
+  and why the multiplier must be poll-and-amplify (ADR-0001's alongside principle
+  rules out hooking the writer to see the delta directly) — including the resulting
+  limitation that APE cannot attribute an HP drop to a cause.
+
+**Scope discovered beyond this ticket's original text, not resolved here:**
+
+- `05-ape-act-hook-install-and-wiring.md` was just as stale as `01` — the full
+  end-to-end wiring ticket for the dead model, with real linked C++ built against
+  it — but wasn't on this ticket's list. Amended in place with a superseded banner;
+  left `needs-info` pending the PRD rewrite rather than resolved, since rewiring it
+  onto the tier model is implementation work blocked on tickets `08`–`12`.
+- The dead model's C++ is still live in the build graph
+  (`src/mods/crush_depth_damage/*`, `CMakeLists.txt`, `tools/config_check`,
+  `tests/damage_band_test.cpp`, `data/Cfg/ape.cfg`) — deleting it safely needs its
+  own session (risk of breaking the build) rather than folding into this pass.
+  Spun into new ticket `15`.

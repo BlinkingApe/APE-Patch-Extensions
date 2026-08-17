@@ -13,14 +13,15 @@ A plain PE32 DLL, loaded by OAE sh3.exe's own custom module loader (a hand-patch
 _Avoid_: "plugin", "act file" (ambiguous with the palette data files)
 
 **crush depth**:
-An existing, engine-tracked value representing the depth at which a submarine begins taking hull damage from pressure. APE reads this value; it does not define or own it.
+An existing, engine-tracked value representing the depth at which stock SH3 begins taking hull damage from pressure. **APE's depth-pressure-stress feature never reads this value** — it is superseded terminology from an earlier (abandoned) model. Stock's own crush-depth damage is left untouched below it.
+_Avoid_: "CDT" as something APE resolves or owns (only the abandoned model did).
 
-**damage window** (also: **band**):
-A configured range, expressed as a fraction of crush depth past the threshold, within which a fixed HP-per-game-second rate applies. APE defines three: light, medium, and an open-ended heavy band. APE owns the entire crush-depth damage model — stock's own bleed is neutralized (`CrashSpeed`=0 in shipped per-unit data) — so there is no "hand back to stock" zone; the heavy band applies until the hull is gone.
-_Avoid_: "tier", "zone"
+**depth tier**:
+One of a small number of configured **absolute** depth thresholds (default ~100m for tier 1, deeper for tier 2) below which APE's own effects apply: a hull-damage **multiplier** (poll-and-amplify — APE notices hull HP fell by N since last tick and subtracts a further `(mult−1)·N`, never attributing the cause), a flat astern **seep rate**, and a flat electric-engine **wear chance**. Crossing a tier boundary is a step change. Tier 3 is stock's own crush-depth damage, untouched — there is no tier APE owns entirely. See `.scratch/depth-pressure-stress/map.md`.
+_Avoid_: "damage window", "band" (terminology from the abandoned three-band, fraction-of-crush-depth model)
 
 **AOB pattern scan** (array-of-bytes scan):
-Resolving an address at runtime by searching loaded process memory for a byte signature (with wildcards for bytes expected to vary), rather than trusting a fixed offset found once and hardcoded. APE uses it to anchor the pointer chains it follows to the live values it reads/writes (player boat, depth, crush depth, HP, mission clock). Since stock sh3.exe never moves, the payoff is self-verification: a patch that shifts an anchor makes the scan miss, and APE fails inert rather than misreading.
+Resolving an address at runtime by searching loaded process memory for a byte signature (with wildcards for bytes expected to vary), rather than trusting a fixed offset found once and hardcoded. APE uses it to anchor the pointer chains it follows to the live values it reads/writes (player boat, depth, hull HP, mission clock, and per-feature values like the diesel/electric-engine damage floats). Since stock sh3.exe never moves, the payoff is self-verification: a patch that shifts an anchor makes the scan miss, and APE fails inert rather than misreading.
 _Avoid_: "hardcoded offset" (the alternative APE deliberately avoids for its anchors)
 
 **JSGME**:

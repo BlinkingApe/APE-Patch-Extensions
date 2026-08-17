@@ -7,7 +7,7 @@ APE is intended to eventually be shared with the OAE/SH3 modding community, not 
 > writes no `LoadLibrary` call site. It patches value sites in `sh3.exe` and keys in
 > `hsie.ini` only. Nothing here is retracted — hull repair and diesel damage are static
 > value edits that need no runtime DLL, so the `ape.act` half of this decision only becomes
-> necessary when crush-depth damage is implemented (see `.scratch/crush-depth-damage/`).
+> necessary when crush-depth damage is implemented (see `.scratch/depth-pressure-stress/`).
 > Revisit this ADR then; until then it describes the intended end state, not the shipped one.
 
 Decided: the JSGME-installable package contains only `ape.act` and `data/Cfg/ape.cfg`. The `sh3.exe` `LoadLibrary` call site (see ADR-0002) is applied by a standalone patcher tool that end users run once against their own OAE `sh3.exe`. This avoids ever redistributing modified copyrighted binary bytes, and the same tool doubles as the internal tool used to reapply the patch after OAE rebuilds during development. Whether to also offer a pre-patched exe as an alternative distribution path is deliberately left open for later.

@@ -4,7 +4,7 @@ Status: ready-for-human
 
 ## Parent
 
-.scratch/crush-depth-damage/PRD.md
+.scratch/depth-pressure-stress/PRD.md
 
 ## What to build
 

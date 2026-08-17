@@ -6,7 +6,7 @@ Blocked by: none
 
 ## Parent
 
-.scratch/crush-depth-damage/map.md
+.scratch/depth-pressure-stress/map.md
 
 ## Question
 
@@ -36,6 +36,16 @@ Also confirm the practical shape of poll-and-amplify:
 HITL: needs a live boat taking real damage.
 
 ⚠ Hash the running `sh3.exe` first.
+
+## Static leads (2026-08-17)
+
+A static pass (not yet CE-confirmed) found `0x5543DC` — already an unidentified
+singleton in this note's §2 — read directly inside `00513FC0` (the depth setter)
+and its caller `00514560`, and has exactly one writer in the whole binary
+(`004A2966`, shaped like a unit-registration site). Not proven to equal the boat
+pointer, but worth dumping and comparing to `ecx`/`esi` at `004E1C00`/`00513FC0`
+**before** a blind pointer-scan. Full writeup:
+`docs/re-notes/01-crush-depth-damage-signature.md` §6.
 
 ## Acceptance criteria
 

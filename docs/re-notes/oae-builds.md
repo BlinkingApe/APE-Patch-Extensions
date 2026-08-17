@@ -7,7 +7,8 @@ against; reference builds from the per-target notes by their short hash.
 
 | Short hash | SHA-256 (full) | Size (bytes) | Human label / date | Notes |
 |------------|----------------|--------------|--------------------|-------|
-| `4B6BEE20` | `4B6BEE20AD9843474D72944EE4811EBB055A8FC4A3377FB692E75731307F347B` | 1,417,216 | current install / 2026-07-13 | hsie params: `Hit_Points=500.0`, `CrashSpeed=7.0` damage/s |
+| `4B6BEE20` | `4B6BEE20AD9843474D72944EE4811EBB055A8FC4A3377FB692E75731307F347B` | 1,417,216 | install snapshot / 2026-07-13 | hsie params: `Hit_Points=500.0`, `CrashSpeed=7.0` damage/s. Superseded — see next row. |
+| `6659539E` | `6659539E2095FBDDAA2FD6EE3921D44FB1E51AB3F37AE61F529334002B8C8132` | 1,417,216 | current install / 2026-08-17 | Re-hashed while static-probing `0x5543DC` for depth-pressure-stress (`01-crush-depth-damage-signature.md` §6). **Drifted from `4B6BEE20` and from the `51d14ca3…` hash the 2026-08-15 survey recorded** (`oae-builds.md` above) — same install path, three different hashes across five weeks. Stock `.text` anchors re-verified byte-identical (§6.1 sanity check), so the drift is confined to patch-table/flag bytes, not code layout. Root cause not investigated this session — flag it before trusting any absolute VA from an older note without re-checking. |
 
 ## h.sie version survey (2026-08-15)
 

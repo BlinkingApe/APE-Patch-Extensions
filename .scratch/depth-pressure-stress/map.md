@@ -1,10 +1,10 @@
-# Crush-depth rescope: depth stress as wear, not hull bleed
+# Depth-pressure stress: hull wear, seepage, and system wear from depth
 
 Label: wayfinder:map
 
 ## Destination
 
-A **rewritten `.scratch/crush-depth-damage/PRD.md`** describing the new model —
+A **rewritten `.scratch/depth-pressure-stress/PRD.md`** describing the new model —
 absolute-depth tiers applying a hull-damage multiplier, continuous astern seepage,
 and probabilistic electric-engine wear — in which **every mechanic has a located,
 proven write target**. Reaching the end means the five live values are resolved and
@@ -16,6 +16,12 @@ write target is unlocated is not specified.
 
 ## Notes
 
+- **Effort renamed 2026-08-17**: `.scratch/crush-depth-damage/` → `.scratch/depth-pressure-stress/`,
+  reflecting that the destination now covers hull wear, astern seepage, *and*
+  system (electric-engine) wear from depth — not crush-depth bleed alone. Ticket
+  filenames and historical references to "crush-depth-damage" (old tickets `01`–`07`,
+  `docs/re-notes/01-crush-depth-damage-signature.md`) are left as-is; they're stable
+  identifiers for work already done, not live effort names.
 - Domain: OAE sh3.exe / `.act` DLL modding — see `CONTEXT.md` at repo root.
 - **This map supersedes the model in the existing `PRD.md`**, which describes three
   fraction-of-crush-depth bands of flat HP-per-second hull bleed with stock's
@@ -62,11 +68,19 @@ write target is unlocated is not specified.
   `data/Menu/en_menu.txt` settled more umbrella questions than disassembly did.
 - Use `/grilling` and `/domain-modeling` on this map; `/to-spec` to write the PRD
   once the way is clear.
+- **Static pass 2026-08-17** (`docs/re-notes/01-crush-depth-damage-signature.md`
+  §6): a candidate static root (`0x5543DC`) for the player-boat/movementObj chain,
+  plus an offset survey of a large shared object it reaches that narrows where the
+  electric-engine damage float likely lives. Not CE-confirmed — sharpens tickets
+  `08`, `09`, `11` but doesn't resolve them; still HITL work. No static candidate
+  found for the mission clock or the flooding trigger (ticket `10`).
 
 ## Decisions so far
 
 <!-- charted 2026-08-16; the model above was settled in the charting session's
      grilling and is recorded in Notes, not here -->
+
+- [Retire the superseded crush-depth model's artifacts](issues/13-retire-superseded-model.md) — dead tickets deleted, issue `01` and `05` amended, `CONTEXT.md` glossary reversed to `depth tier`, ADR-0008 written for the model reversal + poll-and-amplify limitation. Surfaced ticket `15` for the dead C++ still linked into the build.
 
 ## Not yet specified
 

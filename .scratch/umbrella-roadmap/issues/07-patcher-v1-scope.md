@@ -135,7 +135,7 @@ architecture?" — that framing is now wrong in two directions:
   mechanism, not "half the architecture".
 - **Including it would gate the release on unfinished RE, not on build effort.**
   The only candidate that exercises the target is crush-depth constants, and
-  `.scratch/crush-depth-damage/issues/01-re-crush-depth-damage-signature.md` is
+  `.scratch/depth-pressure-stress/issues/01-re-crush-depth-damage-signature.md` is
   still `needs-info`: the static half is done, but **four dynamic hunts** (boat
   pointer chain, movementObj chain, CDT, mission clock) each need a live Cheat
   Engine session with a human diving the boat. That is not work the patcher build

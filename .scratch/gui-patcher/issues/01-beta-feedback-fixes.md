@@ -1,7 +1,7 @@
 # Beta feedback fixes: commit atomicity, foreign-write detection, and the rate ceiling
 
 Type: task
-Status: ready-for-agent
+Status: partially resolved — stories 16-20 (KC 2.5 admission) done 2026-08-17, see Amendment; stories 1-15 (rate ceiling, commit atomicity, foreign-write detection, applied-state detection) still open
 
 ## Blocked by
 

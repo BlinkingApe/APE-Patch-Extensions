@@ -68,7 +68,7 @@ starting.
   were derived from (`01-live-session-playbook.md` names it and says explicitly
   to re-verify if the hash doesn't match). **Confirm the SHA-256 first**, every
   session, before spending CE time on absolute VAs from these notes.
-- Existing precedent for a fully-specified mod effort: `.scratch/crush-depth-damage/`
+- Existing precedent for a fully-specified mod effort: `.scratch/depth-pressure-stress/`
   (PRD.md + numbered issues). New goals should land in a directory of the same
   shape once scoped.
 - Priority across new goals (hull-repair, diesel-damage, docking) is

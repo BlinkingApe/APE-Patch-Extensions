@@ -21,23 +21,32 @@ interactive cross-referencing when walking the chains found dynamically.
 
 ## ▶ NEXT SESSION — START HERE
 
-We need runtime-resolvable, AOB-anchored handles for these, all rooted in **stable
-stock sh3.exe** (static image at `0x00400000`, never recompiled; only per-launch
-ASLR/heap moves the live objects):
+⚠ **Superseded table (kept for history):** the 4-row table below predates the
+tier-model pivot recorded in `.scratch/depth-pressure-stress/map.md`. CDT is now
+**dead** (the new model never reads crush depth); astern seepage and the
+electric-engine damage float were added as live-value hunts. The current, complete
+worklist for **depth-pressure-stress** is:
 
 | # | Value | Offset / chain | Status |
 |---|-------|----------------|--------|
-| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) still needs the dynamic chain-walk (§4). |
-| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer still needs the dynamic chain-walk (§4). |
-| 3 | **CDT (crush depth)** | TBD | **location unknown — dynamic hunt (§4)** |
-| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** (drives game-second `dt`; see PRD timing) |
+| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) needs the dynamic chain-walk (§4) — **candidate static root found 2026-08-17: `0x5543DC`** (§6). |
+| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer needs the dynamic chain-walk (§4) — **same `0x5543DC` candidate is directly used in this function's guard code** (§6). |
+| 3 | ~~CDT (crush depth)~~ | — | **dead.** Tier model never reads crush depth (map, Out of scope). |
+| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** (drives game-second `dt`) — no static candidate found yet (§6). |
+| 5 | **Astern seepage / flooding trigger** | TBD | **dynamic hunt.** No static candidate found yet — see issue `10`; SH3's flooding model itself is unmapped. |
+| 6 | **Electric-engine damage float** | `[[0x5543DC]+4]+0x??` (exact offset TBD) | **dynamic hunt, but strongly narrowed by §6** — same object and same array region as the diesel pair at `+0x30C`; a handful of neighbouring offsets are the short list to try first in CE (issue `11`). |
 
-**Static pass complete (2026-07-21).** Both code anchors are located and carry a
-verified-unique AOB signature (§1). What remains is all **dynamic** (needs the live
-game + a human diving the boat): rooting the two player pointer chains, and finding
-CDT + the mission clock (§4). The AOB signatures are the self-verification handles
-ADR-0003 calls for — once CE gives a static→object chain, the matching AOB confirms
-the field offset (`+0xB8` / `+0x54`) is still valid for this build.
+**Static pass complete (2026-07-21), extended (2026-08-17).** The original two code
+anchors (§1) are located with a verified-unique AOB signature. A follow-up static
+pass (§6) surveyed the `0x5543DC` singleton across both `.text` and h.sie's `.pcode`
+region and found it directly implicated in **both** #1 and #2's code, plus the
+diesel-damage cave (#6's neighbour) and the u-tanker hull-repair cave — making it
+the single most promising static root to test first in CE, ahead of a blind
+pointer-scan. Mission clock (#4) and the flooding trigger (#5) still have **no**
+static candidate; they remain open-ended dynamic hunts. The AOB signatures are the
+self-verification handles ADR-0003 calls for — once CE gives a static→object chain,
+the matching AOB confirms the field offset (`+0xB8` / `+0x54`) is still valid for
+this build.
 
 Plus one **non-memory** task: find which OAE **data file** holds the per-unit
 `CrashSpeed` so we can author the `CrashSpeed`=0 edit for each playable u-boat class
@@ -255,9 +264,113 @@ freezes on pause and accelerates under time compression. Record address, chain, 
 
 The 2026-07-21 static pass used Python `pefile` + `capstone` (Binary Ninja is
 GUI/personal on this machine — no headless API to script). Image base `0x00400000`,
-primary code section `.text` VA `0x00401000`–`0x0051D000`. Scripts are in the
-session scratchpad (`sh3re.py` AOB + uniqueness, `chains.py` xref/func-start/callers,
-`probe.py` singleton-offset tally); re-run against a new build by pointing `EXE=` at
-its `sh3.exe`. AOB uniqueness = count matches over `.text` only. Caution: raw
-4-byte-immediate scans yield false "refs" (e.g. `add eax, 0x566A28`); filter to
-instructions whose *memory operand* disp equals the target (as `chains.py` does).
+primary code section `.text` VA `0x00401000`–`0x0051D000`. Scripts persist in the
+repo at `tools/re-static/` (`sh3re.py` AOB + uniqueness, `chains.py`
+xref/func-start/callers, `probe.py` singleton-offset tally — see its README);
+re-run against a new build by pointing `EXE=` at its `sh3.exe`. AOB uniqueness =
+count matches over `.text` only. Caution: raw 4-byte-immediate scans yield false
+"refs" (e.g. `add eax, 0x566A28`); filter to instructions whose *memory operand*
+disp equals the target (as `chains.py` does). **The 2026-08-17 pass (§6) extended
+this to also scan `.pcode`** (h.sie's appended cave region, `0x00633000`+) — several
+of the mods that reference `0x5543DC` live there, not in stock `.text`, and a
+`.text`-only scan misses them entirely.
+
+## 6. Static lead (2026-08-17): `0x5543DC` as a candidate player/equipment root
+
+Follow-up static pass, run against `C:\games\OneAlex Extended 1.5.2\sh3.exe`
+(current sha256 `6659539e…` — **drifted from the `oae-builds.md` `4B6BEE20` row**;
+see that file's update). Motivated by depth-pressure-stress tickets `08`, `09`,
+`11` all needing a player-object root and `0x5543DC` already being flagged, in three
+separate notes, as an unidentified singleton used by stock depth code, the diesel
+cave, and the u-tanker hull-repair cave.
+
+**Sanity check first:** `004E1C99` (hull-HP getter) and `00513FE9` (depth setter)
+are byte-identical to the 2026-07-21 pass despite the file hash drift — confirms
+stock `.text` is still stable enough to trust this note's existing AOB anchors
+without re-deriving them.
+
+### 6.1 `0x5543DC` has exactly one writer in the whole binary
+
+```
+004A2966  A3 DC 43 55 00   mov [0x5543DC], eax
+```
+
+Immediately after, the same function walks an array of `0x54`-byte elements
+looking for a match on `eax` (`imul esi, esi, 0x54` / `add esi, ecx`) — the shape
+of a "find this object's slot in a list" idiom, consistent with registering a
+newly-controlled unit. **Working hypothesis: `[0x5543DC]` is the live
+player-controlled-unit pointer**, written once per mission/unit-change, read
+everywhere else. Not yet proven — the registration function itself wasn't traced
+to a name or call site this session.
+
+### 6.2 It is read at both of stock's depth sites, not just as a stray guard
+
+| Site | Context |
+|---|---|
+| `00513FCC` (inside the depth-setter `00513FC0`, 2 instructions before `ecx+0x54` is written) | `fld dword [eax+0x10]` off `[0x5543DC]` — a tolerance/epsilon float gating whether the setter bothers writing at all. |
+| `00514560` (the depth-setter's caller region, matches the `this=esi` call site already recorded in §1/§2) | `[0x5543DC]` null-checked as a guard (`test eax,eax; je skip`) before calling the depth-update chain — **not** used as the `this` itself; `esi`/`ecx` (a parameter, still needing a dynamic root) is. |
+
+So `0x5543DC` does **not** trivially equal `movementObj` — it's read from the same
+function neighbourhood as a companion/guard object, which is still a useful
+triangulation point for a CE pointer-scan (search near it) but not a proven
+shortcut.
+
+### 6.3 `[[0x5543DC]+4]` is a large, multi-mod-shared object — offset survey
+
+Scanning every real xref to `0x5543DC` across `.text` **and** `.pcode`, then
+following each `mov reg,[0x5543DC]` / `mov reg2,[reg+4]` pair and tallying what
+gets dereferenced off `reg2`:
+
+| Offset | Seen | First known use |
+|---|---|---|
+| `+0x004` | 19× | (the hop itself — object-of-object) |
+| `+0x008` | 15× | `00635063` diesel cave: singleton-liveness check before the tick |
+| `+0x010` | 4× | `006350D0` diesel cave region |
+| `+0x014` | 2× | `0063521E` (unidentified h.sie cave) |
+| `+0x018` | 2× | `0063505D` diesel cave: surface/running gate, summed with `+0x1C` (§4 of `04-diesel-damage-signature.md`) |
+| `+0x01C` | 2× | same gate |
+| `+0x084` | 3× | `00637153` (unidentified cave) |
+| `+0x0A4` | 3× | `00637153`: **`call [eax+0xA4]`** — a vtable-style virtual call, i.e. this object has function pointers, not just data |
+| `+0x0D8` | 1× | `00635640` (unidentified cave) |
+| `+0x30C` | 3× | `0063505D` diesel cave: the confirmed port/starboard engine-damage floats |
+| `+0x320` | 4× | `0063505D` diesel cave: the confirmed machine-telegraph float |
+| `+0x358`/`+0x360` | 1× each | `00634371` (unidentified cave), `qword` (double) fields |
+| `+0x438`/`+0x440` | 1× each | `006355F1` (unidentified cave) |
+| `+0x4A0`/`+0x4A4` | 2× each | `006355F1` (unidentified cave) |
+| `+0x83C` | 1× | `00635640` (unidentified cave) |
+
+**`+0x83C` is the same offset** the 2026-07-21 pass found heavily used (641×) off
+`[[0x5449B0]+0xD8]`, the "god"/manager object candidate already on record in §2.
+That is independent circumstantial evidence that `[[0x5543DC]+4]` and
+`[[0x5449B0]+0xD8]` may be **the same object reached by two different static
+paths** — worth a direct pointer-value comparison in CE (dump both live and
+compare) before spending a session on a from-scratch pointer-scan.
+
+### 6.4 What this narrows, concretely
+
+- **Ticket `11` (electric-engine float):** if the hypothesis in 6.1/6.3 holds, the
+  electric-engine pair is very likely **another field on this same `0x30C`-region
+  array**, not a separate object needing its own scan. The diesel pair occupies
+  `+0x30C`/`+0x310` (two consecutive floats, port/starboard); the electric pair is
+  the cheapest thing to check for immediately adjacent or structurally parallel
+  (e.g. a second `[reg]`/`[reg+4]` pair a fixed stride away — try the damage-control
+  screen's tab order or `en_menu.txt` string IDs as a cross-check for which slot is
+  which).
+- **Tickets `08`/`09` (movementObj / boat pointer for depth + hull HP):** `0x5543DC`
+  is not proven to equal either pointer, but §6.2 shows it's read from the exact
+  function neighbourhood both chains live in — a CE session should dump
+  `[0x5543DC]`, `[[0x5543DC]+4]`, and compare both against whatever `ecx`/`esi`
+  resolves to at `00513FC0` and `004E1C00`, **before** falling back to a blind
+  pointer-scan from the HP mirror or the depth gauge.
+- **Ticket `10` (flooding model) and mission clock:** no static candidate found this
+  session. `+0x358`/`+0x360` are `qword` (double-precision) fields on the same
+  object — doubles are unusual enough in this codebase to be worth a look (a
+  mission clock as a double would fit), but this is speculative, not a lead.
+- **Nine offsets above are still unidentified** (`+0x14`, `+0x84`, `+0xA4`, `+0xD8`,
+  `+0x358`, `+0x360`, `+0x438`, `+0x440`, `+0x4A0`, `+0x4A4`, `+0x83C`) — listed so a
+  future static or dynamic session doesn't re-derive the tally from scratch.
+
+Method: `tools/re-static/` scripts extended to scan `.pcode` alongside `.text`; ad
+hoc script not yet folded back into the checked-in tools (§5) — the offset-tally
+logic in `probe.py` is reusable but was re-targeted at `0x5543DC` inline rather than
+parameterized. Worth generalizing if another singleton needs the same treatment.

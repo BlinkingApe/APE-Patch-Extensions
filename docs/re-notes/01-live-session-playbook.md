@@ -114,7 +114,7 @@ The loop and its seam are already built and fail inert. To wire the results:
 
 - Record raw findings in `01-crush-depth-damage-signature.md` §1 (per-target) and
   update the §-START-HERE status table.
-- Update issue `01` (`.scratch/crush-depth-damage/issues/01-...md`): check the boxes
+- Update issue `01` (`.scratch/depth-pressure-stress/issues/01-...md`): check the boxes
   as each target lands; flip Status off `needs-info` once all four + CrashSpeed are
   recorded.
 - Then issue `05` is unblocked to completion; issue `02` (load-site RE) → `06`

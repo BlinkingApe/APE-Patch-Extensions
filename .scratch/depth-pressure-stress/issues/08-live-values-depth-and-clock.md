@@ -6,7 +6,7 @@ Blocked by: none
 
 ## Parent
 
-.scratch/crush-depth-damage/map.md
+.scratch/depth-pressure-stress/map.md
 
 ## Question
 
@@ -30,6 +30,15 @@ This is HITL: it needs SH3 running with a human diving the boat.
 ⚠ **Hash the running `sh3.exe` first** (`docs/re-notes/01-live-session-playbook.md`).
 Umbrella ticket 11 lost a session to an unverified binary; ticket 12's hash-first
 run had every address resolve first try.
+
+## Static leads (2026-08-17)
+
+`0x5543DC` (candidate root) narrowed further: it's read at both `00513FCC` (inside
+the depth setter, as a tolerance float off `+0x10`) and `00514560` (the setter's
+caller, as a liveness guard) — the exact function neighbourhood `movementObj`
+lives in, though not proven to *be* `movementObj`. No static candidate found for
+the mission clock. Full writeup: `docs/re-notes/01-crush-depth-damage-signature.md`
+§6.
 
 ## Acceptance criteria
 

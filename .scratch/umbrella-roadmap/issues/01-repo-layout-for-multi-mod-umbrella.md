@@ -12,7 +12,7 @@ None
 APE currently ships one subsystem (crush-depth damage) inside one `ape.act`
 runtime, with `src/` split by role (`ape`, `ape_act`, `core`, `patcher`) rather
 than by mod, and `.scratch/` split one-directory-per-feature
-(`.scratch/crush-depth-damage/`). The umbrella now needs to hold several
+(`.scratch/depth-pressure-stress/`). The umbrella now needs to hold several
 subsystems (crush-depth damage, hull-repair patch, diesel-damage patch,
 docking mod, and unnamed future ones) inside the *same* shared `ape.act`
 runtime.

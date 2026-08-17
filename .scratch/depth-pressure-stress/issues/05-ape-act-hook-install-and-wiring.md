@@ -1,10 +1,48 @@
 # ape.act damage-loop install, live wiring, and debug logging
 
+Status: needs-info (superseded by the tier-model pivot — see amendment below; not touched by ticket 13, discovered stale while auditing the map)
+
+## ⚠ SUPERSEDED BY THE TIER-MODEL PIVOT (amended 2026-08-17)
+
+Everything below this point describes the **abandoned three-band, fraction-of-crush-depth
+model** (CDT reads, `select_band`, a single `[CrushDepthDamage]` config section, one
+band-config struct). The map (`.scratch/depth-pressure-stress/map.md`) superseded that
+whole model; ticket 13 deleted the sibling tickets `03`/`04`/`06`/`07` that described its
+pure function and config loader, but this ticket — the actual end-to-end wiring — wasn't
+on its list. It should have been: it's the same staleness, just further along, with real
+code already built and still linked into the build (`src/mods/crush_depth_damage/`,
+`CMakeLists.txt`, `tools/config_check/main.cpp`, `tests/damage_band_test.cpp`).
+
+**What's still true and reusable:** the *shape* of the offline scaffold — `DllMain`
+spawning a background loop thread with no function hooks (ADR-0001), a resolve/sample
+seam (`IGameState`) that fails inert until real anchors are wired in, plausibility gates
+against insane reads, a discontinuity guard against save-load jumps, and a thread-safe
+append logger. None of that is model-specific; the new tier model needs the same
+skeleton.
+
+**What's dead:** the *effect* logic — `select_band`, CDT resolution, the
+`[CrushDepthDamage]` band-config struct, and the "subtract rate·dt from
+`[boat+0xB8]`" write shape (the new model is poll-and-amplify — notice HP fell by N,
+subtract a further `(mult−1)·N` — not "compute a rate and subtract it").
+
+**Not resolved here.** Rewiring this scaffold onto the tier model is real implementation
+work that depends on tickets `08`/`09`/`10`/`11` (the live-value hunts) and `12` (the tuning
+numbers) resolving first, and on the PRD rewrite the map's destination calls for — the map
+sequences RE before implementation. This ticket is left **needs-info**, not resolved or
+deleted, as a placeholder for that rewiring; a fresh ticket should probably replace it
+once the PRD is rewritten, rather than reopening this one's now-wrong acceptance criteria.
+The dead source it references (`src/mods/crush_depth_damage/*`, its CMake target, its
+`config_check` tool, its test) is tracked for removal in ticket `15`.
+
+---
+
+## Original ticket (2026-07-21, now superseded — kept for history)
+
 Status: ready-for-agent (offline scaffold DONE; remainder blocked on issue 01 — see Comments)
 
 ## Parent
 
-.scratch/crush-depth-damage/PRD.md
+.scratch/depth-pressure-stress/PRD.md
 
 ## What to build
 

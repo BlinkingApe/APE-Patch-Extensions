@@ -6,7 +6,7 @@ Blocked by: 10, 11
 
 ## Parent
 
-.scratch/crush-depth-damage/map.md
+.scratch/depth-pressure-stress/map.md
 
 ## Question
 

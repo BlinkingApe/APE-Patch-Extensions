@@ -28,7 +28,7 @@ effort (PRD + issues, same shape as `crush-depth-damage`):
   disabled with the stretch goal only adjusting the *amount* (i.e. is "off"
   itself ever configurable, or only the repair rate when not fully off).
 - Whether locating the relevant function is RE work in the same style as
-  crush-depth-damage's AOB-anchor hunt (`.scratch/crush-depth-damage/issues/01-*`)
+  crush-depth-damage's AOB-anchor hunt (`.scratch/depth-pressure-stress/issues/01-*`)
   — if so, note it as the first issue of the new feature effort rather than
   resolving it here. Starting method for that hunt:
   `docs/re-notes/02-hsie-patch-identification-method.md` (jump-away site +

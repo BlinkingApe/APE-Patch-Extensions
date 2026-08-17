@@ -6,7 +6,7 @@ Blocked by: none
 
 ## Parent
 
-.scratch/crush-depth-damage/map.md
+.scratch/depth-pressure-stress/map.md
 
 ## Question
 
@@ -37,6 +37,19 @@ Sub-questions:
 HITL: needs a live boat and a crew to attempt repairs.
 
 ⚠ Hash the running `sh3.exe` first.
+
+## Static leads (2026-08-17)
+
+Confirmed the precedent this ticket's Question anticipated: `[[0x5543DC]+4]` is a
+large object with fields at `+0x18`/`+0x1C` (the surface gate), `+0x30C` (diesel
+pair, confirmed), `+0x320` (telegraph, confirmed), and eight further offsets used
+by other, unidentified h.sie caves (`+0x14`, `+0x84`, `+0xA4` (a vtable call —
+`call [eax+0xA4]`), `+0xD8`, `+0x358`/`+0x360` (doubles), `+0x438`/`+0x440`,
+`+0x4A0`/`+0x4A4`). None of these is confirmed as the electric-engine pair — the
+diesel floats sit at `+0x30C`/`+0x310` and nothing else in the tally lands
+adjacent to that — so the short list above is a starting point for CE's
+"find what accesses" on the electric-engine damage-control field, not a confirmed
+answer. Full offset survey: `docs/re-notes/01-crush-depth-damage-signature.md` §6.
 
 ## Acceptance criteria
 
