@@ -1,6 +1,13 @@
 # Build output
 /build/
 /out/
+/dist/
+/tests/patcher_gui/bin/
+
+# Reference game binaries. tools/re-static/gen_manifest.py verifies the manifest
+# against these when they are present, and works without them -- they are
+# commercial game executables and do not belong in the repository.
+/data/exe_with_hsie_patches/
 
 # CMake
 CMakeCache.txt
