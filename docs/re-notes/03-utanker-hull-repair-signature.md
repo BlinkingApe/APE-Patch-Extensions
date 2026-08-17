@@ -190,7 +190,13 @@ candidate given the mod's purpose, but nothing here proves it.
 - Boat pointer chain here (`[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C`) differs from
   block 1's (`[0x5543DC]→+4`) and from the chains in
   `01-crush-depth-damage-signature.md` §4 — three routes to player-adjacent
-  objects, not yet reconciled.
+  objects, not yet reconciled. **2026-08-17: this note's own chain turned out to be
+  the answer depth-pressure-stress ticket `09` was hunting for** — `[ebx+0xB4]`/
+  `[ebx+0xB8]` here are the same max-hull/hull-HP fields that ticket targets, and
+  this chain is now cross-referenced and re-verified in
+  `01-crush-depth-damage-signature.md` §7. Still not reconciled against the other
+  two routes, but no longer needs to be — `09` only needs one working chain to the
+  boat, and this is a proven one.
 
 ### Block 3 — torpedo reload
 

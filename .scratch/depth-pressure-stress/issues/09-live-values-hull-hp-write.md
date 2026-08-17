@@ -47,6 +47,38 @@ pointer, but worth dumping and comparing to `ecx`/`esi` at `004E1C00`/`00513FC0`
 **before** a blind pointer-scan. Full writeup:
 `docs/re-notes/01-crush-depth-damage-signature.md` §6.
 
+## Static leads (2026-08-17, second pass): the pointer-chain hunt may already be done
+
+Found by cross-referencing this repo's own `docs/re-notes/03-utanker-hull-repair-
+signature.md` (written weeks earlier for a different ticket) rather than by new
+scanning — that note's §4 "Block 2" already documents a **fully-resolved, working
+static chain to the player boat object**:
+
+`[0x00554A88] → [+0xC4] → [+0x2240] → [+0x24] → [+0x4C]` = player boat (`ebx`).
+
+It is proven correct by shipped code, not guessed: h.sie's hull-repair cave uses
+exactly this chain, then reads/writes `[ebx+0xB4]`/`[ebx+0xB8]` — max hull / hull
+HP, the identical fields this ticket targets. Re-verified 2026-08-17 against the
+current install (`C:\games\OneAlex Extended 1.5.2\sh3.exe`, sha256 `eeef8595…`):
+the chain-resolution instructions are byte-identical at `00633633`, and
+`oae-builds.md` already has this cave's VA on record as stable across all four
+surveyed binaries (OAE 1.5.2, OAE 1.5.3.7, KC 2.5, GWX 3.0 Gold). AOB (literal, 24
+bytes, unique over the whole file):
+`8B 1D 88 4A 55 00 8B 9B C4 00 00 00 8B 9B 40 22 00 00 8B 5B 24 8B 5B 4C`. Full
+writeup, including why this is stronger evidence than a fresh singleton guess (two
+independent code paths — the stock HUD-mirror getter and h.sie's cave — agree on
+the same `+0xB4`/`+0xB8` layout for the same object; ~79 real reads of
+`[0x554A88]` in stock `.text` alone, far more than the other three candidates
+combined): `docs/re-notes/01-crush-depth-damage-signature.md` §7.
+
+**What this changes for this ticket:** the "resolve a chain rooted in stable stock
+sh3.exe" half of acceptance criterion 1 is very likely already satisfied — the CE
+session should *start* by reading this chain live and cross-checking it against
+`ecx`/`esi` at `004E1C00`, rather than running a from-scratch pointer-scan. What
+remains genuinely HITL: confirming the write **sticks** under `ape.act`'s own
+writer (not just h.sie's), and the depth-charge HP-delta observation (criterion
+3) — neither is answerable from the disassembly alone.
+
 ## Acceptance criteria
 
 - [ ] Player boat resolved via a chain rooted in stable stock `sh3.exe`.

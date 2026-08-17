@@ -29,7 +29,7 @@ worklist for **depth-pressure-stress** is:
 
 | # | Value | Offset / chain | Status |
 |---|-------|----------------|--------|
-| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) needs the dynamic chain-walk (§4) — **candidate static root found 2026-08-17: `0x5543DC`** (§6). |
+| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) — **fully static chain found 2026-08-17 (second pass, §7): `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C`**, cross-referenced from the u-tanker hull-repair cave, which already writes `[boat+0xB8]` through it in shipped code. Live confirmation (§7) still needed for the acceptance-criteria bar, but the chain-discovery half of ticket `09` is done without a debugger. |
 | 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer needs the dynamic chain-walk (§4) — **same `0x5543DC` candidate is directly used in this function's guard code** (§6). |
 | 3 | ~~CDT (crush depth)~~ | — | **dead.** Tier model never reads crush depth (map, Out of scope). |
 | 4 | **Mission clock** | TBD | **dynamic hunt (§4)** (drives game-second `dt`) — no static candidate found yet (§6). |
@@ -191,6 +191,16 @@ The depth setter and the depth compare (both on the movement object; ECX =
   - `0x0055408C`, `0x005543DC` — other static singletons used as `this`/guards in the
     depth-handling function region (`00514180`+, `00514560`+). Worth testing as
     alternative chain roots in CE.
+  - `0x00554A88` — **a fourth, independent root, found 2026-08-17 (§7) not by
+    scanning but by cross-referencing this repo's own `03-utanker-hull-repair-
+    signature.md`.** ~79 real `[0x554A88]` memory-operand reads across stock
+    `.text` alone (far more than any of the three above), and the full chain
+    `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C` is **proven to equal the player boat
+    object** by shipped, working game code — h.sie's hull-repair cave uses exactly
+    this chain to compute `ebx` and then reads/writes `[ebx+0xB8]`/`[ebx+0xB4]`
+    (hull HP / max hull), the same fields this note's §1 derived independently from
+    the HUD-mirror getter. Not near any of the other three roots (offsets
+    `0x100D8`/`0x9FC`/`0x6AC` away) — a genuinely separate path to the same object.
 
 ## 3. CLOSED context — why we don't hook a damage function
 
@@ -374,3 +384,76 @@ Method: `tools/re-static/` scripts extended to scan `.pcode` alongside `.text`; 
 hoc script not yet folded back into the checked-in tools (§5) — the offset-tally
 logic in `probe.py` is reusable but was re-targeted at `0x5543DC` inline rather than
 parameterized. Worth generalizing if another singleton needs the same treatment.
+
+## 7. Static lead (2026-08-17, second pass): `0x554A88` boat-pointer chain, found by cross-referencing this repo, not by scanning
+
+Prompted by a re-audit of the map for stale information: ticket `13`/`15` retired
+the *code* for the old model, but the depth-pressure-stress note's own candidate-
+root list (§2/§6) had never been cross-checked against **this repo's own other RE
+notes**, which already document a fully-resolved, working pointer chain to the
+player boat object. That chain is
+[`03-utanker-hull-repair-signature.md`](03-utanker-hull-repair-signature.md) §4
+"Block 2 — HULL REPAIR", found weeks earlier by static diffing for a different
+ticket and never connected back here.
+
+**The chain:** `[0x00554A88] → [+0xC4] → [+0x2240] → [+0x24] → [+0x4C]` = player
+boat object (`ebx` in the disassembly below).
+
+**Re-verified 2026-08-17 against the current install**
+(`C:\games\OneAlex Extended 1.5.2\sh3.exe`, sha256 `eeef8595…`, distinct from both
+this note's `4B6BEE20` build and the `6659539e…` hash §6 used — a third hash for
+the same install path in five weeks; see `oae-builds.md`). The hull-repair cave is
+present, byte-identical in the chain-resolution instructions, at the same VA
+`00633633` `oae-builds.md` already registered as stable across all four surveyed
+binaries:
+
+```
+00633633  8b1d884a5500       mov ebx, dword ptr [0x554a88]
+00633639  8b9bc4000000       mov ebx, dword ptr [ebx + 0xc4]
+0063363F  8b9b40220000       mov ebx, dword ptr [ebx + 0x2240]
+00633645  8b5b24             mov ebx, dword ptr [ebx + 0x24]
+00633648  8b5b4c             mov ebx, dword ptr [ebx + 0x4c]
+...
+00633663  d88bb4000000       fmul dword ptr [ebx + 0xb4]      ; x MAX hull
+00633669  d883b8000000       fadd dword ptr [ebx + 0xb8]      ; + CURRENT hull
+0063366F  d993b8000000       fst  dword ptr [ebx + 0xb8]      ; STORE hull HP
+```
+
+**AOB (literal, 24 bytes, the five-instruction chain-resolution block only):**
+`8B 1D 88 4A 55 00 8B 9B C4 00 00 00 8B 9B 40 22 00 00 8B 5B 24 8B 5B 4C`
+— **unique, 1 match, over the whole file** (not just `.text`; checked both
+`tools/re-static` regions and `.pcode`/`.pconst`/`.pdata`, since the cave itself
+lives in `.pcode`). No wildcards needed — same reasoning as §1's anchors: this is
+inside the hull-repair cave `oae-builds.md`'s cross-build survey already confirmed
+present at an identical offset across OAE 1.5.2, OAE 1.5.3.7, KC 2.5, and GWX
+3.0 Gold.
+
+**Why this is strong evidence, not just a guess:** `[ebx+0xB8]`/`[ebx+0xB4]` are
+the *exact same fields* §1 derived independently from the hull-HP HUD-mirror
+getter (`004E1C99`). Two unrelated code paths — the stock getter and h.sie's
+hull-repair patch — agree on the same struct layout for the same object. And
+`[0x554A88]` is read directly (`mov eax,[0x554A88]`, no chain at all) at **~79
+sites in stock `.text`** in this build, overwhelmingly more than any of the three
+singleton candidates in §2 — consistent with it being a very central, frequently-
+touched root (plausibly "the current player unit" or similar), not a niche guard.
+
+**What this leaves for ticket `09` (still HITL):**
+- The **pointer-chain hunt itself is done** — no CE pointer-scan should be needed;
+  the acceptance criterion "resolved via a chain rooted in stable stock sh3.exe" can
+  likely be satisfied by *reading* this chain live and confirming it matches
+  whatever `ecx` resolves to at `004E1C00`, rather than a from-scratch scan.
+- **Still needs live confirmation**, not because the chain is in doubt, but because
+  the map's own bar (ticket `09`'s acceptance criteria) is a *live* write-sticks
+  check plus one observed depth-charge HP delta, and h.sie's cave proves the write
+  sticks for *his* trigger (docking), not for a novel writer like `ape.act`'s own
+  loop thread touching the same field on its own schedule.
+- Does **not** resolve ticket `08` (movementObj/depth, or the mission clock) — the
+  u-tanker note itself flags (§4, "Not yet established") that this chain, the
+  `0x5543DC` chain, and `0x5449B0` are three distinct routes to player-adjacent
+  objects that were never reconciled; nothing here proves `0x554A88`'s resolved
+  object also exposes `+0x54` = depth.
+
+Method: `tools/re-static/chains.py`'s `real_mem_refs` pattern, re-run manually
+against the current install and against the whole file rather than `.text` only
+(script not yet folded back into the checked-in tool — same caveat as §6's method
+note).

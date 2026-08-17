@@ -74,6 +74,17 @@ write target is unlocated is not specified.
   electric-engine damage float likely lives. Not CE-confirmed — sharpens tickets
   `08`, `09`, `11` but doesn't resolve them; still HITL work. No static candidate
   found for the mission clock or the flooding trigger (ticket `10`).
+- **Static pass 2026-08-17, second round** (`docs/re-notes/01-crush-depth-damage-signature.md`
+  §7): re-audited the map for stale cross-references rather than scanning fresh,
+  and found that ticket `09`'s exact target — a working pointer chain to the player
+  boat, for the hull-HP write — was **already sitting in this repo**,
+  undiscovered-by-name in `03-utanker-hull-repair-signature.md`'s hull-repair cave
+  write-up. `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C]` = boat, proven by shipped code
+  that already reads/writes `[boat+0xB4]`/`[boat+0xB8]` through it, AOB-anchored
+  and re-verified against the current install. Does not resolve `09` outright —
+  the write-sticks-under-`ape.act`'s-own-writer and depth-charge-delta criteria
+  are still HITL — but narrows its live session from a pointer-scan to a
+  confirmation. No equivalent shortcut found for `08`, `10`, or `11`.
 
 ## Decisions so far
 
@@ -81,6 +92,7 @@ write target is unlocated is not specified.
      grilling and is recorded in Notes, not here -->
 
 - [Retire the superseded crush-depth model's artifacts](issues/13-retire-superseded-model.md) — dead tickets deleted, issue `01` and `05` amended, `CONTEXT.md` glossary reversed to `depth tier`, ADR-0008 written for the model reversal + poll-and-amplify limitation. Surfaced ticket `15` for the dead C++ still linked into the build.
+- [Retire the superseded band-decision model's C++ implementation and build wiring](issues/15-retire-superseded-model-source.md) — deleted the whole `src/mods/crush_depth_damage/` tree, `ape.cfg`, and `config_check` outright rather than keeping a reusable shell; `dllmain.cpp` reduced to a minimal stub. Build verified clean (PE32/x86), no live reference to the dead model remains outside historical prose.
 
 ## Not yet specified
 
