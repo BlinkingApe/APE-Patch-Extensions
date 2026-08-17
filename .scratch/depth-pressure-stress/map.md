@@ -115,6 +115,25 @@ write target is unlocated is not specified.
   (fourth-round pass, above) remains the only lead, neither promoted nor demoted.
   Ticket `11` is otherwise unchanged — a from-scratch live scan, now with a
   cleaner map of what's already been ruled out.
+- **Live pass 2026-08-17** (`docs/re-notes/01-crush-depth-damage-signature.md`
+  §10): first live CE session against ticket `08`. Mission clock is **fully
+  resolved** — static address `0x0063FF80`, 4-byte integer, no chain needed,
+  confirmed pause/time-compression behavior and relaunch stability. The
+  `movementObj` chain-walk is started but not finished: the base register (ECX at
+  `00514001`) is confirmed, but the pointer-scan to a static-rooted chain wasn't
+  run — the session ended after CE/the game crashed when a breakpoint was left
+  held open too long on a hot per-frame path. Ticket `08` remains open, claimed,
+  with one criterion (mission clock) done and the other (movementObj chain) ready
+  to resume from a known register.
+- **Live pass 2026-08-17, second session** (`docs/re-notes/01-crush-depth-damage-signature.md`
+  §11): ticket `08` fully resolved. Disambiguated three live-tracking depth
+  candidates via "find what writes," confirming `movementObj+0x54` = `0x3BA70784`
+  and `movementObj = 0x3BA70730` for that instance. CE pointer scan (level 6,
+  restricted to `sh3.exe`'s module range) plus a two-relaunch pointermap
+  comparison narrowed 84 candidates to 3, the shortest of which —
+  `[[["sh3.exe"+002307BC]+4]+4]+0x54` — ends in the already-known `0x54` field
+  offset, confirming it's real rather than incidental. Resolved and live-tracking
+  confirmed against the depth gauge; stable across two independent relaunches.
 
 ## Decisions so far
 
@@ -123,6 +142,7 @@ write target is unlocated is not specified.
 
 - [Retire the superseded crush-depth model's artifacts](issues/13-retire-superseded-model.md) — dead tickets deleted, issue `01` and `05` amended, `CONTEXT.md` glossary reversed to `depth tier`, ADR-0008 written for the model reversal + poll-and-amplify limitation. Surfaced ticket `15` for the dead C++ still linked into the build.
 - [Retire the superseded band-decision model's C++ implementation and build wiring](issues/15-retire-superseded-model-source.md) — deleted the whole `src/mods/crush_depth_damage/` tree, `ape.cfg`, and `config_check` outright rather than keeping a reusable shell; `dllmain.cpp` reduced to a minimal stub. Build verified clean (PE32/x86), no live reference to the dead model remains outside historical prose.
+- [Live-value session A: current depth + mission clock](issues/08-live-values-depth-and-clock.md) — both resolved: mission clock is static VA `0x0063FF80`, no chain; current depth is `[[["sh3.exe"+002307BC]+4]+4]+0x54`, a 3-level static chain confirmed stable across two relaunches.
 
 ## Not yet specified
 

@@ -1,7 +1,7 @@
 # Live-value session A: current depth + mission clock
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: none
 
 ## Parent
@@ -62,14 +62,47 @@ The mission clock needs a live Exact/Increased-Value scan from scratch, same as
 originally planned; static analysis has nothing further to offer it. Full writeup:
 `docs/re-notes/01-crush-depth-damage-signature.md` §8.
 
+## Static lead (2026-08-17, not yet chased): NSAP's `sh5.act` may already solve this
+
+The live pass's exact-value depth scan surfaced NSAP's own `handleShallowWater`
+routine reading a cached `sh5.uBoatDepth` (§10.2 of the RE note) — a red herring
+for a *scan*, but potentially not for a *static read*: NSAP has to resolve the
+real `movementObj`/boat every frame too, the same way h.sie's hull-repair cave
+already had the boat chain that unblocked ticket `09` (§7). Worth a static pass on
+`sh5.act` before the next live session: trace backward from `sh5.uBoatDepth`'s
+writer to see what it reads from, and whether that source is rooted in something
+static (either in `sh5.act` or `sh3.exe`) rather than another this-relative lookup.
+If it pans out, it may shortcut the pointer-scan the live session still owes;
+if NSAP resolves it just as dynamically as we'd have to, this is a dead end and
+the live pointer-scan (§10.2) remains the only path.
+
 ## Acceptance criteria
 
-- [ ] `movementObj` resolved via a chain rooted in stable stock `sh3.exe`;
+- [x] `movementObj` resolved via a chain rooted in stable stock `sh3.exe`;
       `[movementObj + 0x54]` confirmed against the depth gauge at several depths.
-- [ ] Mission clock located; chain, format and resolution recorded.
-- [ ] Mission clock confirmed frozen under pause and scaling under time compression.
-- [ ] Both recorded in `docs/re-notes/01-crush-depth-damage-signature.md` against the
+- [x] Mission clock located; chain, format and resolution recorded.
+- [x] Mission clock confirmed frozen under pause and scaling under time compression.
+- [x] Both recorded in `docs/re-notes/01-crush-depth-damage-signature.md` against the
       **SHA-256 of the binary actually running**.
+
+## Resolution (2026-08-17)
+
+Both live values are resolved, static-root chains proven across two relaunches.
+Full write-up: `docs/re-notes/01-crush-depth-damage-signature.md` §11 (depth) and
+§10.1 (mission clock, resolved in the prior session).
+
+- **Current depth:** `[[["sh3.exe"+002307BC]+4]+4]+0x54` — 3-level static chain,
+  found via CE pointer-scan + two-relaunch pointermap comparison (84 candidates
+  narrowed to 3, the shortest ending in the already-known `0x54` field offset).
+  Float, meters. Confirmed live-tracking the depth gauge; confirmed stable across
+  two independent relaunches.
+- **Mission clock:** `0x0063FF80` (`sh3.exe+23FF80`), static VA, no chain needed.
+  4-byte integer, 1:1 with game-seconds at 1× time compression. Confirmed frozen
+  on pause, confirmed scaling at 512× time compression, confirmed stable across
+  relaunch.
+- Binary hash re-verified at session start: SHA-256
+  `eeef8595a75d2c95d768867f7c3eddea48b7940bd3d82ca2d159857476c68b61`, identical to
+  the prior session's build.
 
 ## Notes
 

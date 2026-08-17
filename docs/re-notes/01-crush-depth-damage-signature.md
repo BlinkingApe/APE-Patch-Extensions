@@ -11,7 +11,7 @@ generator" hunt is **closed** — see §3 for why (retained as context).
 **OAE build:** `4B6BEE20` (see `oae-builds.md`; SHA-256 re-confirmed against the
 `C:\games\OneAlex Extended 1.5.2_pre-release\sh3.exe` install on 2026-07-21)
 **Static confirmation done:** 2026-07-21 (code anchors + AOB signatures)
-**Dynamic discovery:** _still pending_ (player pointer chains, CDT, mission clock — see §4)
+**Dynamic discovery:** ticket `08` (depth + mission clock) done, §10–§11; remaining tickets still pending — see §4
 **Tools:** Cheat Engine (dynamic discovery) + static disassembly. Binary Ninja is
 GUI/personal here (no headless API), so the static pass was scripted with Python
 `pefile` + `capstone` (`scratchpad/*.py`, method in §5); use the BN GUI for
@@ -26,16 +26,16 @@ tier-model pivot recorded in `.scratch/depth-pressure-stress/map.md`. CDT is now
 **dead** (the new model never reads crush depth); astern seepage and the
 electric-engine damage float were added as live-value hunts. The current, complete
 worklist for **depth-pressure-stress** — kept current here as a single glance-view
-across all four open tickets (`08`–`11`); findings themselves stay in their source
+across tickets `08`–`11` (`08` now resolved); findings themselves stay in their source
 notes (this file §1–§9, or `06-flooding-model-signature.md` for flooding) and are
 not restated below, only gisted:
 
 | # | Value | Offset / chain | Status | Ticket |
 |---|-------|----------------|--------|--------|
 | 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) — **fully static chain found (§7): `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C`**, cross-referenced from the u-tanker hull-repair cave, which already writes `[boat+0xB8]` through it in shipped code. Chain-discovery is done without a debugger; live confirmation (write sticks under `ape.act`, one depth-charge delta) still needed. | `09` |
-| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer needs the dynamic chain-walk (§4) — **no static root exists (§8 confirms, exhaustively): the depth-setter's caller has zero direct callers, reached only via an untraceable vtable slot.** A from-scratch CE pointer-scan is required; no further static session should look for a shortcut. | `08` |
+| 2 | **Current depth** | `[[["sh3.exe"+002307BC]+4]+4]+0x54` | **DONE (§11, 2026-08-17, second session).** Static-rooted chain found via CE pointer scan + two-relaunch pointermap comparison, resolved to `movementObj`'s known `+0x54` depth field. Confirmed live-tracking the gauge; confirmed stable across two independent relaunches. | `08` |
 | 3 | ~~CDT (crush depth)~~ | — | **dead.** Tier model never reads crush depth (map, Out of scope). | — |
-| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** — no static candidate found in two passes (§6, §8); §8 ruled out and reassigned the one candidate double-field pair. Needs a live Exact/Increased-Value scan from scratch. | `08` |
+| 4 | **Mission clock** | `0x0063FF80` (static, `sh3.exe+23FF80`), 4-byte integer | **DONE (§10, 2026-08-17).** No chain needed — literal absolute addressing. 1:1 with game-seconds at 1× time compression; confirmed frozen on pause; confirmed scales with time compression (leaps at 512×); write site `A3 80 FF 63 00` @ `0051CFC7` (unconditional absolute-address store); survives relaunch. | `08` |
 | 5 | **Astern seepage / flooding trigger** | TBD | **dynamic hunt, two unconfirmed leads (`06-flooding-model-signature.md`):** SH3's own interior-camera data tags its sternmost compartment `"DIESEL ENGINE ROOM;InteriorAft"` (evidence for which compartment is astern); a flooding-message read/compare (`[ecx+0x1C]` vs `0.35` at `0x436BE4`) has an unresolved `ecx` worth watching live. No h.sie precedent to borrow, unlike hull repair/diesel damage — genuine discovery, not confirmation. | `10` |
 | 6 | **Electric-engine damage float** | `[[0x5543DC]+4]+0x358`/`+0x360` (lead, unconfirmed) | **dynamic hunt.** §6's original offset survey was mostly a scan artifact — corrected in §9: most "unidentified" offsets belong to *other* objects, and the two real remaining candidates (`+0x438`/`+0x440`; UI strings 462/463) are both ruled out. `+0x358`/`+0x360` (a bounded max/current double accumulator, §8) is the only static lead left — unconfirmed, not the diesel pair's shape (doubles, not two floats). | `11` |
 
@@ -600,3 +600,156 @@ specific, citable reason rather than left an open question. The offset survey
 table in §6.3 should be treated as corrected by this section, not superseded
 wholesale — the confirmed fields (`+0x30C`, `+0x320`) and the still-live lead
 (`+0x358`/`+0x360`) are unchanged.
+
+## §10 Live pass (2026-08-17): mission clock resolved, movementObj chain-walk started
+
+**Binary re-hashed before session:** `C:\games\OneAlex Extended 1.5.2\sh3.exe`,
+SHA-256 `eeef8595a75d2c95d768867f7c3eddea48b7940bd3d82ca2d159857476c68b61` — matches
+the build already on record for the umbrella/§7 static chain. Image base confirmed
+`0x00400000` in CE (no ASLR shift), so all static VAs above apply as-is.
+
+### 10.1 Mission clock — DONE
+
+Method: CE Unknown-Initial-Value → repeated Increased-Value narrowing (Float scan)
+plateaued at ~28-30k candidates — later understood as a type mismatch, since the
+real clock is an **integer** tick count, not a float. A parallel 4-byte-integer
+scan, narrowed the same way plus a pause/unchanged pass and a time-compression
+jump (512×), converged to one candidate.
+
+- **Address:** `0x0063FF80` static VA (`sh3.exe+23FF80`). No pointer chain —
+  confirmed by "find out what writes to this address": the sole writer is
+  `mov [0063FF80],eax` at `0051CFC7` (AOB `A3 80 FF 63 00`), a **literal absolute
+  address baked into the instruction**, not register-relative. That's proof this
+  is a fixed static location, not a heap coincidence.
+- **Type/format:** 4-byte integer, 1:1 with elapsed game-seconds at 1× time
+  compression.
+- **Confirmed:** freezes fully on pause; leaps forward proportionally at 512× time
+  compression; survives a full relaunch (re-checked directly at the same static
+  address on a fresh process, no rescan needed).
+
+This closes acceptance criteria 2–4 for ticket `08` (mission clock located,
+chain/format/resolution recorded, frozen-under-pause and scales-under-TC
+confirmed).
+
+### 10.2 movementObj chain-walk — register identified, chain not yet resolved
+
+Went straight to the known static setter/comparer rather than scanning blind
+(an initial exact-value Float scan on the depth gauge instead surfaced NSAP's
+`sh5.act` mod module — variables like `sh5.SeaDepth`/`sh5.uBoatDepth` in its own
+`handleShallowWater` routine — a red herring, not the vanilla `sh3.exe` field).
+
+Set a breakpoint at `00513FFD` (`fld dword ptr [esp+10]`, the known AOB). It fired
+on the very next frame (depth check runs continuously, not just on deliberate
+depth change — no need to dive to trigger it). Disassembly at the break confirmed
+the expected comparison one instruction later:
+
+```
+00513FFD  D9 44 24 14   fld   dword ptr [esp+10]
+00514001  D8 59 54      fcomp dword ptr [ecx+54]   <- movementObj+0x54, base = ECX
+00514004  DF E0         fnstsw ax
+```
+
+**ECX held `movementObj` at the break: `0x3BE72388`** for that process instance.
+This is a heap address, not stable across relaunches by itself, but it identifies
+**which register** to capture — that will hold regardless of run.
+
+The game/CE became unstable and crashed after the breakpoint was left **held**
+(broken, not resumed) for several seconds while registers were read from the
+screenshot. Suspected cause: `00513FC0`'s neighbourhood is a hot per-frame
+depth-update path (per §8's caller trace — reached every frame via an
+untraceable vtable slot), and stalling it mid-frame likely starved something
+downstream (a physics tick or watchdog). **Recommendation for the next attempt:
+snapshot the register value immediately on break, then resume (Run) within
+a second or two — do not leave it broken while reading/writing notes.**
+
+**Not yet done:** pointer-scan from the captured ECX value to a static-rooted
+chain, and the two-relaunch stability check the ticket's acceptance criteria
+require. Acceptance criterion 1 (movementObj resolved via a stable chain) remains
+open.
+
+---
+
+## §11 Live pass (2026-08-17, second session): movementObj chain resolved — ticket `08` DONE
+
+**Binary re-hashed before session:** `C:\games\OneAlex Extended 1.5.2\sh3.exe`,
+SHA-256 `eeef8595a75d2c95d768867f7c3eddea48b7940bd3d82ca2d159857476c68b61` — confirmed
+identical to §10's build, re-verified again at write-up time via `certutil`. Same
+build throughout, no drift.
+
+### 11.1 Confirming the depth field among several live-tracking candidates
+
+CE's address list surfaced several addresses whose values tracked the depth gauge
+closely, including two `sh5.act`-owned addresses (NSAP's own `sh5.uBoatDepth`
+bookkeeping — a decoy, per §10.2's earlier warning) and three native heap
+addresses. "Find out what writes to this address" on each of the three
+disambiguated them cleanly:
+
+- **`0x23E57968`** — decoy. Sole writer `004A1DA7` (`fstp dword ptr [esi+10]`), a
+  code region unrelated to the known depth-setter block. Tracked depth closely by
+  coincidence (likely a UI/camera mirror), same trap as the `sh5.act` rows.
+- **`0x3BA70784`** — **confirmed `movementObj+0x54`.** Writers `0051416B` and
+  `00514159`, both `mov [ecx+54],eax` — the exact `[ecx+0x54]` operand from the
+  known `fcomp dword ptr [ecx+54]` anchor at `00514001` (§10.2). Register dump at
+  the write site: `ECX = 3BA70730`; arithmetically `3BA70730 + 0x54 = 3BA70784`,
+  exact match. This is the real depth field.
+- **`0x3BA70788`** — same object, adjacent field (`movementObj+0x58`). Writer
+  `00514156` (`mov [ecx+58],edx`), same code block. Likely previous-depth or a
+  depth delta living next to the depth field in the same struct. Not chased
+  further — noted here in case a future ticket needs it.
+
+This gives `movementObj = 0x3BA70730` for this process instance, via a route
+independent of §10.2's breakpoint-and-read (arithmetic on two separate write
+sites plus the register dump), corroborating rather than merely repeating it.
+
+### 11.2 Pointer scan and cross-relaunch comparison
+
+CE's pointer scanner ("Pointer scan for this address"), targeted at
+`0x3BA70784` (`movementObj+0x54`, the depth field directly — chosen over
+scanning for the bare `movementObj` base so the resulting chain resolves straight
+to the value `ape.act` needs, no `+0x54` bookkeeping required downstream),
+settings: max level 6, max offset `0x2000`, max 3 offsets per node, base address
+restricted to `sh3.exe`'s static module range (`00400000`–`006FFFFF`, no ASLR
+shift, per §10). First attempt at max level 4 returned zero paths; raising to
+level 6 (still restricted to the module range) returned 84 candidate chains.
+
+Two-relaunch narrowing followed the standard CE pointermap workflow (raw
+`.scandata` pointermap generated per run, not just the narrowed `.PTR`
+scan-for-address results — the compare feature needs the former): a fresh
+pointermap and targeted scan were generated in each of two separate game
+instances (separate relaunches, `movementObj` re-identified from scratch each
+time via §10.2's method against the new heap address), then the second run's
+scan was compared against the first run's saved pointermap. The intersection
+converged to **3 surviving chains**, all sharing the same static base and first
+two offsets, diverging only after:
+
+| Base | Offsets | Levels |
+|---|---|---|
+| `"sh3.exe"+002307BC` | `+4 +4 +0x54` | 3 |
+| `"sh3.exe"+002307BC` | `+4 +4 +8 +0x50` | 4 |
+| `"sh3.exe"+002307BC` | `+4 +4 +4 +8 +0x50` | 5 |
+
+**The 3-level chain is the one to keep.** Its final offset, `0x54`, is not a
+coincidence — it's the exact known offset from the `fcomp dword ptr [ecx+54]`
+anchor (§1, §10.2). That means `[["sh3.exe"+002307BC]+4]+4` resolves to
+`movementObj` itself, and the chain is simply that base plus the field offset
+already proven by static analysis. The two longer chains reach the same final
+address through other objects' fields (ending in `0x50` instead) — almost
+certainly incidental alternate routes to the same memory rather than
+independently meaningful, and not used.
+
+### 11.3 Confirmed
+
+- **Chain:** `[[["sh3.exe"+002307BC]+4]+4]+0x54` = current depth (float, meters).
+- Resolved correctly across **two independent relaunches** (fresh heap layout
+  each time), satisfying the stability requirement static analysis (§8) could
+  never provide, since no static root to `movementObj` exists in the
+  disassembly-reachable sense — this chain was only findable dynamically.
+- **Live-tracking confirmed in-session:** the resolved chain was added as a live
+  CE address (Float) and observed tracking the depth gauge correctly while
+  diving/surfacing, satisfying "confirmed against the depth gauge at several
+  depths" without a second dedicated dive (already covered by the CE trace in
+  §11.1 plus this live-address check).
+
+This closes acceptance criterion 1. Combined with §10.1 (mission clock), **ticket
+`08` is fully resolved** — no further live-value work remains for depth or the
+mission clock.
