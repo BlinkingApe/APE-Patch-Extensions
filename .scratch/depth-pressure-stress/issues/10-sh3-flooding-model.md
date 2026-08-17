@@ -36,6 +36,30 @@ value can be found by watching it change.
 
 ⚠ Hash the running `sh3.exe` first.
 
+## Static leads (2026-08-17): two open leads, starting from zero
+
+A static pass (strings-first, since this ticket had no code anchor to trace from)
+found:
+
+- **Compartment naming.** SH3's own interior-camera table tags its sternmost
+  renderable compartment `3704=DIESEL ENGINE ROOM;InteriorAft` — concrete evidence
+  (not inference) favoring the engine room over the stern torpedo room for
+  "astern," though the crew-station and equipment lists (`en_menu.txt` 245–256,
+  458–496) track diesel and electric engines as distinct stations, so *which*
+  engine room isn't settled.
+- **An unconfirmed flooding read/compare.** A float `[ecx+0x1C]` is compared
+  against `0.35` at `0x436BE4`, inside a function (`0x435B30`) that walks a
+  compartment/subsystem linked list rooted at `[0x5449B0]→[+0xD8]→[+0x83C]` — a
+  different root from `0x5543DC` (confirmed engine-specific elsewhere) — to gate
+  the "We have flooding, sir!" message. `ecx`'s identity was not resolved
+  statically; this is a lead for a live session to watch, not an anchor.
+- **h.sie's `.pcode` caves have nothing here** — unlike hull repair or diesel
+  damage, no h.sie mod touches flooding/water/pumps in this install, so there's no
+  existing mechanism to borrow. No pump-rate value found either.
+
+Full writeup, including what was ruled out: `docs/re-notes/06-flooding-model-
+signature.md`.
+
 ## Acceptance criteria
 
 - [ ] The mechanism is decided: direct water write, or damage-the-compartment.

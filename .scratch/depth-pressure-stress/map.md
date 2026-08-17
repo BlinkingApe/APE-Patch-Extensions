@@ -96,6 +96,16 @@ write target is unlocated is not specified.
   clock) and reassigned it as a possible lead for ticket `11` instead. Net: `08`
   is now a plain live-value hunt with no shortcut left to look for; `11` gained a
   cheap thing to check first.
+- **Static pass 2026-08-17, fourth round** (`docs/re-notes/06-flooding-model-
+  signature.md`, new note): ticket `10` started from zero — no anchor, no
+  precedent — so this pass went strings-first instead of tracing a known field.
+  Found SH3's own interior-camera data tags its sternmost compartment "DIESEL
+  ENGINE ROOM;InteriorAft" (evidence, not proof, for which compartment is
+  "astern"), and one unconfirmed flooding read/compare (`[ecx+0x1C]` vs `0.35` at
+  `0x436BE4`, `ecx`'s identity unresolved) as a lead for a live session to watch.
+  h.sie's caves have no flooding/pump precedent to borrow, unlike hull repair or
+  diesel damage. Two leads handed off; the mechanism decision, value anchor, and
+  compartment identity all remain fully HITL.
 
 ## Decisions so far
 

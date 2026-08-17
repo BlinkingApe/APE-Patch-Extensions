@@ -22,6 +22,9 @@ from scratch.
 - `03-utanker-hull-repair-signature.md` — the u-tanker mod fully mapped (h.sie's
   appended `sh3.exe` sections, the patch flag table at `0x63CF00`, and the
   hull-repair site). Also the worked example of the static-diff method.
+- `06-flooding-model-signature.md` — SH3's flooding model, static-only first pass:
+  compartment naming, one unconfirmed read/compare lead, no h.sie precedent found.
+  Starts from zero; still fully HITL.
 
 ## Conventions
 
