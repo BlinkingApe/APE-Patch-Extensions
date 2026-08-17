@@ -85,6 +85,17 @@ write target is unlocated is not specified.
   the write-sticks-under-`ape.act`'s-own-writer and depth-charge-delta criteria
   are still HITL — but narrows its live session from a pointer-scan to a
   confirmation. No equivalent shortcut found for `08`, `10`, or `11`.
+- **Static pass 2026-08-17, third round** (`docs/re-notes/01-crush-depth-damage-signature.md`
+  §8): chased whether ticket `09`'s `0x554A88` boat chain also reaches
+  `movementObj` for ticket `08`. It doesn't — checked exhaustively, both
+  directions, zero hits. Further found the depth-setter's caller has **no static
+  root reachable at all** (zero direct callers, only an untraceable vtable slot) —
+  closes ticket `08`'s depth half definitively to a from-scratch CE scan, not a
+  narrowing. Also ruled out the one mission-clock candidate static analysis had
+  produced (§6.3's `+0x358`/`+0x360` doubles — a wear-ratio accumulator, not a
+  clock) and reassigned it as a possible lead for ticket `11` instead. Net: `08`
+  is now a plain live-value hunt with no shortcut left to look for; `11` gained a
+  cheap thing to check first.
 
 ## Decisions so far
 

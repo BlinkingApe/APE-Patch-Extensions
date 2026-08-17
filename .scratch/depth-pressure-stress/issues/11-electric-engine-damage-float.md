@@ -51,6 +51,18 @@ adjacent to that — so the short list above is a starting point for CE's
 "find what accesses" on the electric-engine damage-control field, not a confirmed
 answer. Full offset survey: `docs/re-notes/01-crush-depth-damage-signature.md` §6.
 
+## Static lead (2026-08-17, from a pass targeting ticket 08): `+0x358`/`+0x360` reassigned as a possible wear-ratio pair
+
+A static pass chasing ticket `08`'s mission clock traced the `+0x358`/`+0x360`
+doubles this ticket's §6 offset survey had left unidentified, and found them to be
+a **bounded max/current accumulator** (`fmul`/`fadd`/`fst`/`fcomp` against a cap,
+gated on the same `[0x5543DC+0x10]` liveness tolerance §6.2 already uses) —
+structurally a wear/damage-ratio pair, not a clock. Not confirmed to *be* the
+electric-engine float (doubles, not the diesel pair's floats; a different pair
+shape), but close enough in structure to be worth a look before the from-scratch CE
+scan this ticket already calls for. Full disassembly:
+`docs/re-notes/01-crush-depth-damage-signature.md` §8.
+
 ## Acceptance criteria
 
 - [ ] Electric-engine damage float located; anchor/chain/offset recorded.

@@ -30,9 +30,9 @@ worklist for **depth-pressure-stress** is:
 | # | Value | Offset / chain | Status |
 |---|-------|----------------|--------|
 | 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) — **fully static chain found 2026-08-17 (second pass, §7): `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C`**, cross-referenced from the u-tanker hull-repair cave, which already writes `[boat+0xB8]` through it in shipped code. Live confirmation (§7) still needed for the acceptance-criteria bar, but the chain-discovery half of ticket `09` is done without a debugger. |
-| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer needs the dynamic chain-walk (§4) — **same `0x5543DC` candidate is directly used in this function's guard code** (§6). |
+| 2 | **Current depth** | `[movementObj + 0x54]` | **code anchor + AOB DONE** (§1); `movementObj` pointer needs the dynamic chain-walk (§4) — **no static root exists (§8 confirms, exhaustively): the depth-setter's caller has zero direct callers, reached only via an untraceable vtable slot.** A from-scratch CE pointer-scan is required; no further static session should look for a shortcut. |
 | 3 | ~~CDT (crush depth)~~ | — | **dead.** Tier model never reads crush depth (map, Out of scope). |
-| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** (drives game-second `dt`) — no static candidate found yet (§6). |
+| 4 | **Mission clock** | TBD | **dynamic hunt (§4)** (drives game-second `dt`) — no static candidate found in two passes (§6, §8); §8 ruled out and reassigned the one candidate double-field pair. Needs a live Exact/Increased-Value scan from scratch. |
 | 5 | **Astern seepage / flooding trigger** | TBD | **dynamic hunt.** No static candidate found yet — see issue `10`; SH3's flooding model itself is unmapped. |
 | 6 | **Electric-engine damage float** | `[[0x5543DC]+4]+0x??` (exact offset TBD) | **dynamic hunt, but strongly narrowed by §6** — same object and same array region as the diesel pair at `+0x30C`; a handful of neighbouring offsets are the short list to try first in CE (issue `11`). |
 
@@ -457,3 +457,67 @@ Method: `tools/re-static/chains.py`'s `real_mem_refs` pattern, re-run manually
 against the current install and against the whole file rather than `.text` only
 (script not yet folded back into the checked-in tool — same caveat as §6's method
 note).
+
+## 8. Static lead (2026-08-17, third pass): `movementObj` stays unrooted; a §6.3 offset reassigned
+
+Follow-up static pass targeting ticket `08` specifically: does the `0x554A88` boat
+chain (§7) also reach `movementObj` (the `+0x54` current-depth field), sparing a
+second CE pointer-scan? Run against the same install
+(`C:\games\OneAlex Extended 1.5.2\sh3.exe`, sha256 `eeef8595…` — unchanged from §7,
+no further drift).
+
+**Result: no.** Exhaustively checked both directions:
+
+- **Forward from `0x554A88`:** all 20 real xrefs to `0x554A88` across
+  `.text`+`.pcode`+`.pconst`+`.pdata`, windowed ±15 instructions each, for any
+  `[reg+0x54]` operand. Zero hits.
+- **Backward from the chain's last hop:** all 6 real `mov reg,[reg2+0x4C]` sites in
+  the whole binary (the chain's final step) — all 6 are h.sie `.pcode` caves, none
+  in stock `.text`; four are simply other h.sie mods reusing the identical
+  `0x554A88` chain to reach `[boat+0xB4]`/`[boat+0xB8]` (hull), never `+0x54`.
+  Traced each forward 40 instructions past the `+0x4C` hop — no `+0x54` follow-up
+  anywhere.
+
+So the boat object (hull HP, `0x554A88` chain) and `movementObj` (depth, `+0x54`)
+remain **not shown to be the same object** — plainly negative, closing off what
+would have been the cheapest possible shortcut for ticket `08`.
+
+**The depth-setter's caller is unreachable statically, definitively.** Full
+disassembly of `00514560` (the setter's caller, `esi`/`ecx` = `this` passed straight
+through to `00513FC0` and siblings `005139F0`/`00514470`) shows it has **zero direct
+(`E8`) callers anywhere in the file** — it's reached only via a vtable slot at
+`.rdata:0x005322E0`, and that vtable's base has zero raw references anywhere either.
+This is consistent with §3's finding that damage/action dispatch runs through a
+generic virtual-call mechanism (`sObject::Action`-style), not a resolvable call
+chain. **This closes the static path, rather than narrowing it** — `movementObj`'s
+root cannot be found without a live pointer-scan; no further static session should
+spend time on it. One minor triangulation point for that CE session: `[this+0x60]`
+is a small refcount/tick guard read in the setter (`00513FD4`) and touched in the
+caller (`0051457F`) and in the sibling `00514470` — not a root, but useful to watch
+alongside `ecx`/`esi` when dumping live.
+
+**§6.3's `+0x358`/`+0x360` doubles are ruled out as the mission clock, and
+reassigned.** Traced to their actual code (`00634371`, `006335FA`–`00633615`):
+
+```
+mov ebx,[0x5543DC]; mov ebx,[ebx+4]
+fmul qword [ebx+0x358]      ; rate * something
+fadd qword [ebx+0x360]      ; += current
+fst  qword [ebx+0x360]      ; store back (accumulate)
+fcomp qword [ebx+0x358]     ; compare to a cap
+jb ...                      ; clamp if not yet at cap
+```
+
+This is a **bounded accumulator with a max cap**, not a monotonically-increasing
+clock — the shape reads as an equipment wear/damage-ratio pair (max/current,
+divided for a percentage at `00634371`, gated on the same `[0x5543DC+0x10]`
+liveness tolerance §6.2 already found), not a time value. Flagged for ticket `11`
+(electric-engine wear) as a possible lead — **not chased further, out of this
+ticket's scope**. No other mission-clock candidate found; two static passes now
+agree there is none to find statically (§6, §8) — it needs a live Exact/Increased-
+Value scan from the start, same as always planned.
+
+**What this leaves for ticket `08` (still fully HITL):** both live values need a
+from-scratch CE pointer-scan/value-scan; no static shortcut exists for either. This
+is a genuinely negative result, recorded so a future session doesn't re-spend time
+looking for one.

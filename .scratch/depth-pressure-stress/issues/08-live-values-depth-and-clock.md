@@ -40,6 +40,28 @@ lives in, though not proven to *be* `movementObj`. No static candidate found for
 the mission clock. Full writeup: `docs/re-notes/01-crush-depth-damage-signature.md`
 §6.
 
+## Static leads (2026-08-17, second pass): negative result — no shortcut exists
+
+Checked whether ticket `09`'s newly-proven `0x554A88` boat chain also reaches
+`movementObj` (sparing a second pointer-scan here). It does not: exhaustive forward
+and backward xref checks around `0x554A88` and its chain's final hop found zero
+references to a `[reg+0x54]` operand anywhere. Separately, the depth-setter's
+caller (`00514560`) was traced and found to have **zero direct callers anywhere in
+the binary** — it's reached only through an untraceable vtable slot
+(`.rdata:0x5322E0`), which closes the static path definitively rather than
+narrowing it. **A from-scratch CE pointer-scan is required for `movementObj`; no
+static shortcut exists.** One minor triangulation point for that session:
+`[this+0x60]` is a small refcount/tick guard touched in both the setter and its
+caller — worth watching alongside `ecx`/`esi` while dumping live, but not a root.
+
+Mission clock: still no static candidate after two passes. The one candidate this
+note had flagged (`+0x358`/`+0x360` doubles off `[[0x5543DC]+4]`, §6.3) turned out
+to be a bounded max/current accumulator (reads like an equipment wear ratio), not a
+monotonic clock — ruled out and flagged instead as a possible lead for ticket `11`.
+The mission clock needs a live Exact/Increased-Value scan from scratch, same as
+originally planned; static analysis has nothing further to offer it. Full writeup:
+`docs/re-notes/01-crush-depth-damage-signature.md` §8.
+
 ## Acceptance criteria
 
 - [ ] `movementObj` resolved via a chain rooted in stable stock `sh3.exe`;
