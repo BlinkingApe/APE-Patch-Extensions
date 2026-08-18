@@ -308,8 +308,7 @@ def build():
                 "diesel-message-text", "4893",
                 "4893=If we don't cut power now, we're risking a breakdown!",
                 {"kind": "literal",
-                 "value": "Diesel trouble, Kaleun. Normal wear and tear, "
-                          "we'll get her running, kein Stress."},
+                 "value": "Diesel trouble, Kaleun - normal wear and tear."},
                 note="string 4893 is referenced exactly once in the whole "
                      "game (ticket 10) -- safe to overwrite in place, not "
                      "relocate",

@@ -659,8 +659,8 @@ namespace ApePatcher.Tests
             Check.True(session.Apply(Both(session)).Ok, "apply");
 
             IniFile menu = IniFile.Load(fx.MenuText);
-            Check.Equal("4893=Diesel trouble, Kaleun. Normal wear and tear, we'll get her "
-                + "running, kein Stress.", menu.Line("4893"), "the report's new wording");
+            Check.Equal("4893=Diesel trouble, Kaleun - normal wear and tear.",
+                menu.Line("4893"), "the report's new wording");
 
             Site gate = Find(fx.Manifest, Manifest.DieselPatchId, "diesel-message-gate");
             Check.Bytes(Hex.ToBytes("9090"),
