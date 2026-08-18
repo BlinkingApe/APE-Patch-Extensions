@@ -309,15 +309,21 @@ namespace ApePatcher
             Current.DieselApplied = Install.Applied(Manifest.DieselPatchId)
                                     && Install.Available(Manifest.DieselPatchId);
 
-            // Hull repair reads straight back off the roll operands in every state:
-            // h.sie's own 5-20 and APE's defaults are the same numbers.
-            double floor, width;
-            if (TryFieldValue(Manifest.HullPatchId, Source.HullFloor, out floor)
-                && TryFieldValue(Manifest.HullPatchId, Source.HullWidth, out width)
-                && width >= 1)
+            // Hull repair only reads back once APE has applied it: APE's shipped
+            // default (0-5) no longer equals h.sie's own stock roll (5-20), so an
+            // unapplied install has nothing of APE's to show. The panel opens on
+            // APE's default instead, the same pattern diesel damage already uses
+            // below.
+            if (Install.Applied(Manifest.HullPatchId))
             {
-                Current.HullMin = (int)floor;
-                Current.HullMax = (int)(floor + width - 1);
+                double floor, width;
+                if (TryFieldValue(Manifest.HullPatchId, Source.HullFloor, out floor)
+                    && TryFieldValue(Manifest.HullPatchId, Source.HullWidth, out width)
+                    && width >= 1)
+                {
+                    Current.HullMin = (int)floor;
+                    Current.HullMax = (int)(floor + width - 1);
+                }
             }
 
             // Diesel damage only reads back once APE has applied it: h.sie ships

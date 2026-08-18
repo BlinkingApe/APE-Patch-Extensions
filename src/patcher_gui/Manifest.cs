@@ -79,6 +79,13 @@ namespace ApePatcher
         public int FieldLength;
         public string FieldType;                  // "u8", "u32", "f32"
 
+        // The field's authored validity range (ticket 06) -- what the manifest
+        // proved the site accepts, not APE's own product opinion about what to
+        // ship. Unset (NaN) for a site with no field at all.
+        public double Min = double.NaN;
+        public double Max = double.NaN;
+        public bool HasRange { get { return !double.IsNaN(Min); } }
+
         // hsie.ini sites
         public string Key;
         public string OriginalLine;
@@ -316,6 +323,11 @@ namespace ApePatcher
                 site.FieldAt = Json.Int(fd, "at");
                 site.FieldLength = Json.Int(fd, "length");
                 site.FieldType = Json.Str(fd, "type");
+            }
+            if (Json.Get(s, "min") != null)
+            {
+                site.Min = Json.Num(s, "min");
+                site.Max = Json.Num(s, "max");
             }
             return site;
         }

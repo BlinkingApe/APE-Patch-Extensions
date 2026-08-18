@@ -164,8 +164,10 @@ namespace ApePatcher.Ui
             hullState.Margin = new Padding(22, 2, 0, 4);
             column.Controls.Add(hullState);
 
-            hullMin = Widgets.Num(desired.HullMin, 0, 100, 0, 1, 62);
-            hullMax = Widgets.Num(desired.HullMax, 0, 100, 0, 1, 62);
+            Site hullFloor = SiteOf(Manifest.HullPatchId, "hull-roll-floor");
+            Site hullWidth = SiteOf(Manifest.HullPatchId, "hull-roll-width");
+            hullMin = Widgets.Num(desired.HullMin, (decimal)hullFloor.Min, (decimal)hullFloor.Max, 0, 1, 62);
+            hullMax = Widgets.Num(desired.HullMax, (decimal)hullWidth.Min, (decimal)hullWidth.Max, 0, 1, 62);
             hullMin.ValueChanged += delegate { if (!binding) { desired.HullMin = (int)hullMin.Value; Sync(); } };
             hullMax.ValueChanged += delegate { if (!binding) { desired.HullMax = (int)hullMax.Value; Sync(); } };
             column.Controls.Add(Fields(new Control[] {
@@ -233,6 +235,13 @@ namespace ApePatcher.Ui
             column.Controls.Add(statsBox);
 
             return column;
+        }
+
+        Site SiteOf(string patchId, string siteId)
+        {
+            foreach (Site s in session.Manifest.Patch(patchId).Sites)
+                if (s.Id == siteId) return s;
+            throw new PatchException("Manifest has no site '" + siteId + "'.");
         }
 
         static Control Row(CheckBox box, Label title)
@@ -467,7 +476,7 @@ namespace ApePatcher.Ui
 
             rowPath.Text = "path      " + install.InstallPath;
             rowBuild.Text = "build     " + install.BuildName + "   h.sie " + install.HsieVersion
-                + "   sha " + install.ShortSha + "…";
+                + "   sha " + install.ShortSha + "…" + "   APE " + ApeVersion.Current;
             rowExpected.Text = install.Supported
                 ? ""
                 : "expected  " + install.SupportedBuilds;

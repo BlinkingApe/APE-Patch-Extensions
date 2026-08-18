@@ -55,8 +55,8 @@ namespace ApePatcher
         public const double DestructionThreshold = 0.50;
 
         public bool HullApplied;
-        public int HullMin = 5;
-        public int HullMax = 20;
+        public int HullMin = 0;
+        public int HullMax = 5;
 
         public bool DieselApplied;
         public double Rate = 1.5;      // events per 10,000 h of diesel running

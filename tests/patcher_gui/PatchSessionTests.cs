@@ -168,6 +168,8 @@ namespace ApePatcher.Tests
             Check.False(session.Install.Applied(Manifest.DieselPatchId), "diesel damage is h.sie's");
             Check.False(session.Current.HullApplied, "and the model opens unchecked");
             Check.False(session.Current.DieselApplied, "for both features");
+            Check.Equal(0, session.Current.HullMin, "hull repair opens on APE's own default (ticket 04)");
+            Check.Equal(5, session.Current.HullMax, "not h.sie's stock 5-20 roll it has not yet applied");
         }
 
         public static void Test_AnAppliedInstallOpensWithTheValuesItHolds()
@@ -427,14 +429,17 @@ namespace ApePatcher.Tests
 
         public static void Test_HullRepairAtHsiesOwnRangeIsNotAChange()
         {
-            // APE's hull default *is* h.sie's 5-20 roll, so ticking the box and
-            // changing nothing writes nothing -- and the tool must say so rather
-            // than claim a commit it did not make.
+            // h.sie's own 5-20 roll is still a no-op to apply *at those exact
+            // numbers* -- ticket 04 moved APE's shipped default to 0-5, a real
+            // narrowing, so this now has to construct h.sie's stock range
+            // explicitly rather than rely on Current already holding it.
             Fixtures.Install fx = Fixtures.Stock(true);
             PatchSession session = fx.Session();
 
             PatchState want = session.Current.Clone();
-            want.HullApplied = true;      // 5-20, exactly what the install holds
+            want.HullApplied = true;
+            want.HullMin = 5;
+            want.HullMax = 20;            // h.sie's own stock roll, exactly what the install holds
             WriteReport report = session.Apply(want);
 
             Check.True(report.Ok, "nothing wrong with it");
@@ -640,6 +645,26 @@ namespace ApePatcher.Tests
             Check.Contains("sh3.exe", session.Install.RefusalReason, "unreadable, not silently patched");
             Check.False(session.Install.Applied(Manifest.HullPatchId), "no patch reads as applied");
             Check.False(session.Install.Applied(Manifest.DieselPatchId), "for either feature");
+        }
+
+        // -- 11. manifest-authored bounds (ticket 06) ---------------------------
+
+        public static void Test_HullSitesCarryTheManifestsAuthoredBoundsNotAHardcodedLiteral()
+        {
+            // The window used to hard-code 0-100 for both hull spinners
+            // regardless of which field they bound. Now it reads min/max off the
+            // manifest, so the fix has to actually be there to read.
+            Manifest m = Manifest.Embedded();
+            Site floor = Find(m, Manifest.HullPatchId, "hull-roll-floor");
+            Site width = Find(m, Manifest.HullPatchId, "hull-roll-width");
+
+            Check.True(floor.HasRange, "the floor site carries an authored range");
+            Check.Close(0.0, floor.Min, 1e-9, "floor's minimum");
+            Check.Close(100.0, floor.Max, 1e-9, "floor's maximum");
+
+            Check.True(width.HasRange, "the width site carries an authored range");
+            Check.Close(1.0, width.Min, 1e-9, "width's minimum differs from floor's");
+            Check.Close(101.0, width.Max, 1e-9, "width's maximum differs from floor's");
         }
 
         // -- helpers -----------------------------------------------------------

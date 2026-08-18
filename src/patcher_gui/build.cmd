@@ -15,10 +15,16 @@ set HERE=%~dp0
 set ROOT=%HERE%..\..
 set CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe
 set DIST=%ROOT%\dist
-set OUT=%DIST%\ApePatchExtensions.exe
 set ART=%ROOT%\data\art\blinkingape.png
 set ICO=%ROOT%\data\art\blinkingape.ico
 set MANIFEST=%ROOT%\data\manifest\ape-manifest.json
+
+REM Version.cs is the single source of truth (ticket 03); pull the number out
+REM of its one const line so the exe's name can never drift from the header.
+for /f "tokens=2 delims==;" %%v in ('findstr /c:"const string Current" "%HERE%Version.cs"') do set APE_VERSION_RAW=%%v
+set APE_VERSION=%APE_VERSION_RAW:"=%
+set APE_VERSION=%APE_VERSION: =%
+set OUT=%DIST%\ApePatchExtensions-%APE_VERSION%.exe
 
 python "%ROOT%\tools\re-static\gen_manifest.py" --check
 if errorlevel 1 exit /b 1
