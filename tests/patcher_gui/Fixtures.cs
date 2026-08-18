@@ -10,7 +10,9 @@
 // allowlist mechanism itself gets exercised honestly rather than stubbed out.
 //
 // hsie.ini is the real thing -- fixtures/hsie.ini is a byte copy of OAE 1.5.2's,
-// trailing tabs and all.
+// trailing tabs and all. fixtures/en_menu.txt is a trimmed stand-in for
+// data/Menu/en_menu.txt (ticket 10): only string 4893 and its neighbours,
+// since that is the only line APE's diesel-message site touches.
 
 using System;
 using System.Collections.Generic;
@@ -49,6 +51,11 @@ namespace ApePatcher.Tests
             return Path.Combine(RepoRoot(), @"tests\patcher_gui\fixtures\hsie.ini");
         }
 
+        public static string MenuTextPath()
+        {
+            return Path.Combine(RepoRoot(), @"tests\patcher_gui\fixtures\en_menu.txt");
+        }
+
         public static string Latin1(byte[] bytes)
         {
             return System.Text.Encoding.GetEncoding(28591).GetString(bytes);
@@ -82,9 +89,11 @@ namespace ApePatcher.Tests
             public Manifest Manifest;
             public string Sh3Exe { get { return Path.Combine(Dir, "sh3.exe"); } }
             public string HsieIni { get { return Path.Combine(Dir, "hsie.ini"); } }
+            public string MenuText { get { return Path.Combine(Dir, "data", "Menu", "en_menu.txt"); } }
 
             public byte[] ExeBytes() { return File.ReadAllBytes(Sh3Exe); }
             public string IniText() { return Latin1(File.ReadAllBytes(HsieIni)); }
+            public string MenuTextContent() { return Latin1(File.ReadAllBytes(MenuText)); }
 
             /// <summary>Open a session against this directory. Build identity is
             /// normalised over APE's own sites, so a directory APE has already
@@ -115,6 +124,8 @@ namespace ApePatcher.Tests
             byte[] exe = BuildStockExe(install.Manifest, dieselFlagOn, hsieVersionStamp);
             File.WriteAllBytes(install.Sh3Exe, exe);
             File.Copy(HsieIniPath(), install.HsieIni);
+            Directory.CreateDirectory(Path.GetDirectoryName(install.MenuText));
+            File.Copy(MenuTextPath(), install.MenuText);
 
             Admit(install.Manifest, exe, buildName, hsieVersionStamp);
             return install;

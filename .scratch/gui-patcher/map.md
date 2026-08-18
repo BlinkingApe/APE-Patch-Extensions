@@ -46,7 +46,10 @@ Skills: `/grilling` and `/domain-modeling` for design-decision tickets;
   new text "Diesel trouble, Kaleun. Normal wear and tear, we'll get her
   running, kein Stress."; fires unconditionally now, including on the rare
   destruction tail. String-sourcing mechanism split out to
-  [ticket 10](issues/10-diesel-message-string-source.md).
+  [ticket 10](issues/10-diesel-message-string-source.md). Built 2026-08-18:
+  a new `SiteStore.MenuText` for a keyed line in `data/Menu/en_menu.txt`,
+  plus a fixed-rewrite site nopping the `je` gate at `0x6351F4`. Tests in
+  `tests/patcher_gui/PatchSessionTests.cs` section 10.
 
 - [Manifest bounds wiring](issues/06-manifest-bounds-wiring.md) — wire up
   `min`/`max` from the manifest into the UI widgets (closes the drift gap

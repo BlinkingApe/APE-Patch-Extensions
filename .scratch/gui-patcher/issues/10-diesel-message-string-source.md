@@ -1,7 +1,7 @@
 # Where does the new diesel damage message's text get sourced from?
 
 Type: research
-Status: resolved
+Status: resolved, built
 
 Map: [v1.1 scope map](../map.md)
 

@@ -163,6 +163,20 @@ def ini_site(sid, key, original, ape, note=None):
     return site
 
 
+def menu_site(sid, key, original, ape, note=None):
+    site = {
+        "id": sid,
+        "store": "en_menu.txt",
+        "encoding": "ini-value",
+        "key": key,
+        "original": original,
+        "ape": ape,
+    }
+    if note:
+        site["note"] = note
+    return site
+
+
 def build():
     hull = {
         "id": "hull-repair",
@@ -268,6 +282,37 @@ def build():
                 note="1-(1-p)^TC quantizes p onto a float32 lattice with a "
                      "silent inert floor at 2.98e-8; APE replaces it with a "
                      "clamped p*TC",
+            ),
+            # -- sh3.exe .pcode: the diesel damage report (tickets 09-10) -----
+            exe_site(
+                "diesel-message-gate", 0x6351F4,
+                original="740e",                     # je +0xe -> skips the
+                                                       # string call on full
+                                                       # damage/destruction
+                # No invariant byte survives the rewrite -- both bytes of a
+                # 2-byte je change, unlike tc-helper-rewrite's padded body --
+                # so this site carries no context. The re-notes discuss the
+                # same one-byte-opcode tradeoff for the sibling gate at
+                # 0x6351BD (never shipped as a site there); this is the first
+                # site that actually pays it.
+                context=[],
+                replacement="9090",                   # nop nop: message now
+                                                       # fires unconditionally
+                encoding="fixed-rewrite",
+                note="drops h.sie's partial-damage-only gate on string 4893's "
+                     "call site, so the Chief's report fires on every hit, "
+                     "including the destruction tail (ticket 09)",
+            ),
+            # -- data/Menu/en_menu.txt: the report's text (ticket 10) ---------
+            menu_site(
+                "diesel-message-text", "4893",
+                "4893=If we don't cut power now, we're risking a breakdown!",
+                {"kind": "literal",
+                 "value": "Diesel trouble, Kaleun. Normal wear and tear, "
+                          "we'll get her running, kein Stress."},
+                note="string 4893 is referenced exactly once in the whole "
+                     "game (ticket 10) -- safe to overwrite in place, not "
+                     "relocate",
             ),
         ],
     }

@@ -1,0 +1,5 @@
+[STRINGS]
+MaxStrings=5000
+4892=Diesel engine damaged!
+4893=If we don't cut power now, we're risking a breakdown!
+4894=Diesel engine repaired.

@@ -415,16 +415,19 @@ namespace ApePatcher.Tests
             WriteReport report = session.Apply(want);
 
             Check.True(report.Ok, "the commit lands");
-            // 2 hull sites + 8 ini keys + 4 band immediates + 1 rewrite, less
-            // Val11: h.sie already ships Factor-for-0-damaged as 1.0, which is
-            // what APE wants, so that site is not a change and is not claimed.
-            Check.Equal(14, report.SitesWritten.Count, "every site that actually changes is named");
+            // 2 hull sites + 8 ini keys + 4 band immediates + 1 rewrite + the
+            // diesel-message gate + its text, less Val11: h.sie already ships
+            // Factor-for-0-damaged as 1.0, which is what APE wants, so that
+            // site is not a change and is not claimed.
+            Check.Equal(16, report.SitesWritten.Count, "every site that actually changes is named");
             Check.DoesNotContain("Val11", string.Join("|", report.SitesWritten.ToArray()),
                 "and nothing that did not");
             Check.Contains("hsie.ini Val9", string.Join("|", report.SitesWritten.ToArray()),
                 "including the ini keys");
             Check.Contains("0x635818", string.Join("|", report.SitesWritten.ToArray()),
                 "and the fixed rewrite");
+            Check.Contains("data/Menu/en_menu.txt 4893", string.Join("|", report.SitesWritten.ToArray()),
+                "and the diesel damage report's text");
         }
 
         public static void Test_HullRepairAtHsiesOwnRangeIsNotAChange()
@@ -645,6 +648,96 @@ namespace ApePatcher.Tests
             Check.Contains("sh3.exe", session.Install.RefusalReason, "unreadable, not silently patched");
             Check.False(session.Install.Applied(Manifest.HullPatchId), "no patch reads as applied");
             Check.False(session.Install.Applied(Manifest.DieselPatchId), "for either feature");
+        }
+
+        // -- 10. the diesel damage report, a third site type (tickets 09-10) ---
+
+        public static void Test_ApplyingDieselDamageRewordsTheReportAndDropsTheGate()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+            Check.True(session.Apply(Both(session)).Ok, "apply");
+
+            IniFile menu = IniFile.Load(fx.MenuText);
+            Check.Equal("4893=Diesel trouble, Kaleun. Normal wear and tear, we'll get her "
+                + "running, kein Stress.", menu.Line("4893"), "the report's new wording");
+
+            Site gate = Find(fx.Manifest, Manifest.DieselPatchId, "diesel-message-gate");
+            Check.Bytes(Hex.ToBytes("9090"),
+                Slice(fx.ExeBytes(), gate.OffsetFor(Fixtures.TestVersionId), 2),
+                "the partial-damage-only je is nopped out, so the report fires unconditionally");
+        }
+
+        public static void Test_TheMessageSiteSurvivesAnUnrelatedEdit()
+        {
+            // The line before and after 4893 in the fixture must not move or
+            // change -- APE's round trip touches exactly one line.
+            Fixtures.Install fx = Fixtures.Stock(true);
+            string before = fx.MenuTextContent();
+
+            PatchSession session = fx.Session();
+            Check.True(session.Apply(Both(session)).Ok, "apply");
+            Check.Contains("4892=Diesel engine damaged!", fx.MenuTextContent(),
+                "the neighbouring line is untouched");
+            Check.Contains("4894=Diesel engine repaired.", fx.MenuTextContent(),
+                "on both sides");
+            Check.Equal(CountNewlines(before), CountNewlines(fx.MenuTextContent()),
+                "no line was added or dropped");
+        }
+
+        public static void Test_UncheckingDieselDamageRestoresTheReportAndTheGateByteForByte()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            byte[] exeBefore = fx.ExeBytes();
+            string menuBefore = fx.MenuTextContent();
+
+            PatchSession session = fx.Session();
+            Check.True(session.Apply(Both(session)).Ok, "apply");
+            Check.False(Same(exeBefore, fx.ExeBytes()), "sh3.exe really changed");
+            Check.False(menuBefore == fx.MenuTextContent(), "en_menu.txt really changed");
+
+            PatchSession applied = fx.Session();
+            PatchState off = applied.Current.Clone();
+            off.HullApplied = false;
+            off.DieselApplied = false;
+            Check.True(applied.Apply(off).Ok, "unchecking diesel damage");
+
+            Check.Bytes(exeBefore, fx.ExeBytes(), "sh3.exe is byte-identical to the start");
+            Check.Equal(menuBefore, fx.MenuTextContent(), "en_menu.txt is byte-identical too");
+        }
+
+        public static void Test_AHandEditedMenuTextLineIsRefusedTheSameWayHsieIniIs()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            string text = fx.MenuTextContent().Replace(
+                "If we don't cut power now, we're risking a breakdown!",
+                "Something a player wrote by hand.");
+            File.WriteAllBytes(fx.MenuText, System.Text.Encoding.GetEncoding(28591).GetBytes(text));
+
+            byte[] exeBefore = fx.ExeBytes();
+            string menuBefore = fx.MenuTextContent();
+
+            PatchSession session = fx.Session();
+            WriteReport report = session.Apply(Both(session));
+
+            Check.False(report.Ok, "the commit is refused");
+            Check.True(report.ForeignWrite, "and flagged as the overridable foreign-write refusal");
+            Check.Contains("4893", report.Message, "the refusal names the key");
+            Check.Bytes(exeBefore, fx.ExeBytes(), "sh3.exe is untouched");
+            Check.Equal(menuBefore, fx.MenuTextContent(), "en_menu.txt is untouched, hand-edit and all");
+
+            WriteReport overridden = session.Apply(Both(session), true);
+            Check.True(overridden.Ok, "applying again with allowForeignWrite proceeds");
+        }
+
+        public static void Test_AMissingMenuTextFileIsReportedNotCrashed()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            File.Delete(fx.MenuText);
+
+            PatchSession session = fx.Session();
+            Check.False(session.Install.Supported, "no en_menu.txt is not a readable install");
+            Check.Contains("en_menu.txt", session.Install.RefusalReason, "and says what is missing");
         }
 
         // -- 11. manifest-authored bounds (ticket 06) ---------------------------

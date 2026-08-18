@@ -112,11 +112,13 @@ namespace ApePatcher
     {
         public const string Sh3ExeName = "sh3.exe";
         public const string HsieIniName = "hsie.ini";
+        public const string MenuTextName = "data/Menu/en_menu.txt";
 
         readonly Manifest manifest;
         readonly string dir;
         byte[] exe;          // null when the install could not be read
         IniFile ini;
+        IniFile menuText;
 
         /// <summary>The file-write boundary, seamed so tests can inject a write
         /// failure -- including a rollback's own write -- without a real
@@ -160,6 +162,12 @@ namespace ApePatcher
 
         string ExePath { get { return Path.Combine(dir, Sh3ExeName); } }
         string IniPath { get { return Path.Combine(dir, HsieIniName); } }
+        string MenuTextPath { get { return Path.Combine(dir, "data", "Menu", "en_menu.txt"); } }
+
+        /// <summary>Which in-memory store a non-sh3.exe site's key/line lives in.</summary>
+        IniFile StoreFor(Site s) { return s.Store == SiteStore.HsieIni ? ini : menuText; }
+
+        string FileNameFor(Site s) { return s.Store == SiteStore.HsieIni ? HsieIniName : MenuTextName; }
 
         // -- opening -----------------------------------------------------------
 
@@ -182,11 +190,18 @@ namespace ApePatcher
                     + "hardcode fixes installed.";
                 return;
             }
+            if (!File.Exists(MenuTextPath))
+            {
+                Install.RefusalReason = "No " + MenuTextName + " here. This does not look "
+                    + "like a Silent Hunter III install.";
+                return;
+            }
 
             try
             {
                 exe = File.ReadAllBytes(ExePath);
                 ini = IniFile.Load(IniPath);
+                menuText = IniFile.Load(MenuTextPath);
             }
             catch (Exception e)
             {
@@ -262,7 +277,7 @@ namespace ApePatcher
                 }
                 else
                 {
-                    string line = ini.Line(s.Key);
+                    string line = StoreFor(s).Line(s.Key);
                     if (line == null) continue;
                     if (string.Equals(line, s.OriginalLine, StringComparison.Ordinal)) continue;
                     if (IniLineIsRecognised(s, line)) foundApeValue = true;
@@ -413,7 +428,7 @@ namespace ApePatcher
                     else
                     {
                         string want = TargetLine(p, s, desired);
-                        string have = ini.Line(s.Key);
+                        string have = StoreFor(s).Line(s.Key);
                         if (have == null || !string.Equals(have, want, StringComparison.Ordinal))
                             Add(plan, p, s);
                     }
@@ -580,7 +595,8 @@ namespace ApePatcher
 
             byte[] newExe = (byte[])exe.Clone();
             IniFile newIni = IniFile.Load(IniPath);
-            bool exeChanged = false, iniChanged = false;
+            IniFile newMenu = IniFile.Load(MenuTextPath);
+            bool exeChanged = false, iniChanged = false, menuChanged = false;
 
             foreach (PlannedWrite w in plan.Writes)
             {
@@ -590,15 +606,21 @@ namespace ApePatcher
                     Array.Copy(run, 0, newExe, w.Site.OffsetFor(Install.VersionId), run.Length);
                     exeChanged = true;
                 }
-                else
+                else if (w.Site.Store == SiteStore.HsieIni)
                 {
                     newIni.SetLine(w.Site.Key, TargetLine(w.Patch, w.Site, desired));
                     iniChanged = true;
+                }
+                else
+                {
+                    newMenu.SetLine(w.Site.Key, TargetLine(w.Patch, w.Site, desired));
+                    menuChanged = true;
                 }
                 report.SitesWritten.Add(w.Site.Describe());
             }
 
             byte[] exeBackup = exe;
+            IniFile iniBackup = ini;
             try
             {
                 if (exeChanged) WriteExeBytes(ExePath, newExe);
@@ -636,9 +658,39 @@ namespace ApePatcher
                 report.Message = CannotWrite(HsieIniName, iniFailure);
                 return report;
             }
+            try
+            {
+                if (menuChanged) SaveIni(newMenu, MenuTextPath);
+            }
+            catch (Exception menuFailure)
+            {
+                // The third file, added by ticket 10: put both earlier writes
+                // back rather than leave the install half-patched, the same
+                // guarantee the ini stage above makes for sh3.exe.
+                report.SitesWritten.Clear();
+                Exception rollbackFailure = null;
+                if (iniChanged)
+                {
+                    try { SaveIni(iniBackup, IniPath); }
+                    catch (Exception e) { rollbackFailure = e; }
+                }
+                if (rollbackFailure == null && exeChanged)
+                {
+                    try { WriteExeBytes(ExePath, exeBackup); }
+                    catch (Exception e) { rollbackFailure = e; }
+                }
+                if (rollbackFailure != null)
+                {
+                    report.Message = InconsistentStateAfterMenuFailure(menuFailure, rollbackFailure);
+                    return report;
+                }
+                report.Message = CannotWrite(MenuTextName, menuFailure);
+                return report;
+            }
 
             exe = newExe;
             ini = newIni;
+            menuText = newMenu;
             report.Ok = true;
             report.Message = Describe(plan);
 
@@ -674,6 +726,27 @@ namespace ApePatcher
                 + "again and apply the same change -- that finishes writing " + HsieIniName + " so "
                 + "it agrees with " + Sh3ExeName + ". If it fails again, restore both files from a "
                 + "backup or reinstall h.sie's hardcode fixes before trying once more.";
+        }
+
+        /// <summary>The three-file analogue of InconsistentState, for a menu-text
+        /// write failure whose rollback of an already-written sh3.exe or hsie.ini
+        /// also fails (ticket 10's third site type). Less deeply specced than the
+        /// two-file case since it is the tail of a tail, but the same promise
+        /// holds: the player is told which files may still hold APE's change.</summary>
+        static string InconsistentStateAfterMenuFailure(Exception menuFailure, Exception rollbackFailure)
+        {
+            return "APE could not write " + MenuTextName + " (" + menuFailure.Message + "), and then "
+                + "could not restore an earlier file it had already written for this same change ("
+                + rollbackFailure.Message + ")."
+                + Environment.NewLine + Environment.NewLine
+                + "Your install is now inconsistent: " + Sh3ExeName + " and/or " + HsieIniName
+                + " may still hold the change APE just made, but " + MenuTextName + " does not."
+                + Environment.NewLine + Environment.NewLine
+                + "To recover: close APE, make sure all three files are writable (not read-only, "
+                + "not open in another program, not synced by a cloud backup tool), then run APE "
+                + "again and apply the same change -- that finishes the write so every file agrees. "
+                + "If it fails again, restore all three files from a backup or reinstall h.sie's "
+                + "hardcode fixes before trying once more.";
         }
 
         static string Describe(WritePlan plan)
@@ -735,24 +808,25 @@ namespace ApePatcher
                     }
                     else
                     {
-                        string have = ini.Line(s.Key);
+                        string fileName = FileNameFor(s);
+                        string have = StoreFor(s).Line(s.Key);
                         if (have == null)
                             return "APE refused to write. " + s.Describe()
-                                + " is not in this " + HsieIniName + "."
+                                + " is not in this " + fileName + "."
                                 + Environment.NewLine
-                                + "Nothing was written, in either file.";
+                                + "Nothing was written, in any file.";
                         if (IniLineIsRecognised(s, have)) continue;
                         if (allowForeignWrite) continue;
                         foreignWrite = true;
-                        return "APE refused to write. hsie.ini " + s.Key + " holds a value APE did "
-                            + "not write:"
+                        return "APE refused to write. " + fileName + " " + s.Key + " holds a value "
+                            + "APE did not write:"
                             + Environment.NewLine
                             + "  found in your file   " + have
                             + Environment.NewLine
                             + "  h.sie's original      " + s.OriginalLine
                             + Environment.NewLine
-                            + "Nothing was written, in either file. This is usually your own edit to "
-                            + HsieIniName + " -- APE will not overwrite it silently. Keep it as it "
+                            + "Nothing was written, in any file. This is usually your own edit to "
+                            + fileName + " -- APE will not overwrite it silently. Keep it as it "
                             + "is, or apply again to proceed and let APE write its own value over it.";
                     }
                 }

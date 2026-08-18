@@ -1,7 +1,7 @@
 # Diesel damage message: reword and move from pre-damage warning to post-damage report
 
 Type: grilling
-Status: resolved
+Status: resolved, built
 
 Map: [v1.1 scope map](../map.md)
 
@@ -62,8 +62,10 @@ warning fire live during ticket 05's test run.
 
 ## Not resolved here (mechanism follow-up)
 
-Still open, and left for whoever implements this: where string 4893's
-*replacement* text is actually sourced from — overwriting the stock
+Resolved and built (2026-08-18): see [ticket 10](10-diesel-message-string-source.md)
+for the mechanism and `src/patcher_gui/Manifest.cs`'s new `SiteStore.MenuText`
+for the implementation. Originally open, left for whoever implements this:
+where string 4893's *replacement* text is actually sourced from — overwriting the stock
 string-table entry (risk: is 4893 referenced anywhere else in the game?
 unchecked) vs. pointing `push 0x131D` at a new APE-authored string-table
 entry. This is RE/asset-pipeline legwork, not a design decision, and

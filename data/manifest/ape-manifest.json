@@ -331,6 +331,32 @@
           ],
           "replacement": "558becd94508d84d0cd9e8dbf1dbc1ddd9c9c20800cccccccccccccccccccccccccccccccccccccccccccccc",
           "note": "1-(1-p)^TC quantizes p onto a float32 lattice with a silent inert floor at 2.98e-8; APE replaces it with a clamped p*TC"
+        },
+        {
+          "id": "diesel-message-gate",
+          "store": "sh3.exe",
+          "encoding": "fixed-rewrite",
+          "va": "0x6351F4",
+          "offsets": {
+            "oae-1.5.2-hsie-1.6E1": 1339892,
+            "kc-2.5-hsie-1.6B1": 1339892
+          },
+          "original": "740e",
+          "context": [],
+          "replacement": "9090",
+          "note": "drops h.sie's partial-damage-only gate on string 4893's call site, so the Chief's report fires on every hit, including the destruction tail (ticket 09)"
+        },
+        {
+          "id": "diesel-message-text",
+          "store": "en_menu.txt",
+          "encoding": "ini-value",
+          "key": "4893",
+          "original": "4893=If we don't cut power now, we're risking a breakdown!",
+          "ape": {
+            "kind": "literal",
+            "value": "Diesel trouble, Kaleun. Normal wear and tear, we'll get her running, kein Stress."
+          },
+          "note": "string 4893 is referenced exactly once in the whole game (ticket 10) -- safe to overwrite in place, not relocate"
         }
       ]
     }

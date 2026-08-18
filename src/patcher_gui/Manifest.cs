@@ -7,8 +7,9 @@
 //
 // Vocabulary (ticket 08):
 //   patch  the checkbox-toggleable unit; unchecking reverts it as a whole
-//   site   one write location -- one address in sh3.exe, or one ValN line in
-//          hsie.ini -- carrying exactly one field
+//   site   one write location -- one address in sh3.exe, one ValN line in
+//          hsie.ini, or one keyed line in data/Menu/en_menu.txt (ticket 10) --
+//          carrying exactly one field
 //
 // Every site holds its complete original byte run or line, not merely enough to
 // verify: unchecking is the only revert mechanism APE has, and it has to
@@ -29,7 +30,7 @@ namespace ApePatcher
         public PatchException(string message, Exception inner) : base(message, inner) { }
     }
 
-    public enum SiteStore { Sh3Exe, HsieIni }
+    public enum SiteStore { Sh3Exe, HsieIni, MenuText }
 
     public enum FieldEncoding { Byte, Float32, OperandImmediate, FixedRewrite, IniValue }
 
@@ -86,7 +87,8 @@ namespace ApePatcher
         public double Max = double.NaN;
         public bool HasRange { get { return !double.IsNaN(Min); } }
 
-        // hsie.ini sites
+        // hsie.ini and en_menu.txt sites -- both a keyed "key=value" line in a
+        // plain-text file, captured/written/reverted by exact-text round trip.
         public string Key;
         public string OriginalLine;
         public string LiteralValue;               // for Source.Literal
@@ -106,9 +108,12 @@ namespace ApePatcher
         /// failure has to be diagnosable.</summary>
         public string Describe()
         {
-            return Store == SiteStore.HsieIni
-                ? "hsie.ini " + Key
-                : "sh3.exe " + Va + " (" + Id + ")";
+            switch (Store)
+            {
+                case SiteStore.HsieIni: return "hsie.ini " + Key;
+                case SiteStore.MenuText: return "data/Menu/en_menu.txt " + Key;
+                default: return "sh3.exe " + Va + " (" + Id + ")";
+            }
         }
     }
 
@@ -277,10 +282,12 @@ namespace ApePatcher
             site.Id = Json.Str(s, "id");
             site.Note = Json.Str(s, "note");
             string store = Json.Str(s, "store");
-            site.Store = store == "hsie.ini" ? SiteStore.HsieIni : SiteStore.Sh3Exe;
+            site.Store = store == "hsie.ini" ? SiteStore.HsieIni
+                        : store == "en_menu.txt" ? SiteStore.MenuText
+                        : SiteStore.Sh3Exe;
             site.Encoding = ParseEncoding(Json.Str(s, "encoding"));
 
-            if (site.Store == SiteStore.HsieIni)
+            if (site.Store != SiteStore.Sh3Exe)
             {
                 site.Key = Json.Str(s, "key");
                 site.OriginalLine = Json.Str(s, "original");
