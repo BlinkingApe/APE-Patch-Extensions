@@ -1,6 +1,20 @@
 # Build check: drop sh3.exe identity, keep hsie version only
 
-Status: ready-for-agent
+Status: resolved
+
+## Answer
+
+Implemented as specified in `ccc382b` (implementation) and `c9ad126` (code-review
+fixes). `Site.Offsets` collapsed to a single `int`; `Manifest.Identify`/`IdentityOf`/
+`SupportedVersion` removed; hsie version is read and displayed only, never matched
+against a list; `Verify()`'s per-site context-byte check is the sole remaining
+safety net. Manifest schema bumped to 2 and regenerated via `gen_manifest.py`.
+Documented as [ADR-0009](../../../docs/adr/0009-static-patcher-drops-build-identity-keeps-hsie-version-display.md),
+superseding ADR-0007's "Decided" section. All 138 tests pass in both cultures;
+`code-review` (Standards + Spec axes) found no hard violations after two follow-up
+fixes: `gen_manifest.py` now actually reports each reference binary's hsie stamp
+(its docstring had claimed this but the code didn't), and the now-permanently-inert
+`rowExpected` header label was deleted from `MainForm.cs` rather than left wired in.
 
 ## Problem Statement
 
