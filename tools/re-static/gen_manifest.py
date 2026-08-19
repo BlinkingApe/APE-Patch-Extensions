@@ -39,62 +39,16 @@ def off(va):
     return va - VA_TO_FILE
 
 
-# The build APE v1 shipped against.  Ticket 07: OAE 1.5.2 with h.sie v 1.6E1.
-# Kept as the id every exe_site() call is authored under -- the file offsets
-# below all come from RE against this build. Adding a version means re-proving
-# every site's offset against a real binary of that version first (ticket 08's
-# admission bar); once proven, add it to VERSIONS below and every exe_site()
-# picks up an offset entry for it automatically (see ALL_VERSION_IDS, derived
-# from VERSIONS once it exists, a few lines down -- one list, not two to keep
-# in sync).
-VERSION_ID = "oae-1.5.2-hsie-1.6E1"
-KC25_VERSION_ID = "kc-2.5-hsie-1.6B1"
-
-# Build identity is a *normalised* hash, not the file's own: every byte run APE
-# owns is reset to its manifest original and h.sie's 22-byte flag table is zeroed
-# before hashing.  Two consequences, both required:
-#
-#   - an install APE has already patched still identifies as the same build, so
-#     the tool can reopen showing what it wrote;
-#   - a HsieOptionsSelector run, which rewrites only flag bytes, does not change
-#     the build's identity either.
-#
-# `referenceSha256` is the plain file hash of the pristine binary this was
-# authored against, kept for the record and shown in the header.
-#
-# ⚠ KC 2.5's plain file hash moves on every flag flip (ADR-0007) and the value
-# quoted in ADR-0007/ticket 01 (`a7b5fc03...`) is a stale one, captured before a
-# flag flip and before the identity model existed -- it is not usable as either
-# field here. `referenceSha256` for KC 2.5 is left unset: only its normalised
-# identity was ever recorded in full (docs/re-notes/05-kc25-admission-evidence.md);
-# the plain hash is on record only truncated (`ab85d6e2...`) and this field is
-# documentary only, never used to decide admission.
-VERSIONS = [
-    {
-        "id": VERSION_ID,
-        "buildName": "OAE 1.5.2",
-        "hsieVersion": "v 1.6E1",
-        "identitySha256":
-            "36d66176f5be49f4708f05b6c076e2e7abf8e819ff81a38bbf85ede2a448d12c",
-        "referenceSha256":
-            "51d14ca3c08f42c9d315a9ec8e7df8948e97e14453cfa9857e33b820d233a87f",
-    },
-    {
-        "id": KC25_VERSION_ID,
-        "buildName": "KC 2.5",
-        "hsieVersion": "v 1.6B1",
-        "identitySha256":
-            "361eaaa088b71b103580a9e7101009c8ddd43387749cc54fdd5bb0d9e115926c",
-        "referenceSha256": None,
-    },
-]
-
-# Every admitted build's offsets are authored here, not per-site: ticket 08's
-# spike (docs/re-notes/05-kc25-admission-evidence.md) re-read all seven sites
-# out of a real KC 2.5 binary at the OAE 1.5.2 offsets and found exact matches,
-# so KC 2.5 shares OAE 1.5.2's offsets rather than carrying its own. Derived
-# from VERSIONS so the two cannot drift apart.
-ALL_VERSION_IDS = [v["id"] for v in VERSIONS]
+# Ticket 13: APE no longer identifies a specific sh3.exe build. Every site's
+# offset below was proven against OAE 1.5.2 (h.sie v 1.6E1) and re-confirmed
+# byte-identical in KC 2.5 (h.sie v 1.6B1) -- docs/re-notes/05-kc25-admission-
+# evidence.md -- so there is one offset per site, not one per build. APE reads
+# and displays whatever h.sie version stamp it finds, but never matches it
+# against a list: h.sie's own installer already refused to run against an
+# sh3.exe it does not support, so APE inherits that gate instead of
+# duplicating it. A new h.sie version that relocates a site is still caught,
+# just later -- Verify()'s per-site context-byte check refuses the write, not
+# a whole-file identity check refuses the open.
 
 # hsie.act rewrites these 24 .pconst addresses from hsie.ini at load, so a static
 # byte written to any of them is clobbered before the game reads it (ticket 09).
@@ -130,7 +84,7 @@ def exe_site(sid, va, original, context, field=None, source=None,
         "store": "sh3.exe",
         "encoding": encoding,
         "va": "0x%06X" % va,
-        "offsets": dict((vid, off(va)) for vid in ALL_VERSION_IDS),
+        "offset": off(va),
         "original": original,
         "context": [[at, b] for at, b in context],
     }
@@ -317,9 +271,8 @@ def build():
     }
 
     return {
-        "schema": 1,
+        "schema": 2,
         "generator": "tools/re-static/gen_manifest.py",
-        "versions": VERSIONS,
         "flagTableOffset": off(0x63CF00),
         "flagCount": 22,
         "versionStringOffset": off(0x63CC00),
@@ -329,33 +282,14 @@ def build():
     }
 
 
-def normalised_hash(manifest, blob, version_id):
-    """The build identity: APE's own sites reset to their originals and h.sie's
-    flag table zeroed, so neither an APE patch nor a HsieOptionsSelector run
-    changes which build this is."""
-    b = bytearray(blob)
-    for patch in manifest["patches"]:
-        for site in patch["sites"]:
-            if site["store"] != "sh3.exe":
-                continue
-            at = site["offsets"][version_id]
-            original = bytes.fromhex(site["original"])
-            b[at:at + len(original)] = original
-    at = manifest["flagTableOffset"]
-    b[at:at + manifest["flagCount"]] = b"\0" * manifest["flagCount"]
-    return hashlib.sha256(bytes(b)).hexdigest()
-
-
 def verify_against_reference(manifest):
     """Re-read every sh3.exe site out of a reference binary, if one is present.
 
-    Which offsets and which h.sie version stamp to expect depend on which
-    admitted *build* the binary's plain hash matches -- there is no longer one
-    global answer now that more than one version is admitted. A reference
-    binary that matches no version's referenceSha256 is skipped entirely: the
-    sibling variant set under data/exe_with_hsie_patches/ is not any admitted
-    build, so this is usually a no-op that exists to catch a checked-in install
-    binary.
+    Ticket 13: there is one offset per site, not one per admitted build, so
+    every reference binary under data/exe_with_hsie_patches/ is checked
+    against it unconditionally -- no version match to gate on. The h.sie
+    version stamp is read and reported for visibility only; it is never
+    compared against an expected value, since APE no longer keeps one.
     """
     if not os.path.isdir(REF_DIR):
         return []
@@ -365,36 +299,18 @@ def verify_against_reference(manifest):
     problems = []
     for name in refs:
         blob = open(os.path.join(REF_DIR, name), "rb").read()
-        plain = hashlib.sha256(blob).hexdigest()
 
-        matched = [v for v in manifest["versions"] if v.get("referenceSha256") == plain]
-        for version in matched:
-            vid = version["id"]
-
-            got = normalised_hash(manifest, blob, vid)
-            if got != version["identitySha256"]:
-                problems.append("%s: normalised identity is %s, manifest says %s"
-                                % (name, got, version["identitySha256"]))
-
-            want_stamp = version["hsieVersion"].encode("ascii")
-            stamp = blob[manifest["versionStringOffset"]:
-                         manifest["versionStringOffset"] + manifest["versionStringLength"]]
-            if stamp != want_stamp:
-                problems.append("%s: h.sie version stamp is %r, expected %r (%s)"
-                                % (name, stamp, want_stamp, version["buildName"]))
-
-            for patch in manifest["patches"]:
-                for site in patch["sites"]:
-                    if site["store"] != "sh3.exe":
-                        continue
-                    at = site["offsets"][vid]
-                    want = bytes.fromhex(site["original"])
-                    got = blob[at:at + len(want)]
-                    if got != want:
-                        problems.append(
-                            "%s: site %s at 0x%X holds %s, manifest says %s (%s)"
-                            % (name, site["id"], at, got.hex(), site["original"],
-                               version["buildName"]))
+        for patch in manifest["patches"]:
+            for site in patch["sites"]:
+                if site["store"] != "sh3.exe":
+                    continue
+                at = site["offset"]
+                want = bytes.fromhex(site["original"])
+                got = blob[at:at + len(want)]
+                if got != want:
+                    problems.append(
+                        "%s: site %s at 0x%X holds %s, manifest says %s"
+                        % (name, site["id"], at, got.hex(), site["original"]))
     return problems
 
 

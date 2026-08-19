@@ -23,12 +23,9 @@ namespace ApePatcher
         public string InstallPath;
         public bool Supported;
         public string RefusalReason;
-        public string SupportedBuilds;
 
-        public string BuildName = "unknown";
         public string HsieVersion = "unknown";
         public string Sha256 = "";
-        public string VersionId;
 
         /// <summary>h.sie's own Diesel Damage switch, flag-table entry #20. APE
         /// reads this table and never writes it (ticket 05, decision A-2).</summary>
@@ -175,7 +172,6 @@ namespace ApePatcher
         {
             Install = new InstallReport();
             Install.InstallPath = dir;
-            Install.SupportedBuilds = manifest.SupportedBuildsSentence();
             Current = new PatchState();
 
             if (!File.Exists(ExePath))
@@ -211,20 +207,8 @@ namespace ApePatcher
             }
 
             Install.Sha256 = Sha256Of(exe);
-            SupportedVersion version = manifest.Identify(exe);
             Install.HsieVersion = ReadHsieVersion();
-
-            if (version == null)
-            {
-                Install.BuildName = "unrecognised build";
-                Install.RefusalReason = "APE does not recognise this " + Sh3ExeName
-                    + " and will not write to it. Supported: " + Install.SupportedBuilds + ".";
-                return;
-            }
-
             Install.Supported = true;
-            Install.VersionId = version.Id;
-            Install.BuildName = version.BuildName;
             Install.DieselFlagOn = ReadFlag(manifest.Patch(Manifest.DieselPatchId).FlagIndex);
 
             foreach (Patch p in manifest.Patches)
@@ -260,9 +244,9 @@ namespace ApePatcher
         /// mutable field differing -- a site whose context has moved is someone
         /// else's edit, not APE's, whatever its field holds. A site that cannot
         /// be read at all is skipped rather than counted either way (story 11) --
-        /// in practice this only reaches a hsie.ini key missing from the file,
-        /// since a supported build's sh3.exe offsets are proven in range by
-        /// Manifest.Identify before this ever runs.</summary>
+        /// for sh3.exe that means ReadRun's own bounds check found the site's
+        /// offset outside this exe, and for hsie.ini a key missing from the
+        /// file.</summary>
         bool IsApplied(Patch p)
         {
             bool foundApeValue = false;
@@ -386,17 +370,11 @@ namespace ApePatcher
 
         byte[] ReadRun(Site s)
         {
-            int at = s.OffsetFor(Install.VersionId ?? Fallback(s));
+            int at = s.Offset;
             if (at < 0 || at + s.Original.Length > exe.Length) return null;
             byte[] run = new byte[s.Original.Length];
             Array.Copy(exe, at, run, 0, run.Length);
             return run;
-        }
-
-        string Fallback(Site s)
-        {
-            foreach (KeyValuePair<string, int> kv in s.Offsets) return kv.Key;
-            throw new PatchException("Site " + s.Id + " has no offsets at all.");
         }
 
         // -- planning ----------------------------------------------------------
@@ -603,7 +581,7 @@ namespace ApePatcher
                 if (w.Site.Store == SiteStore.Sh3Exe)
                 {
                     byte[] run = TargetRun(w.Patch, w.Site, desired);
-                    Array.Copy(run, 0, newExe, w.Site.OffsetFor(Install.VersionId), run.Length);
+                    Array.Copy(run, 0, newExe, w.Site.Offset, run.Length);
                     exeChanged = true;
                 }
                 else if (w.Site.Store == SiteStore.HsieIni)

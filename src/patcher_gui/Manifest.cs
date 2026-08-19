@@ -34,23 +34,6 @@ namespace ApePatcher
 
     public enum FieldEncoding { Byte, Float32, OperandImmediate, FixedRewrite, IniValue }
 
-    public class SupportedVersion
-    {
-        public string Id;
-        public string BuildName;
-        public string HsieVersion;
-
-        /// <summary>The build's identity: a hash taken with every site APE owns
-        /// reset to its original and h.sie's flag table zeroed. Neither an APE
-        /// patch nor a HsieOptionsSelector run changes it, which is what lets the
-        /// tool recognise an install it has already written to.</summary>
-        public string IdentitySha256;
-
-        /// <summary>The plain file hash of the pristine binary this was authored
-        /// against. Shown in the header, never used to decide anything.</summary>
-        public string ReferenceSha256;
-    }
-
     /// <summary>Where a site's value comes from in the desired-state model. Drives
     /// the write in one direction and the read-back in the other.</summary>
     public enum Source
@@ -72,7 +55,7 @@ namespace ApePatcher
 
         // sh3.exe sites
         public string Va;
-        public Dictionary<string, int> Offsets = new Dictionary<string, int>(StringComparer.Ordinal);
+        public int Offset;
         public byte[] Original;                   // the complete original run
         public byte[] Replacement;                // fixed-rewrite only
         public List<KeyValuePair<int, byte[]>> Context = new List<KeyValuePair<int, byte[]>>();
@@ -94,15 +77,6 @@ namespace ApePatcher
         public string LiteralValue;               // for Source.Literal
 
         public bool HasField { get { return FieldAt >= 0; } }
-
-        public int OffsetFor(string versionId)
-        {
-            int at;
-            if (!Offsets.TryGetValue(versionId, out at))
-                throw new PatchException("Site " + Id + " has no proven offset for build "
-                    + versionId + ".");
-            return at;
-        }
 
         /// <summary>A human-readable name for this site, used when a verification
         /// failure has to be diagnosable.</summary>
@@ -138,7 +112,6 @@ namespace ApePatcher
         public const string DieselPatchId = "diesel-damage";
 
         public int Schema;
-        public List<SupportedVersion> Versions = new List<SupportedVersion>();
         public int FlagTableOffset;
         public int FlagCount;
         public int VersionStringOffset;
@@ -150,61 +123,6 @@ namespace ApePatcher
             foreach (Patch p in Patches)
                 if (string.Equals(p.Id, id, StringComparison.Ordinal)) return p;
             throw new PatchException("Manifest has no patch '" + id + "'.");
-        }
-
-        public SupportedVersion VersionByIdentity(string identitySha256)
-        {
-            foreach (SupportedVersion v in Versions)
-                if (string.Equals(v.IdentitySha256, identitySha256, StringComparison.OrdinalIgnoreCase))
-                    return v;
-            return null;
-        }
-
-        /// <summary>Normalise a candidate sh3.exe to its build identity: reset
-        /// every run APE owns to the manifest's original and zero h.sie's flag
-        /// table, then hash. Done against each admitted version's offsets in
-        /// turn, since a site's offset is the one thing that varies by version.</summary>
-        public string IdentityOf(byte[] exe, string versionId)
-        {
-            byte[] copy = (byte[])exe.Clone();
-            foreach (Patch p in Patches)
-                foreach (Site s in p.Sites)
-                {
-                    if (s.Store != SiteStore.Sh3Exe) continue;
-                    int at;
-                    if (!s.Offsets.TryGetValue(versionId, out at)) continue;
-                    if (at < 0 || at + s.Original.Length > copy.Length) return null;
-                    Array.Copy(s.Original, 0, copy, at, s.Original.Length);
-                }
-            if (FlagTableOffset + FlagCount > copy.Length) return null;
-            for (int i = 0; i < FlagCount; i++) copy[FlagTableOffset + i] = 0;
-
-            using (System.Security.Cryptography.SHA256 sha =
-                   System.Security.Cryptography.SHA256.Create())
-                return Hex.ToString(sha.ComputeHash(copy));
-        }
-
-        /// <summary>The admitted build this binary is, or null.</summary>
-        public SupportedVersion Identify(byte[] exe)
-        {
-            foreach (SupportedVersion v in Versions)
-            {
-                string identity = IdentityOf(exe, v.Id);
-                if (identity != null
-                    && string.Equals(identity, v.IdentitySha256, StringComparison.OrdinalIgnoreCase))
-                    return v;
-            }
-            return null;
-        }
-
-        /// <summary>What APE tells a player it does support, when it refuses their
-        /// build.</summary>
-        public string SupportedBuildsSentence()
-        {
-            List<string> names = new List<string>();
-            foreach (SupportedVersion v in Versions)
-                names.Add(v.BuildName + " with h.sie " + v.HsieVersion);
-            return string.Join(", ", names.ToArray());
         }
 
         // -- loading -----------------------------------------------------------
@@ -228,9 +146,7 @@ namespace ApePatcher
             return embeddedJson;
         }
 
-        /// <summary>A fresh manifest off the embedded resource. Deliberately not a
-        /// shared singleton -- the test rig admits a synthetic build to its copy,
-        /// and that must never leak into anyone else's.</summary>
+        /// <summary>A fresh manifest off the embedded resource.</summary>
         public static Manifest Embedded()
         {
             return FromJson(EmbeddedJson());
@@ -241,25 +157,13 @@ namespace ApePatcher
             Dictionary<string, object> root = Json.Obj(Json.Parse(json));
             Manifest m = new Manifest();
             m.Schema = Json.Int(root, "schema");
-            if (m.Schema != 1)
+            if (m.Schema != 2)
                 throw new PatchException("Manifest schema " + Fmt.Int(m.Schema)
-                    + " is newer than this build of APE understands.");
+                    + " is not one this build of APE understands.");
             m.FlagTableOffset = Json.Int(root, "flagTableOffset");
             m.FlagCount = Json.Int(root, "flagCount");
             m.VersionStringOffset = Json.Int(root, "versionStringOffset");
             m.VersionStringLength = Json.Int(root, "versionStringLength");
-
-            foreach (object o in Json.Arr(Json.Get(root, "versions")))
-            {
-                Dictionary<string, object> v = Json.Obj(o);
-                SupportedVersion sv = new SupportedVersion();
-                sv.Id = Json.Str(v, "id");
-                sv.BuildName = Json.Str(v, "buildName");
-                sv.HsieVersion = Json.Str(v, "hsieVersion");
-                sv.IdentitySha256 = Json.Str(v, "identitySha256");
-                sv.ReferenceSha256 = Json.Str(v, "referenceSha256");
-                m.Versions.Add(sv);
-            }
 
             foreach (object o in Json.Arr(Json.Get(root, "patches")))
             {
@@ -319,9 +223,7 @@ namespace ApePatcher
                     (int)Math.Round((double)pair[0]), Hex.ToBytes((string)pair[1])));
             }
 
-            Dictionary<string, object> offs = Json.Obj(Json.Get(s, "offsets"));
-            foreach (KeyValuePair<string, object> kv in offs)
-                site.Offsets[kv.Key] = (int)Math.Round((double)kv.Value);
+            site.Offset = Json.Int(s, "offset");
 
             object f = Json.Get(s, "field");
             if (f != null)
@@ -364,26 +266,6 @@ namespace ApePatcher
                 case "threshold": return Source.Threshold;
             }
             throw new PatchException("Manifest declares an unknown value source '" + s + "'.");
-        }
-
-        /// <summary>Add a supported build whose sites sit at the same offsets as an
-        /// already-known one. Used by the test rig to admit a synthetic install;
-        /// a real new h.sie version is admitted only by re-proving every offset
-        /// against a real binary of that version (ticket 08's bar), which means
-        /// regenerating the manifest, not calling this.</summary>
-        public SupportedVersion AddVersionSharingOffsets(string id, string buildName,
-                                                        string hsieVersion, string copyOffsetsFrom)
-        {
-            SupportedVersion v = new SupportedVersion();
-            v.Id = id;
-            v.BuildName = buildName;
-            v.HsieVersion = hsieVersion;
-            Versions.Add(v);
-            foreach (Patch p in Patches)
-                foreach (Site s in p.Sites)
-                    if (s.Store == SiteStore.Sh3Exe)
-                        s.Offsets[id] = s.OffsetFor(copyOffsetsFrom);
-            return v;
         }
     }
 

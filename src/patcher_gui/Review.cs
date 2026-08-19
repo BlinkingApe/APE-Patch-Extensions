@@ -54,7 +54,7 @@ namespace ApePatcher
 
             if (!install.Supported)
             {
-                r.NothingText = "Nothing — this build is not one APE knows how to write.";
+                r.NothingText = "Nothing — APE could not read this install.";
                 r.NothingIsWarning = true;
                 return r;
             }

@@ -27,7 +27,7 @@ dist\ApePatchExtensions.exe --self-test "C:\games\OneAlex Extended 1.5.2"
 ```
 
 Builds, lays out and paints the window without showing it. Exit `0` built and the
-install was recognised, `2` built but the install was refused, `1` it threw.
+install was readable, `2` built but the install was refused, `1` it threw.
 
 ## Shape
 
@@ -52,11 +52,14 @@ never reaches for a private method and never asserts on control positions.
 
 ## Two things to know before changing it
 
-**Build identity is a normalised hash, not the file's.** Every run APE owns is
-reset to its manifest original and h.sie's 22-byte flag table is zeroed before
-hashing. Without that, an install would stop being recognised the moment APE
-patched it, and the tool could never reopen showing what it wrote. A
-HsieOptionsSelector run does not change a build's identity either.
+**There is no sh3.exe build check (ticket 13).** APE reads and displays
+whatever h.sie version stamp it finds, but never matches it against a list --
+h.sie's own installer already refused to run against an sh3.exe it does not
+support, so APE inherits that gate rather than duplicating it. Every site's
+offset is a single value proven once, not one per admitted build. The
+remaining safety net is `Verify()`'s per-site invariant-context-byte check,
+which runs before every write and refuses the whole commit if a site's bytes
+do not match what APE was proven against.
 
 **Culture invariance is a correctness requirement, not a preference.**
 `hsie.ini` is parsed by h.sie's own code, which expects `4.1667e-08`. A

@@ -183,17 +183,20 @@ namespace ApePatcher.Tests
                 "and so does diesel damage");
         }
 
-        public static void Test_AnUnsupportedBuildReviewsAsNothingWritable()
+        public static void Test_AnUnreadableInstallReviewsAsNothingWritable()
         {
-            Fixtures.Install fx = Fixtures.UnrecognisedBuild();
-            PatchSession session = fx.Session();
+            // Ticket 13: with no whole-file identity check, the only way left
+            // to land on Install.Supported == false is a missing or unreadable
+            // file -- there is no "wrong build" case any more.
+            string dir = Fixtures.TempDir();
+            PatchSession session = PatchSession.Open(dir, Manifest.Embedded());
             PatchState want = session.Current.Clone();
             want.HullApplied = true;
             want.DieselApplied = true;
 
             Review r = Build(session, want);
             Check.True(r.Empty, "nothing is listed");
-            Check.Contains("not one APE knows how to write", r.NothingText, "and it says why");
+            Check.Contains("could not read", r.NothingText, "and it says why");
             Check.True(r.NothingIsWarning, "in the warning colour");
         }
 

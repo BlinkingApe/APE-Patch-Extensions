@@ -64,7 +64,7 @@ namespace ApePatcher.Ui
         /// against a real install" is worth being able to answer from a build
         /// script rather than by eye.
         ///
-        /// Exit 0 built and the install was recognised, 2 built but the install
+        /// Exit 0 built and the install was readable, 2 built but the install
         /// was refused, 1 it threw.</summary>
         static int SelfTest(string dir)
         {

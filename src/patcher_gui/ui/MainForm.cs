@@ -471,17 +471,14 @@ namespace ApePatcher.Ui
             verdict.Text = install.Supported ? "Install verified" : "Install refused";
             verdict.ForeColor = install.Supported ? SystemColors.ControlText : Look.Warn;
             verdictSub.Text = install.Supported
-                ? "APE will only write to a build it recognises."
-                : "APE writes nothing to a build it does not recognise.";
+                ? "APE will only write to sites that hold the exact bytes it was proven against."
+                : "APE writes nothing to an install it cannot read.";
 
             rowPath.Text = "path      " + install.InstallPath;
-            rowBuild.Text = "build     " + install.BuildName + "   h.sie " + install.HsieVersion
+            rowBuild.Text = "h.sie     " + install.HsieVersion
                 + "   sha " + install.ShortSha + "…" + "   APE " + ApeVersion.Current;
-            rowExpected.Text = install.Supported
-                ? ""
-                : "expected  " + install.SupportedBuilds;
-            rowExpected.ForeColor = Look.Warn;
-            rowExpected.Visible = !install.Supported;
+            rowExpected.Text = "";
+            rowExpected.Visible = false;
         }
 
         void RenderStats()

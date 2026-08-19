@@ -1,22 +1,6 @@
 {
-  "schema": 1,
+  "schema": 2,
   "generator": "tools/re-static/gen_manifest.py",
-  "versions": [
-    {
-      "id": "oae-1.5.2-hsie-1.6E1",
-      "buildName": "OAE 1.5.2",
-      "hsieVersion": "v 1.6E1",
-      "identitySha256": "36d66176f5be49f4708f05b6c076e2e7abf8e819ff81a38bbf85ede2a448d12c",
-      "referenceSha256": "51d14ca3c08f42c9d315a9ec8e7df8948e97e14453cfa9857e33b820d233a87f"
-    },
-    {
-      "id": "kc-2.5-hsie-1.6B1",
-      "buildName": "KC 2.5",
-      "hsieVersion": "v 1.6B1",
-      "identitySha256": "361eaaa088b71b103580a9e7101009c8ddd43387749cc54fdd5bb0d9e115926c",
-      "referenceSha256": null
-    }
-  ],
   "flagTableOffset": 1371904,
   "flagCount": 22,
   "versionStringOffset": 1371136,
@@ -58,10 +42,7 @@
           "store": "sh3.exe",
           "encoding": "operand-immediate",
           "va": "0x63364B",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1332811,
-            "kc-2.5-hsie-1.6B1": 1332811
-          },
+          "offset": 1332811,
           "original": "6810000000",
           "context": [
             [
@@ -85,10 +66,7 @@
           "store": "sh3.exe",
           "encoding": "byte",
           "va": "0x633655",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1332821,
-            "kc-2.5-hsie-1.6B1": 1332821
-          },
+          "offset": 1332821,
           "original": "83c005",
           "context": [
             [
@@ -209,10 +187,7 @@
           "store": "sh3.exe",
           "encoding": "operand-immediate",
           "va": "0x6351B0",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1339824,
-            "kc-2.5-hsie-1.6B1": 1339824
-          },
+          "offset": 1339824,
           "original": "683d0a173f",
           "context": [
             [
@@ -235,10 +210,7 @@
           "store": "sh3.exe",
           "encoding": "operand-immediate",
           "va": "0x6351B5",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1339829,
-            "kc-2.5-hsie-1.6B1": 1339829
-          },
+          "offset": 1339829,
           "original": "680ad7233c",
           "context": [
             [
@@ -261,10 +233,7 @@
           "store": "sh3.exe",
           "encoding": "operand-immediate",
           "va": "0x6351BF",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1339839,
-            "kc-2.5-hsie-1.6B1": 1339839
-          },
+          "offset": 1339839,
           "original": "c74424040000803f",
           "context": [
             [
@@ -288,10 +257,7 @@
           "store": "sh3.exe",
           "encoding": "operand-immediate",
           "va": "0x6351C7",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1339847,
-            "kc-2.5-hsie-1.6B1": 1339847
-          },
+          "offset": 1339847,
           "original": "c704249a99993e",
           "context": [
             [
@@ -314,10 +280,7 @@
           "store": "sh3.exe",
           "encoding": "fixed-rewrite",
           "va": "0x635818",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1341464,
-            "kc-2.5-hsie-1.6B1": 1341464
-          },
+          "offset": 1341464,
           "original": "558bec505152ff750cd9e8d8650883ec04d91c24e877190000d9e0d9e8dec15a5958c9c20800cccccccccccc",
           "context": [
             [
@@ -337,10 +300,7 @@
           "store": "sh3.exe",
           "encoding": "fixed-rewrite",
           "va": "0x6351F4",
-          "offsets": {
-            "oae-1.5.2-hsie-1.6E1": 1339892,
-            "kc-2.5-hsie-1.6B1": 1339892
-          },
+          "offset": 1339892,
           "original": "740e",
           "context": [],
           "replacement": "9090",

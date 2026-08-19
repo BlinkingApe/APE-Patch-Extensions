@@ -1,5 +1,13 @@
 # The static patcher verifies by build-identity hash and fixed offsets, not AOB scanning
 
+> **Superseded (ticket 13) by [ADR-0009](0009-static-patcher-drops-build-identity-keeps-hsie-version-display.md).**
+> The "Decided" section below — the whole-file identity hash and its build
+> allowlist — no longer describes what APE does: it has been dropped in favour
+> of trusting h.sie's own install-time gate, with per-site verify-before-write
+> as the only remaining check. The rest of this ADR (why static files differ
+> from `ape.act`'s live resolution, and that this narrows rather than
+> supersedes ADR-0003) still holds.
+
 **ADR-0003** decided that APE resolves its anchors by AOB signature scan rather than
 hardcoded offsets, and **CONTEXT.md**'s glossary states the rule flatly: *"APE still
 resolves its value anchors dynamically rather than trusting fixed addresses."* Written as

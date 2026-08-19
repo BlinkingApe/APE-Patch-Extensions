@@ -27,30 +27,36 @@ namespace ApePatcher.Tests
             Fixtures.Install fx = Fixtures.Stock(true);
             PatchSession session = fx.Session();
 
-            Check.True(session.Install.Supported, "the fixture build is admitted");
-            Check.Equal("OAE 1.5.2", session.Install.BuildName, "build name");
+            Check.True(session.Install.Supported, "sh3.exe, hsie.ini and en_menu.txt are all present");
             Check.Equal("v 1.6E1", session.Install.HsieVersion, "h.sie version, read from the binary");
             Check.Equal(fx.Dir, session.Install.InstallPath, "the directory it opened");
         }
 
-        public static void Test_AnUnrecognisedBuildIsRefusedAndNamesWhatIsSupported()
+        public static void Test_AnyHsieVersionIsAcceptedAndOnlyDisplayed()
         {
-            Fixtures.Install fx = Fixtures.UnrecognisedBuild();
+            // Ticket 13: APE no longer keeps an allowlist of hsie versions -- a
+            // stamp it has never seen opens exactly like any other, and is only
+            // ever shown, never matched against anything.
+            Fixtures.Install fx = Fixtures.StockBuild(true, "v 9.9Z9");
             PatchSession session = fx.Session();
 
-            Check.False(session.Install.Supported, "a mutated sh3.exe is not admitted");
-            Check.Contains("OAE 1.5.2", session.Install.SupportedBuilds,
-                "the refusal says which build APE does support");
-            Check.Contains("v 1.6E1", session.Install.SupportedBuilds, "and which h.sie version");
+            Check.True(session.Install.Supported, "a novel hsie version is not refused");
+            Check.Equal("v 9.9Z9", session.Install.HsieVersion, "and is simply read back");
+            Check.True(session.Install.Available(Manifest.HullPatchId), "patches still read normally");
         }
 
-        public static void Test_AnUnsupportedBuildRefusesToWriteAnything()
+        public static void Test_AContextMismatchOpensFineButRefusesToWrite()
         {
-            Fixtures.Install fx = Fixtures.UnrecognisedBuild();
+            // Ticket 13: with no whole-file identity check, a genuinely
+            // incompatible sh3.exe still opens -- its files are present and
+            // readable -- and it is Verify(), not Read(), that catches it.
+            Fixtures.Install fx = Fixtures.ContextCorrupted();
+            PatchSession session = fx.Session();
+            Check.True(session.Install.Supported, "files are present and readable, so it opens");
+
             byte[] exeBefore = fx.ExeBytes();
             string iniBefore = fx.IniText();
 
-            PatchSession session = fx.Session();
             WriteReport report = session.Apply(Both(session));
 
             Check.False(report.Ok, "the commit is refused");
@@ -92,17 +98,16 @@ namespace ApePatcher.Tests
             Check.Equal("Val9=2e-4", IniLine(fx, "Val9"), "hsie.ini was not touched for it");
         }
 
-        // -- 1b. admitting a second build (umbrella ticket 01 stories 16-19) ---
+        // -- 1b. a build stamped with a different h.sie version (ticket 13) ----
 
-        public static void Test_ASecondAdmittedBuildAppliesAndRevertsByteForByte()
+        public static void Test_ADifferentlyStampedBuildAppliesAndRevertsByteForByte()
         {
             // The same round trip Test_UncheckingBothFeaturesRestoresBothFilesByteForByte
-            // covers for the shipped v 1.6E1 build, run against a build stamped
-            // v 1.6B1 (KC 2.5's h.sie version) and admitted as its own allowlist
-            // entry sharing the shipped build's offsets -- ticket 01 story 18.
-            Fixtures.Install fx = Fixtures.StockBuild(true, "KC 2.5", "v 1.6B1");
-            Check.True(fx.Session().Install.Supported, "the second build is admitted");
-            Check.Equal("KC 2.5", fx.Session().Install.BuildName, "and named correctly");
+            // covers for the shipped v 1.6E1 stamp, run against a build stamped
+            // v 1.6B1 (KC 2.5's h.sie version) -- there is no separate admission
+            // step left to exercise (ticket 13): every offset is universal.
+            Fixtures.Install fx = Fixtures.StockBuild(true, "v 1.6B1");
+            Check.True(fx.Session().Install.Supported, "opens the same as any other stamp");
             Check.Equal("v 1.6B1", fx.Session().Install.HsieVersion, "reading its own h.sie stamp");
 
             byte[] exeBefore = fx.ExeBytes();
@@ -111,7 +116,7 @@ namespace ApePatcher.Tests
             PatchSession session = fx.Session();
             PatchState want = Both(session);
             want.Rate = 4.0;
-            Check.True(session.Apply(want).Ok, "applying against the second build");
+            Check.True(session.Apply(want).Ok, "applying against the differently-stamped build");
             Check.False(Same(exeBefore, fx.ExeBytes()), "sh3.exe really changed");
 
             PatchSession applied = fx.Session();
@@ -122,39 +127,6 @@ namespace ApePatcher.Tests
 
             Check.Bytes(exeBefore, fx.ExeBytes(), "sh3.exe is byte-identical to the start");
             Check.Bytes(iniBefore, File.ReadAllBytes(fx.HsieIni), "hsie.ini is byte-identical too");
-        }
-
-        public static void Test_SharingAnHsieVersionDoesNotShareAdmission()
-        {
-            // Ticket 01 story 19: KC 2.5 and OAE 1.5.3.7 both report h.sie
-            // "v 1.6B1", but they are different builds and admitting one must not
-            // admit the other by side effect.
-            Fixtures.Install[] builds = Fixtures.TwoBuildsSharingAnHsieVersion();
-            Fixtures.Install kc = builds[0];
-            Fixtures.Install oae1537 = builds[1];
-
-            Check.True(kc.Session().Install.Supported, "KC 2.5 is admitted on its own identity");
-            Check.Equal("KC 2.5", kc.Session().Install.BuildName, "and identified as itself");
-
-            Check.True(oae1537.Session().Install.Supported,
-                "OAE 1.5.3.7 is admitted on its own identity, separately");
-            Check.Equal("OAE 1.5.3.7", oae1537.Session().Install.BuildName, "and identified as itself");
-        }
-
-        public static void Test_AnUnsupportedBuildRefusalNamesEveryAdmittedBuild()
-        {
-            // Ticket 01 story 17: a refusal keeps naming every build APE does
-            // support, not just the first one admitted.
-            Fixtures.Install[] builds = Fixtures.TwoBuildsSharingAnHsieVersion();
-            Fixtures.Install fx = builds[0];
-            byte[] exe = fx.ExeBytes();
-            exe[0x1000] ^= 0xFF;                // nowhere near any site
-            File.WriteAllBytes(fx.Sh3Exe, exe);
-
-            InstallReport install = fx.Session().Install;
-            Check.False(install.Supported, "a mutated sh3.exe is not admitted");
-            Check.Contains("KC 2.5", install.SupportedBuilds, "names the first admitted build");
-            Check.Contains("OAE 1.5.3.7", install.SupportedBuilds, "and the second");
         }
 
         // -- 2. read-back ------------------------------------------------------
@@ -258,7 +230,7 @@ namespace ApePatcher.Tests
             // it is off.
             Fixtures.Install fx = Fixtures.Stock(true);
             Site helper = Find(fx.Manifest, Manifest.DieselPatchId, "tc-helper-rewrite");
-            int at = helper.OffsetFor(Fixtures.TestVersionId);
+            int at = helper.Offset;
 
             PatchSession session = fx.Session();
             Check.Bytes(helper.Original, Slice(fx.ExeBytes(), at, helper.Original.Length),
@@ -340,7 +312,7 @@ namespace ApePatcher.Tests
             Fixtures.Install fx = Fixtures.Stock(true);
             Site band = Find(fx.Manifest, Manifest.DieselPatchId, "band-first-hi");
             byte[] exe = fx.ExeBytes();
-            exe[band.OffsetFor(Fixtures.TestVersionId)] = 0x90;   // the push opcode -- context, not field
+            exe[band.Offset] = 0x90;   // the push opcode -- context, not field
             File.WriteAllBytes(fx.Sh3Exe, exe);
 
             byte[] exeBefore = fx.ExeBytes();
@@ -630,8 +602,8 @@ namespace ApePatcher.Tests
             Site width = Find(fx.Manifest, Manifest.HullPatchId, "hull-roll-width");
             Site floor = Find(fx.Manifest, Manifest.HullPatchId, "hull-roll-floor");
             byte[] exe = fx.ExeBytes();
-            exe[width.OffsetFor(Fixtures.TestVersionId)] = 0x90;   // corrupt only the context byte
-            exe[floor.OffsetFor(Fixtures.TestVersionId)] = 0x00;
+            exe[width.Offset] = 0x90;   // corrupt only the context byte
+            exe[floor.Offset] = 0x00;
             File.WriteAllBytes(fx.Sh3Exe, exe);
 
             PatchSession reopened = fx.Session();
@@ -664,7 +636,7 @@ namespace ApePatcher.Tests
 
             Site gate = Find(fx.Manifest, Manifest.DieselPatchId, "diesel-message-gate");
             Check.Bytes(Hex.ToBytes("9090"),
-                Slice(fx.ExeBytes(), gate.OffsetFor(Fixtures.TestVersionId), 2),
+                Slice(fx.ExeBytes(), gate.Offset, 2),
                 "the partial-damage-only je is nopped out, so the report fires unconditionally");
         }
 

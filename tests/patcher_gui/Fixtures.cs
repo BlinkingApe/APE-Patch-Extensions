@@ -6,8 +6,9 @@
 // the version stamp.  It is built *from the manifest*, so it is stock by
 // construction and cannot drift from what the tool expects.
 //
-// Its hash is then admitted to a private copy of the manifest, which is how the
-// allowlist mechanism itself gets exercised honestly rather than stubbed out.
+// Ticket 13: APE no longer identifies a specific sh3.exe build, so there is
+// nothing left to admit -- a stock fixture is ready to open the moment its
+// bytes are in place.
 //
 // hsie.ini is the real thing -- fixtures/hsie.ini is a byte copy of OAE 1.5.2's,
 // trailing tabs and all. fixtures/en_menu.txt is a trimmed stand-in for
@@ -17,7 +18,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
 using ApePatcher;
 
 namespace ApePatcher.Tests
@@ -25,7 +25,6 @@ namespace ApePatcher.Tests
     static class Fixtures
     {
         public const int Sh3ExeLength = 1417216;
-        public const string TestVersionId = "test-synthetic";
 
         // The live OAE 1.5.2 flag table, read 2026-08-15 (docs/re-notes/03, sec.2).
         // Entry 20 -- Diesel Damage Fix -- is the one the tool reads.
@@ -95,11 +94,6 @@ namespace ApePatcher.Tests
             public string IniText() { return Latin1(File.ReadAllBytes(HsieIni)); }
             public string MenuTextContent() { return Latin1(File.ReadAllBytes(MenuText)); }
 
-            /// <summary>Open a session against this directory. Build identity is
-            /// normalised over APE's own sites, so a directory APE has already
-            /// written to still identifies as the same build -- no re-admission
-            /// here, which is exactly the property a player depends on when they
-            /// reopen the tool.</summary>
             public PatchSession Session() { return PatchSession.Open(Dir, Manifest); }
         }
 
@@ -107,15 +101,15 @@ namespace ApePatcher.Tests
         /// writes -- i.e. an install with neither feature applied.</summary>
         public static Install Stock(bool dieselFlagOn)
         {
-            return StockBuild(dieselFlagOn, "OAE 1.5.2", "v 1.6E1");
+            return StockBuild(dieselFlagOn, "v 1.6E1");
         }
 
-        /// <summary>The same shape of install, but stamped as a different h.sie
-        /// version and admitted as a second, separately-identified build sharing
-        /// OAE 1.5.2's site offsets -- the same relationship KC 2.5 and OAE 1.5.3.7
-        /// have to the shipped build (docs/re-notes/05-kc25-admission-evidence.md):
-        /// same offsets, different identity because the version stamp differs.</summary>
-        public static Install StockBuild(bool dieselFlagOn, string buildName, string hsieVersionStamp)
+        /// <summary>The same shape of install, stamped with whatever h.sie
+        /// version string is given. Ticket 13: APE reads and displays this
+        /// stamp but never matches it against a list, so a stamp that is not
+        /// OAE 1.5.2's own (e.g. KC 2.5's "v 1.6B1") opens exactly the same
+        /// way -- there is no separate admission step left to exercise.</summary>
+        public static Install StockBuild(bool dieselFlagOn, string hsieVersionStamp)
         {
             Install install = new Install();
             install.Dir = TempDir();
@@ -127,17 +121,23 @@ namespace ApePatcher.Tests
             Directory.CreateDirectory(Path.GetDirectoryName(install.MenuText));
             File.Copy(MenuTextPath(), install.MenuText);
 
-            Admit(install.Manifest, exe, buildName, hsieVersionStamp);
             return install;
         }
 
-        /// <summary>The same directory, mutated somewhere APE does not write, so
-        /// its hash no longer matches any admitted build.</summary>
-        public static Install UnrecognisedBuild()
+        /// <summary>The same stock shape, but with one sh3.exe site's invariant
+        /// context byte corrupted. This is what a genuinely incompatible
+        /// install looks like now that there is no whole-file identity check
+        /// (ticket 13): Read() still opens it -- sh3.exe, hsie.ini and
+        /// en_menu.txt are all present and readable -- and it is Verify() that
+        /// catches the mismatch and refuses the write.</summary>
+        public static Install ContextCorrupted()
         {
             Install install = Stock(true);
+            Site site = install.Manifest.Patch(Manifest.HullPatchId).Sites[0];   // hull-roll-width
+            KeyValuePair<int, byte[]> ctx = site.Context[0];
+
             byte[] exe = install.ExeBytes();
-            exe[0x1000] ^= 0xFF;                // nowhere near any site
+            exe[site.Offset + ctx.Key] ^= 0xFF;
             File.WriteAllBytes(install.Sh3Exe, exe);
             return install;
         }
@@ -158,56 +158,9 @@ namespace ApePatcher.Tests
                 foreach (Site s in p.Sites)
                 {
                     if (s.Store != SiteStore.Sh3Exe) continue;
-                    s.Original.CopyTo(exe, s.OffsetFor(ShippedVersionId(m)));
+                    s.Original.CopyTo(exe, s.Offset);
                 }
             return exe;
-        }
-
-        public static string ShippedVersionId(Manifest m)
-        {
-            return m.Versions[0].Id;
-        }
-
-        /// <summary>Two installs sharing the same h.sie version (`v 1.6B1`, KC
-        /// 2.5's and OAE 1.5.3.7's real stamp) but distinct build identities,
-        /// both admitted into one manifest -- the shape ticket 01 story 19 tests:
-        /// sharing an h.sie version must not imply sharing an allowlist entry.</summary>
-        public static Install[] TwoBuildsSharingAnHsieVersion()
-        {
-            Install kc = StockBuild(true, "KC 2.5", "v 1.6B1");
-            Install oae = StockBuild(true, "OAE 1.5.3.7", "v 1.6B1");
-
-            // Real KC 2.5 and OAE 1.5.3.7 differ in bytes outside every site APE
-            // owns and outside the flag table -- 2.87% of .pcode, per the spike
-            // (docs/re-notes/05-kc25-admission-evidence.md) -- which is exactly
-            // what makes them separately-identified builds despite sharing an
-            // h.sie version and every offset APE reads. Nothing else about the
-            // synthetic fixture varies the two, so mutate one far byte to stand
-            // in for that divergence.
-            byte[] exe = oae.ExeBytes();
-            exe[0x2000] ^= 0xFF;
-            File.WriteAllBytes(oae.Sh3Exe, exe);
-
-            SupportedVersion second = kc.Manifest.AddVersionSharingOffsets(
-                "test-synthetic-oae1537", "OAE 1.5.3.7", "v 1.6B1", ShippedVersionId(kc.Manifest));
-            second.IdentitySha256 = kc.Manifest.IdentityOf(exe, "test-synthetic-oae1537");
-
-            oae.Manifest = kc.Manifest;
-            return new[] { kc, oae };
-        }
-
-        static void Admit(Manifest m, byte[] exe, string buildName, string hsieVersionStamp)
-        {
-            SupportedVersion v = m.AddVersionSharingOffsets(
-                TestVersionId, buildName, hsieVersionStamp, ShippedVersionId(m));
-            v.ReferenceSha256 = Sha256(exe);
-            v.IdentitySha256 = m.IdentityOf(exe, TestVersionId);
-        }
-
-        public static string Sha256(byte[] bytes)
-        {
-            using (SHA256 sha = SHA256.Create())
-                return Hex.ToString(sha.ComputeHash(bytes));
         }
     }
 }
