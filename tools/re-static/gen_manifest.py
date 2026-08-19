@@ -300,6 +300,10 @@ def verify_against_reference(manifest):
     for name in refs:
         blob = open(os.path.join(REF_DIR, name), "rb").read()
 
+        stamp = blob[manifest["versionStringOffset"]:
+                     manifest["versionStringOffset"] + manifest["versionStringLength"]]
+        print("manifest: %s: h.sie stamp %r" % (name, stamp), file=sys.stderr)
+
         for patch in manifest["patches"]:
             for site in patch["sites"]:
                 if site["store"] != "sh3.exe":

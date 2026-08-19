@@ -25,7 +25,7 @@ namespace ApePatcher.Ui
         // header
         Panel header;
         Label verdict, verdictSub;
-        Label rowPath, rowBuild, rowExpected;
+        Label rowPath, rowBuild;
 
         // hull
         CheckBox hullOn;
@@ -99,10 +99,8 @@ namespace ApePatcher.Ui
 
             rowPath = MonoRow(0);
             rowBuild = MonoRow(1);
-            rowExpected = MonoRow(2);
             header.Controls.Add(rowPath);
             header.Controls.Add(rowBuild);
-            header.Controls.Add(rowExpected);
             return header;
         }
 
@@ -477,8 +475,6 @@ namespace ApePatcher.Ui
             rowPath.Text = "path      " + install.InstallPath;
             rowBuild.Text = "h.sie     " + install.HsieVersion
                 + "   sha " + install.ShortSha + "…" + "   APE " + ApeVersion.Current;
-            rowExpected.Text = "";
-            rowExpected.Visible = false;
         }
 
         void RenderStats()
