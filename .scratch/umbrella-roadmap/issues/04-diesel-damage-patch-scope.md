@@ -3,6 +3,92 @@
 Type: grilling
 Status: resolved
 
+## ⚠ Reopened 2026-08-21 — v1.11 bug report: runaway repeated damage while reversing
+
+User report, playing OAE 1.5.2 with APE's shipped v1.11 defaults (rate 1.5
+events/10,000 h, damage band 0.15–0.55): took diesel wear damage while
+**reversing at 4 knots**, at TC 16×/32×, then took the *same* damage again
+within moments, then again, then again — both diesels destroyed in a single
+short span. This does not match the shipped model, which should produce at
+most an occasional single hit per patrol, never a rapid-fire sequence.
+
+Ticket 12's black-box test only exercised forward telegraph settings (all
+stop, various ahead speeds) plus submerged/snorkel conditions — **reverse was
+never tested**, live or static. This is new territory for the model.
+
+Leading hypothesis, unconfirmed: the current model computes
+`p_ds = p_dso × Speed^0.01` via CRT `pow()` (see umbrella ticket 12's
+"Finding A's fix"). If astern/reverse telegraph orders are encoded as a
+**negative** float (not 0..1 like the ahead range), `pow(negative, 0.01)` is
+undefined for a non-integer exponent and IEEE-754 `pow` returns `NaN`. `NaN`
+poisons every downstream float comparison to `false`, including the
+`p > threshold` gate at `0x635129` (`jb` "no damage" branch) and the
+`roll >= p → no damage` check at `0x63516C` (`jae` skip). If both silently
+"fail closed" toward the damage-applying path instead of away from it, every
+tick while reversing would score a hit — independent of the RNG and
+independent of the intended rate — which matches "again, then again, then
+again" far better than a probability bug at the stated rate would.
+
+## Answer (3rd pass) — resolved 2026-08-21
+
+Grilled with the user against the bug report above.
+
+**Confirmation of the mechanism.** The user reported **8 hits within real
+seconds**, and — the decisive detail — **damage kept landing even after they
+manually cancelled time compression**. That rules out "TC scaling explains
+it" (each hit would need a fresh real-second tick, and TC was already back to
+1×) and leaves "every real-second tick scored a guaranteed hit regardless of
+the RNG roll" as the only mechanism that fits. Traced against the disassembly
+in `docs/re-notes/04-diesel-damage-signature.md` §3: on x87, an unordered
+(NaN) `fcomip` sets the same flag pattern as "less than," so if the telegraph
+value fed to `pow()` at `0x635111`/`0x635117` is negative, `pow(negative,
+0.01)` returns NaN, and **both** downstream branches — the threshold gate at
+`0x635129`/`0x635131` (`jb`) and the roll-check at `0x63516C` (`jae`) — fall
+through toward the damage-applying path instead of away from it. This is
+consistent with, though not proof of, reverse/astern telegraph orders being
+encoded as negative floats — that specific encoding was not independently
+confirmed this session (would require another live CE session, and the two
+prior ones on this cave both went badly per ticket 11's history).
+
+**Decision: don't chase the encoding, gate reverse out entirely.** Offered
+three options (defensive `fabs()` before `pow()`, confirm-live-first, or an
+explicit `Speed <= 0 -> skip` gate). User chose the third: **disable diesel
+wear while the boat is ordered astern, full stop.** This is a stricter cut
+than `fabs()` would be — it also forecloses any future "wear while backing
+down" behavior, not just the crash — but it's the simplest patch and needs no
+live CE session to trust, matching the risk-acceptance pattern ticket 11
+already set for this cave.
+
+**Where it goes.** The idle cutoff already added by ticket 12
+(`Val14/15/16 = 0.01`, derived `Val10`) correctly zeroes the rate at
+telegraph `== 0.0` (`pow(0, 0.01) = 0`, below threshold) — that part is not
+broken. The gap is specifically the **negative** side, which produces NaN
+rather than a comparably-small real, so the existing threshold check can't
+filter it. The fix is a new explicit compare — `Speed < 0.0 -> skip to
+0x635204` (the cave's existing "no damage this tick" exit, already used by
+the surface gate and the TC-changed gate) — inserted **before** the telegraph
+reaches the `pow()` call at `0x635111`. This is a `.pcode` control-flow
+insertion, not a data-immediate rewrite: unlike the four damage-band sites,
+it needs spare bytes and a real disassembly pass to place safely, which this
+session did not do.
+
+**Handed off, not built, this session.** The actual patch site (where in the
+cave to splice the compare, whether there's room without relocating other
+code) is RE + implementation work belonging to the shipped tool, not this
+scope-level map. Filed as
+[gui-patcher ticket 14](../../gui-patcher/issues/14-reverse-telegraph-skip-gate.md).
+
+### What this leaves
+
+- **The exact astern-telegraph encoding is still unconfirmed**, same
+  epistemic position as the surfaced-gate identity in ticket 11 — accepted as
+  a named risk rather than chased to ground. If it turns out reverse is
+  *not* negative, this ticket's gate becomes a no-op (harmless) and the real
+  bug would still be open; watch for a recurrence report to distinguish the
+  two.
+- **Forward and idle behavior is unchanged and already proven** (ticket 12) —
+  this fix only touches the reverse path.
+
 ## ⚠ Reopened 2026-08-15 — new premise from the user
 
 After speaking with a historian, the user has a clearer and **much simpler**

@@ -61,7 +61,9 @@ CLOBBERED = [
 ]
 
 # APE's replacement for h.sie's time-compression helper: p*TC, clamped to 1.0.
-# 21 bytes into the original's 38-byte body, int3-padded out to 0x635844.
+# 21 bytes into the original's 44-byte body, then ticket 14's reverse-telegraph
+# trampoline (23 bytes, see below) fills the padding out to 0x635844 -- there
+# is no int3 padding left once both live here.
 # (docs/re-notes/04-diesel-damage-signature.md sec.3b)
 HELPER_APE = (
     "558bec"      # push ebp; mov ebp, esp
@@ -73,7 +75,29 @@ HELPER_APE = (
     "ddd9"        # fstp    st(1)
     "c9"          # leave
     "c20800"      # ret 8
-) + "cc" * 23
+) + (
+    # Ticket 14's reverse-telegraph skip trampoline, landing at 0x63582D
+    # (docs/re-notes/04-diesel-damage-signature.md sec.6). Entered via a jmp
+    # spliced into the pow()-arg push at 0x635111 (site
+    # reverse-telegraph-skip-jmp, below). eax is dead here -- both exit paths
+    # (the pow() call at 0x635117 and the cave's shared "no damage this tick"
+    # exit at 0x635204) immediately overwrite it from a fresh call return, and
+    # nothing between here and there reads it.
+    "a1d4e16300"    # mov  eax, [0x63E1D4]    ; the telegraph value, as bits
+    "85c0"          # test eax, eax           ; SF := its sign bit
+    "7806"          # js   +6                 ; negative (reverse) -> skip
+    "50"            # push eax                ; positive/zero: same push the
+                     #                        ; removed instruction would
+                     #                        ; have done
+    "e9dbf8ffff"    # jmp  0x635117           ; resume at the pow() call
+    "58"            # pop  eax                ; [skip] discard the exponent
+                     #                        ; already pushed at 0x63510A,
+                     #                        ; which the aborted call would
+                     #                        ; otherwise have consumed
+    "e9c2f9ffff"    # jmp  0x635204           ; the cave's shared no-damage
+                     #                        ; exit
+    + "cc" * 2      # unreached padding, out to 0x635844
+)
 
 
 def exe_site(sid, va, original, context, field=None, source=None,
@@ -223,14 +247,40 @@ def build():
                 encoding="operand-immediate", source="band_lo",
                 vmin=0.01, vmax=0.99, default=0.15,
             ),
+            # -- sh3.exe .pcode: the reverse-telegraph NaN skip (ticket 14) ---
+            exe_site(
+                "reverse-telegraph-skip-jmp", 0x635111,
+                original="ff35d4e16300",           # push dword [0x63E1D4]
+                                                    # (the telegraph value, the
+                                                    # 2nd pow() argument)
+                # No invariant byte survives the rewrite -- same tradeoff
+                # diesel-message-gate already pays (see its note above): the
+                # push becomes a jmp, so every byte changes.
+                context=[],
+                replacement="e917070000cc",         # jmp to the trampoline
+                                                     # landed in tc-helper-
+                                                     # rewrite's padding, then
+                                                     # 1 unreached byte
+                encoding="fixed-rewrite",
+                note="splices in the Speed < 0.0 skip gate: reversing feeds "
+                     "the damage-chance calc's pow() a negative telegraph "
+                     "value, which returns NaN and satisfies both downstream "
+                     "branches toward 'apply damage' every real-second tick "
+                     "regardless of the roll (umbrella ticket 04's 3rd-pass "
+                     "answer). The trampoline itself lives in tc-helper-"
+                     "rewrite's replacement, below -- see "
+                     "docs/re-notes/04-diesel-damage-signature.md sec.6.",
+            ),
             # -- sh3.exe .pcode: the time-compression helper ------------------
             exe_site(
                 "tc-helper-rewrite", 0x635818,
                 original="558bec505152ff750cd9e8d8650883ec04d91c24e877190000"
                          "d9e0d9e8dec15a5958c9c20800cccccccccccc",
-                # push ebp / mov ebp, esp opens both bodies; the last three
-                # int3s close the padded region in both.
-                context=[(0, "558bec"), (41, "cccccc")],
+                # push ebp / mov ebp, esp opens both bodies. Ticket 14's
+                # trampoline now fills the rest of APE's replacement, so only
+                # the last 2 int3s (of h.sie's original 6) still read as
+                # padding in both.
+                context=[(0, "558bec"), (42, "cccc")],
                 replacement=HELPER_APE,
                 encoding="fixed-rewrite",
                 note="1-(1-p)^TC quantizes p onto a float32 lattice with a "

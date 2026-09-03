@@ -469,8 +469,8 @@ namespace ApePatcher.Ui
             verdict.Text = install.Supported ? "Install verified" : "Install refused";
             verdict.ForeColor = install.Supported ? SystemColors.ControlText : Look.Warn;
             verdictSub.Text = install.Supported
-                ? "APE will only write to sites that hold the exact bytes it was proven against."
-                : "APE writes nothing to an install it cannot read.";
+                ? "APE will only write when hsie has been installed."
+                : "APE won't write without hsie installed.";
 
             rowPath.Text = "path      " + install.InstallPath;
             rowBuild.Text = "h.sie     " + install.HsieVersion

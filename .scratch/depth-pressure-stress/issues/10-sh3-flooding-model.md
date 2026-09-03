@@ -1,7 +1,7 @@
 # SH3's flooding model: how does APE provoke an astern leak?
 
 Type: task
-Status: open
+Status: claimed
 Blocked by: none
 
 ## Parent

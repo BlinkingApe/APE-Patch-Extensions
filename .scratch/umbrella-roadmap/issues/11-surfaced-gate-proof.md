@@ -22,7 +22,7 @@ diesel cave gates on this, at `0x6350CA`:
 006350DF  0f 82 1f010000   jb    0x635204             ; sum < 0 -> skip the tick
 ```
 
-`docs/re-notes/04-diesel-damage-signature.md` §6 records the identity of
+`docs/re-notes/04-diesel-damage-signature.md` §7 records the identity of
 `[0x5543DC+0x18]` and `[+0x1C]` as **not established**. The obvious reading is a
 depth/surfaced test — diesels only run on the surface — but nothing in the
 disassembly proves it.

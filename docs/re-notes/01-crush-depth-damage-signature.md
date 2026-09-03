@@ -26,13 +26,13 @@ tier-model pivot recorded in `.scratch/depth-pressure-stress/map.md`. CDT is now
 **dead** (the new model never reads crush depth); astern seepage and the
 electric-engine damage float were added as live-value hunts. The current, complete
 worklist for **depth-pressure-stress** — kept current here as a single glance-view
-across tickets `08`–`11` (`08` now resolved); findings themselves stay in their source
+across tickets `08`–`11` (`08` and `09` now resolved); findings themselves stay in their source
 notes (this file §1–§9, or `06-flooding-model-signature.md` for flooding) and are
 not restated below, only gisted:
 
 | # | Value | Offset / chain | Status | Ticket |
 |---|-------|----------------|--------|--------|
-| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **code anchor + AOB DONE** (§1); HP-value *read* also available with **no chain** via static mirror `[0x566A28]`. Boat *pointer* (for writes) — **fully static chain found (§7): `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C`**, cross-referenced from the u-tanker hull-repair cave, which already writes `[boat+0xB8]` through it in shipped code. Chain-discovery is done without a debugger; live confirmation (write sticks under `ape.act`, one depth-charge delta) still needed. | `09` |
+| 1 | **Player boat object → hull HP** | HP = `[boat + 0xB8]` | **DONE (§12, 2026-08-18).** Chain `[0x554A88]→+0xC4→+0x2240→+0x24→+0x4C]+0xB8` confirmed live: APE-style write holds; the engine's own universal hull-HP writer (`02C930D7`, per-frame, cause-agnostic) independently lands on the same address. Delta observed: `450 → 448.2609`. | `09` |
 | 2 | **Current depth** | `[[["sh3.exe"+002307BC]+4]+4]+0x54` | **DONE (§11, 2026-08-17, second session).** Static-rooted chain found via CE pointer scan + two-relaunch pointermap comparison, resolved to `movementObj`'s known `+0x54` depth field. Confirmed live-tracking the gauge; confirmed stable across two independent relaunches. | `08` |
 | 3 | ~~CDT (crush depth)~~ | — | **dead.** Tier model never reads crush depth (map, Out of scope). | — |
 | 4 | **Mission clock** | `0x0063FF80` (static, `sh3.exe+23FF80`), 4-byte integer | **DONE (§10, 2026-08-17).** No chain needed — literal absolute addressing. 1:1 with game-seconds at 1× time compression; confirmed frozen on pause; confirmed scales with time compression (leaps at 512×); write site `A3 80 FF 63 00` @ `0051CFC7` (unconditional absolute-address store); survives relaunch. | `08` |
@@ -753,3 +753,71 @@ independently meaningful, and not used.
 This closes acceptance criterion 1. Combined with §10.1 (mission clock), **ticket
 `08` is fully resolved** — no further live-value work remains for depth or the
 mission clock.
+
+## §12 Live pass (2026-08-18): boat write confirmed, universal hull-HP writer found — ticket `09` DONE
+
+**Binary re-hashed before session:** `C:\games\OneAlex Extended 1.5.2\sh3.exe`,
+SHA-256 `EEEF8595A75D2C95D768867F7C3EDDEA48B7940BD3D82CA2D159857476C68B61` — matches
+§11's build and the hash on record from §7's static pass. No drift.
+
+### 12.1 Write test on the §7 static chain
+
+The §7 chain (`[0x00554A88]→+0xC4→+0x2240→+0x24→+0x4C` = boat, then `+0xB8` =
+hull HP) was loaded live as a CE pointer with those exact offsets. A direct write
+to `[boat+0xB8]` **held** — reflected in-game (damage reports/feedback) and did
+not revert. This closes acceptance criterion 1 (chain resolved) and half of
+criterion 2 (write sticks); confirms the chain from `03-utanker-hull-repair-
+signature.md` is the correct one for `ape.act`'s own writer, not just h.sie's.
+
+### 12.2 Universal writer instruction found via "find what writes"
+
+A hardware write breakpoint on `[boat+0xB8]` (the resolved address, not the
+pointer — the CE dialog for a pointer-typed entry asks which; **address** is
+correct here, since the goal is to catch changes to the value itself, not
+reassignment of which boat instance the chain points at) caught the site during
+a **crush-depth pressure** event (not a depth-charge — but per the user's prior
+testing, crush-depth damage, gunfire, torpedoes, DCs, and ramming all route
+through the same shared collision/damage function, so this is equally valid
+evidence for "how hull HP gets written," independent of cause):
+
+```
+02C930CB - D8E1          - fsub st(0),st(1)
+02C930CD - C783 70010000 04000000 - mov [ebx+00000170],00000004
+02C930D7 - D99B B8000000 - fstp dword ptr [ebx+000000B8]   <<
+02C930DD - 5B            - pop ebx
+02C930DE - DDD8          - fst st(0)
+```
+
+`EBX = 3BD17088` at the write, and `3BD17088 + 0xB8 = 3BD17140` — matches the
+already-confirmed hull-HP address exactly, corroborating the chain a second,
+independent way.
+
+**Hit count: 432 over ~7 seconds (09:52:20–09:52:27)** — a per-frame write
+(~60/sec), not an event-triggered one. This means the engine unconditionally
+re-stores current hull HP into this field every tick; the actual damage is a
+single `fsub` applied once per real collision, and the surrounding store is
+idempotent on frames where nothing changed. **Implication for poll-and-amplify:**
+safe by construction — APE's own poll will always see the live value regardless
+of its own poll rate relative to this per-frame write, since there's no discrete
+"event" at this layer to miss. **Caution for future live sessions:** this is
+exactly the class of hot per-frame write site that crashed the ticket-08 session
+when a breakpoint was left armed too long (§10) — disable/remove this breakpoint
+promptly once the write site is identified, don't leave it running.
+
+### 12.3 HP delta observed
+
+`Hull_R/W` watch: **450 → 448.2609** across the crush-depth-pressure event (delta
+≈ 1.7391, single `fsub`, applied and stuck — read-back after the event still
+showed the lowered value, confirming criterion 2's "write sticks" from the
+engine's own writes too, not just APE's test write).
+
+### 12.4 Confirmed — ticket `09` closed
+
+- **Chain**: `[0x00554A88]→+0xC4→+0x2240→+0x24→+0x4C` = boat; `[boat+0xB8]` = hull
+  HP. Confirmed live, both by a direct APE-style write holding and by identifying
+  the engine's own writer instruction independently landing on the same address.
+- **Universal writer**: `02C930D7`, `fstp dword ptr [ebx+0xB8]`, per-frame
+  (~60/sec), single `fsub` per real collision — not gated to depth-charges, fires
+  for any hull-damage cause via the shared collision function.
+- **One observed delta**: 450 → 448.2609 (crush-depth pressure), write stuck.
+- This closes all four acceptance criteria on ticket `09`.

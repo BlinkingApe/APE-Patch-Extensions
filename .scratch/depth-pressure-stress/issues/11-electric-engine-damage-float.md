@@ -92,6 +92,34 @@ static lead, neither promoted nor demoted by this pass.** Everything else on the
 shared object is now ruled out for a specific, citable reason rather than left
 open. Full writeup: `docs/re-notes/01-crush-depth-damage-signature.md` §9.
 
+## Live lead (2026-08-18): a repair-tracking float pair found, then ruled out
+
+Live session (hash `EEEF8595A75D2C95D768867F7C3EDDEA48B7940BD3D82CA2D159857476C68B61`,
+matches the recorded build). After a DC hit damaged the electric engines (~2 min
+repair), scanned for values near `0.1`, then narrowed by "decreased value" across a
+partial repair: two adjacent floats survived, `0x240C73E0`/`0x240C73E4` (4 bytes
+apart), tracking down from ~`0.071`/`0.077` toward ~0 in step with the in-game
+repair countdown — behaviorally a perfect match for a damage-fraction pair.
+
+Computed their offset from `[[0x5543DC]+4]` anyway (`+0x213A2A58`/`+0x213A2A5C`) to
+check the "sibling of diesel" hypothesis. The offset is ~554,000,000 bytes — far too
+large to be a field inside the same allocation as the diesel pair (`+0x30C`), so
+these two floats are **not** on `[[0x5543DC]+4]`'s object; the resemblance to the
+diesel/telegraph cluster doesn't hold for this pair. (`+0x358`/`+0x360` remains the
+only surviving lead on that specific object, per the second static pass above —
+this live pass neither confirms nor rules that one out.)
+
+Write-tested directly on the raw addresses regardless, since behavior alone looked
+promising: writing `1.0` to `0x240C73E0` produced **no observable in-game effect**
+and **did not hold** — read back as reverted. Same object class as the hull-HP
+mirror at `0x00566A28`: something else recomputes or owns this value every tick.
+**Ruled out as a red herring.** These addresses are also session-local raw
+addresses regardless (not reached via a stable chain), so nothing here survives to
+the next relaunch even setting aside the negative write result.
+
+Net: still no located electric-engine damage float. `+0x358`/`+0x360` is the only
+lead left standing from any pass, static or live.
+
 ## Acceptance criteria
 
 - [ ] Electric-engine damage float located; anchor/chain/offset recorded.

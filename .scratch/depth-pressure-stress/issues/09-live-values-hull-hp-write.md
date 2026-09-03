@@ -1,7 +1,7 @@
 # Live-value session B: boat pointer chain for the hull-HP write
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: none
 
 ## Parent
@@ -81,9 +81,38 @@ writer (not just h.sie's), and the depth-charge HP-delta observation (criterion
 
 ## Acceptance criteria
 
-- [ ] Player boat resolved via a chain rooted in stable stock `sh3.exe`.
-- [ ] `[boat + 0xB8]` confirmed to **read** the player's hull, and confirmed to
+- [x] Player boat resolved via a chain rooted in stable stock `sh3.exe`.
+- [x] `[boat + 0xB8]` confirmed to **read** the player's hull, and confirmed to
       **stick when written** (not reverted by the engine, unlike the mirror).
-- [ ] One depth-charge hit observed and its HP delta and application shape recorded.
-- [ ] Recorded in `docs/re-notes/01-crush-depth-damage-signature.md` against the
+- [x] One depth-charge hit observed and its HP delta and application shape recorded.
+      (Crush-depth pressure, not a DC specifically — confirmed equivalent per the
+      shared collision function; see Answer.)
+- [x] Recorded in `docs/re-notes/01-crush-depth-damage-signature.md` against the
       running binary's SHA-256.
+
+## Answer
+
+Live session 2026-08-18 (hash `EEEF8595A75D2C95D768867F7C3EDDEA48B7940BD3D82CA2D159857476C68B61`,
+matches the build the static chain was verified against).
+
+**Chain**: `[0x00554A88]→+0xC4→+0x2240→+0x24→+0x4C` = boat; `[boat+0xB8]` = hull HP.
+Confirmed two independent ways: (1) a direct write from CE held and showed in-game
+damage feedback; (2) a hardware write breakpoint on the resolved address caught the
+engine's own writer landing on the identical address via arithmetic on its `ebx`.
+
+**Universal writer**: `02C930D7` — `fstp dword ptr [ebx+0xB8]`, part of a per-frame
+write (~60/sec: 432 hits in ~7s), not an event-triggered one. Real damage is a
+single `fsub` applied once per collision; the surrounding store re-runs
+unconditionally every tick, which is safe for poll-and-amplify by construction —
+no discrete event to miss regardless of APE's own poll rate. Not DC-specific: the
+same collision function handles crush-depth pressure, gunfire, torpedoes, DCs, and
+ramming (confirmed by the user from prior testing), so this writer applies to all
+of them.
+
+**Delta observed**: `450 → 448.2609` across one crush-depth-pressure event,
+write stuck (not reverted by the engine).
+
+Full writeup: `docs/re-notes/01-crush-depth-damage-signature.md` §12.
+
+⚠ The breakpoint on this address was hot (per-frame) and was disabled promptly
+after the write site was identified, per the ticket-08 near-crash precedent.

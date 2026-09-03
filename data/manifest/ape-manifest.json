@@ -276,6 +276,17 @@
           "default": 0.15
         },
         {
+          "id": "reverse-telegraph-skip-jmp",
+          "store": "sh3.exe",
+          "encoding": "fixed-rewrite",
+          "va": "0x635111",
+          "offset": 1339665,
+          "original": "ff35d4e16300",
+          "context": [],
+          "replacement": "e917070000cc",
+          "note": "splices in the Speed < 0.0 skip gate: reversing feeds the damage-chance calc's pow() a negative telegraph value, which returns NaN and satisfies both downstream branches toward 'apply damage' every real-second tick regardless of the roll (umbrella ticket 04's 3rd-pass answer). The trampoline itself lives in tc-helper-rewrite's replacement, below -- see docs/re-notes/04-diesel-damage-signature.md sec.6."
+        },
+        {
           "id": "tc-helper-rewrite",
           "store": "sh3.exe",
           "encoding": "fixed-rewrite",
@@ -288,11 +299,11 @@
               "558bec"
             ],
             [
-              41,
-              "cccccc"
+              42,
+              "cccc"
             ]
           ],
-          "replacement": "558becd94508d84d0cd9e8dbf1dbc1ddd9c9c20800cccccccccccccccccccccccccccccccccccccccccccccc",
+          "replacement": "558becd94508d84d0cd9e8dbf1dbc1ddd9c9c20800a1d4e1630085c0780650e9dbf8ffff58e9c2f9ffffcccc",
           "note": "1-(1-p)^TC quantizes p onto a float32 lattice with a silent inert floor at 2.98e-8; APE replaces it with a clamped p*TC"
         },
         {

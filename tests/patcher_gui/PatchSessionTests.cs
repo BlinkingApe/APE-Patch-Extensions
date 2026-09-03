@@ -248,6 +248,39 @@ namespace ApePatcher.Tests
                 "reverted: h.sie's helper is back");
         }
 
+        public static void Test_TheReverseTelegraphSkipGateIsWrittenAndRestored()
+        {
+            // Ticket 14: 0x635111's push becomes a jmp into a trampoline
+            // spliced into tc-helper-rewrite's own replacement padding, so
+            // reversing (a negative machine-telegraph value) can no longer
+            // feed pow() a value that returns NaN and scores a guaranteed
+            // hit every tick.
+            Fixtures.Install fx = Fixtures.Stock(true);
+            Site jmp = Find(fx.Manifest, Manifest.DieselPatchId, "reverse-telegraph-skip-jmp");
+            Site helper = Find(fx.Manifest, Manifest.DieselPatchId, "tc-helper-rewrite");
+            int jmpAt = jmp.Offset;
+            int helperAt = helper.Offset;
+
+            PatchSession session = fx.Session();
+            Check.Bytes(jmp.Original, Slice(fx.ExeBytes(), jmpAt, jmp.Original.Length),
+                "stock: h.sie's push of the telegraph value onto pow()'s argument stack");
+
+            Check.True(session.Apply(Both(session)).Ok, "apply");
+            Check.Bytes(jmp.Replacement, Slice(fx.ExeBytes(), jmpAt, jmp.Replacement.Length),
+                "applied: a jmp into the trampoline, then one unreached byte");
+            Check.Bytes(helper.Replacement, Slice(fx.ExeBytes(), helperAt, helper.Replacement.Length),
+                "applied: tc-helper-rewrite's replacement now also carries the trampoline body");
+
+            PatchSession applied = fx.Session();
+            PatchState off = applied.Current.Clone();
+            off.DieselApplied = false;
+            Check.True(applied.Apply(off).Ok, "uncheck");
+            Check.Bytes(jmp.Original, Slice(fx.ExeBytes(), jmpAt, jmp.Original.Length),
+                "reverted: h.sie's push is back");
+            Check.Bytes(helper.Original, Slice(fx.ExeBytes(), helperAt, helper.Original.Length),
+                "reverted: h.sie's tc helper is back too, trampoline and all");
+        }
+
         // -- 4. ini surgery through the session --------------------------------
 
         public static void Test_ApplyingDieselDamageWritesOnlyTheEightKeysItOwns()
@@ -387,11 +420,12 @@ namespace ApePatcher.Tests
             WriteReport report = session.Apply(want);
 
             Check.True(report.Ok, "the commit lands");
-            // 2 hull sites + 8 ini keys + 4 band immediates + 1 rewrite + the
+            // 2 hull sites + 8 ini keys + 4 band immediates + 1 tc-helper
+            // rewrite + 1 reverse-telegraph skip jmp (ticket 14) + the
             // diesel-message gate + its text, less Val11: h.sie already ships
             // Factor-for-0-damaged as 1.0, which is what APE wants, so that
             // site is not a change and is not claimed.
-            Check.Equal(16, report.SitesWritten.Count, "every site that actually changes is named");
+            Check.Equal(17, report.SitesWritten.Count, "every site that actually changes is named");
             Check.DoesNotContain("Val11", string.Join("|", report.SitesWritten.ToArray()),
                 "and nothing that did not");
             Check.Contains("hsie.ini Val9", string.Join("|", report.SitesWritten.ToArray()),

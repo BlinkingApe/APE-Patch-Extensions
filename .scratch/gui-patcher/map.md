@@ -79,11 +79,27 @@ Skills: `/grilling` and `/domain-modeling` for design-decision tickets;
   text-file line, same capture/write/revert round-trip as `hsie.ini`
   sites. Encoding is moot; the decided text is pure ASCII.
 
+- [Diesel damage message: shorten the wording](issues/12-diesel-message-reword-shorter.md) —
+  supersedes ticket 09's wording with a shorter line: "Diesel trouble, Kaleun -
+  normal wear and tear." Not yet built — the site already exists (ticket 10's
+  `SiteStore.MenuText` mechanism), so this is a text swap in
+  `gen_manifest.py`'s `diesel-message-text` site plus a manifest regen and a
+  test-string update, not new mechanism.
+
 - [Reword CONTEXT.md's runtime-anchor wording](issues/11-context-md-runtime-anchor-wording.md) —
   done: both glossary passages now scope "resolves anchors dynamically" /
   "avoid hardcoded offset" to `ape.act`'s runtime resolution specifically,
   pointing at ADR-0007 for the GUI patcher's separate fixed-offset model.
   Documentation only, no behavior change.
+
+- [Diesel damage: gate out reverse telegraph](issues/14-reverse-telegraph-skip-gate.md) —
+  built. A negative telegraph value fed into `pow()` returned NaN, which
+  satisfied both downstream branches toward "apply damage" every
+  real-second tick (umbrella ticket 04's 3rd-pass answer, from a v1.11 bug
+  report). Fixed with a raw sign-bit test (not an x87 compare, which is the
+  mechanism that broke in the first place), spliced into `tc-helper-rewrite`'s
+  own spare padding rather than a new trampoline region. Manifest regenerated,
+  tested, builds clean. Live in-play confirmation not done this session.
 
 ## Not yet specified
 

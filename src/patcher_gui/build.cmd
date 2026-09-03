@@ -24,7 +24,7 @@ REM of its one const line so the exe's name can never drift from the header.
 for /f "tokens=2 delims==;" %%v in ('findstr /c:"const string Current" "%HERE%Version.cs"') do set APE_VERSION_RAW=%%v
 set APE_VERSION=%APE_VERSION_RAW:"=%
 set APE_VERSION=%APE_VERSION: =%
-set OUT=%DIST%\ApePatchExtensions-%APE_VERSION%.exe
+set OUT=%DIST%\ApePatchExtensions_v%APE_VERSION%.exe
 
 python "%ROOT%\tools\re-static\gen_manifest.py" --check
 if errorlevel 1 exit /b 1

@@ -143,6 +143,7 @@ write target is unlocated is not specified.
 - [Retire the superseded crush-depth model's artifacts](issues/13-retire-superseded-model.md) — dead tickets deleted, issue `01` and `05` amended, `CONTEXT.md` glossary reversed to `depth tier`, ADR-0008 written for the model reversal + poll-and-amplify limitation. Surfaced ticket `15` for the dead C++ still linked into the build.
 - [Retire the superseded band-decision model's C++ implementation and build wiring](issues/15-retire-superseded-model-source.md) — deleted the whole `src/mods/crush_depth_damage/` tree, `ape.cfg`, and `config_check` outright rather than keeping a reusable shell; `dllmain.cpp` reduced to a minimal stub. Build verified clean (PE32/x86), no live reference to the dead model remains outside historical prose.
 - [Live-value session A: current depth + mission clock](issues/08-live-values-depth-and-clock.md) — both resolved: mission clock is static VA `0x0063FF80`, no chain; current depth is `[[["sh3.exe"+002307BC]+4]+4]+0x54`, a 3-level static chain confirmed stable across two relaunches.
+- [Live-value session B: boat pointer chain for the hull-HP write](issues/09-live-values-hull-hp-write.md) — resolved: `[0x00554A88]→+0xC4→+0x2240→+0x24→+0x4C]+0xB8` confirmed live (write holds); found the engine's own universal hull-HP writer (`02C930D7`, per-frame, single `fsub` per collision, cause-agnostic) as a bonus, safe for poll-and-amplify by construction. Delta observed: `450 → 448.2609`.
 
 ## Not yet specified
 

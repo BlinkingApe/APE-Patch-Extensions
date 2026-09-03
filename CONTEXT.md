@@ -5,7 +5,7 @@ APE is a workflow and tool suite for developing and maintaining runtime engine h
 ## Language
 
 **OAE sh3.exe**:
-The specific, already-modified `sh3.exe` binary APE targets — OneAlex Extended, which itself bundles h.sie's hardcode patches, Stiebler's mods, and NSAP (Night Surface Attack Project). The underlying `sh3.exe` is the stock Ubisoft image and is never recompiled; OAE and its upstream mods are byte-level patches reapplied over it (new default values, inserted call sites) as they update. APE still resolves its value anchors dynamically rather than trusting fixed addresses, so a patch update that shifts an anchor is detected rather than silently misread.
+The specific, already-modified `sh3.exe` binary APE targets — OneAlex Extended, which itself bundles h.sie's hardcode patches, Stiebler's mods, and NSAP (Night Surface Attack Project). The underlying `sh3.exe` is the stock Ubisoft image and is never recompiled; OAE and its upstream mods are byte-level patches reapplied over it (new default values, inserted call sites) as they update. APE's runtime resolution (`ape.act`, following pointer chains to live values in a running process) still resolves its value anchors dynamically rather than trusting fixed addresses, so a patch update that shifts an anchor is detected rather than silently misread. The GUI patcher's static edits to files on disk are a separate case with a different, legitimate fixed-offset model — see ADR-0007.
 _Avoid_: "the game", "stock sh3.exe" (stock refers to the unmodified Ubisoft release — a different binary with different code layout)
 
 **.act module**:
@@ -21,8 +21,8 @@ One of a small number of configured **absolute** depth thresholds (default ~100m
 _Avoid_: "damage window", "band" (terminology from the abandoned three-band, fraction-of-crush-depth model)
 
 **AOB pattern scan** (array-of-bytes scan):
-Resolving an address at runtime by searching loaded process memory for a byte signature (with wildcards for bytes expected to vary), rather than trusting a fixed offset found once and hardcoded. APE uses it to anchor the pointer chains it follows to the live values it reads/writes (player boat, depth, hull HP, mission clock, and per-feature values like the diesel/electric-engine damage floats). Since stock sh3.exe never moves, the payoff is self-verification: a patch that shifts an anchor makes the scan miss, and APE fails inert rather than misreading.
-_Avoid_: "hardcoded offset" (the alternative APE deliberately avoids for its anchors)
+Resolving an address at runtime by searching loaded process memory for a byte signature (with wildcards for bytes expected to vary), rather than trusting a fixed offset found once and hardcoded. `ape.act` uses it to anchor the pointer chains it follows to the live values it reads/writes (player boat, depth, hull HP, mission clock, and per-feature values like the diesel/electric-engine damage floats). Since stock sh3.exe never moves, the payoff is self-verification: a patch that shifts an anchor makes the scan miss, and APE fails inert rather than misreading.
+_Avoid_: "hardcoded offset" for `ape.act`'s runtime anchors — the alternative it deliberately avoids. Not a project-wide rule: the GUI patcher's static file edits legitimately use fixed offsets, verified per-site by context bytes at write time rather than a whole-file identity check (ADR-0007, narrowed by ADR-0009).
 
 **JSGME**:
 Generic Mod Enabler — the mod installation tool already standard in this modding ecosystem. APE packages its end-user deliverable as a JSGME-installable folder.

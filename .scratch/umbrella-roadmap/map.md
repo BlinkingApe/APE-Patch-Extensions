@@ -79,6 +79,20 @@ starting.
 
 ## Decisions so far
 
+- [Diesel-damage patch: scope](issues/04-diesel-damage-patch-scope.md) —
+  **reopened and re-resolved a 3rd time, 2026-08-21**, against a v1.11 bug
+  report: rapid repeated diesel destruction (8 hits in seconds, continuing
+  after TC was cancelled) while reversing. Root cause: the flat-exponent
+  probability calc (`Speed^0.01` via `pow()`) is fed the raw telegraph value
+  with no sign check; if reverse orders are negative, `pow()` returns `NaN`,
+  and NaN's x87 comparison flags happen to satisfy *both* downstream
+  branches toward "apply damage" — a guaranteed hit every real-second tick,
+  independent of RNG or the configured rate. **Decision: gate out reverse
+  entirely** (`Speed < 0.0 -> skip`) rather than chase confirming the exact
+  encoding via another live CE session — the same risk-acceptance posture
+  ticket 11 already set for this cave. Implementation handed to
+  [gui-patcher ticket 14](../gui-patcher/issues/14-reverse-telegraph-skip-gate.md),
+  since the shipped code lives there.
 - [Patcher v1 scope: which patches ship first](issues/07-patcher-v1-scope.md) —
   **v1 is hull repair + diesel damage, on two write targets and one build.**
   Hull repair goes **first as the tracer bullet** (one `sh3.exe` operand range,

@@ -537,7 +537,112 @@ addresses **after** that point stands. So a runtime (`ape.act`) implementation
 can retune `Val9`–`Val16` freely — it is only the *static, on-disk* patcher that
 is blocked by §0.
 
-## 6. Not yet established
+## 6. Ticket 14 — the reverse-telegraph NaN skip
+
+Live bug report 2026-08-21 (v1.11 shipped defaults, OAE 1.5.2): diesel wear
+damage fired repeatedly — 8 hits within real seconds, continuing even after
+the player cancelled time compression — while reversing at 4 knots. Both
+diesels destroyed in a single short span. See umbrella-roadmap ticket 04's
+3rd-pass answer for the full grilling; this section is the RE and the patch
+sites gui-patcher ticket 14 asked for.
+
+### The mechanism
+
+`pow()` at `0x635111`/`0x635117` (§3) takes the raw telegraph value
+`[0x63E1D4]` as its base with no sign check. If reverse/astern orders are a
+negative float, `pow(negative, 0.01)` is undefined for a non-integer exponent
+and returns `NaN`. On x87, an unordered (NaN) `fcomip` sets the same flag
+pattern as "less than", so **both** downstream branches — the threshold gate
+at `0x635129`/`0x635131` (`jb`) and the roll-check at `0x63516C` (`jae`) —
+fall through toward the damage-applying path instead of away from it. Every
+real-second tick scores a guaranteed hit, independent of the RNG and of the
+configured rate — exactly the reported "again, then again, then again",
+including surviving a TC cancel since the bug is per-real-second-tick, not
+TC-scaled. The exact sign/encoding of reverse telegraph orders was not
+independently confirmed via live CE (two prior sessions on this cave both
+went badly, per umbrella ticket 11's history) — the fix below does not
+depend on confirming it, since it (also) catches a negative-*signed* NaN
+telegraph, not only a plain negative float.
+
+### The fix: divert before `pow()` on the sign bit, not an x87 compare
+
+Decision (umbrella ticket 04): gate reverse out entirely rather than chase
+the exact encoding or add a defensive `fabs()` — **`Speed < 0.0` skips the
+tick**, diverting to the cave's existing "no damage this tick" exit at
+`0x635204` (the same exit the surface gate and TC-changed gate already use).
+Implemented as a **raw sign-bit test**, not an x87 comparison — deliberately,
+since x87's unordered-NaN semantics are the exact mechanism that caused the
+bug in the first place, and a `test eax, eax` / `js` cannot be fooled by NaN
+the way `fcomip` can.
+
+**Site 1 — `reverse-telegraph-skip-jmp` (`0x635111`, 6 bytes).** Replaces the
+pow()-arg push (`push dword [0x63E1D4]`) with a `jmp` to the trampoline
+below, plus one unreached byte:
+
+```
+original     ff 35 d4 e1 63 00        push dword [0x63E1D4]
+replacement  e9 17 07 00 00 cc        jmp  0x63582D ; + 1 unreached byte
+```
+
+**Site 2 — the trampoline, folded into `tc-helper-rewrite`'s own replacement
+(`0x63582D`–`0x635843`, 23 bytes).** `tc-helper-rewrite` (§3b) already
+replaces `0x635818`'s 44-byte body with a 21-byte function plus 23 bytes of
+then-unused `int3` padding; the trampoline lives in that padding, so this
+costs no new site and no new file territory:
+
+```
+0063582D  a1 d4e16300      mov  eax, [0x63E1D4]   ; telegraph, as bits
+00635832  85 c0            test eax, eax          ; SF := its sign bit
+00635834  78 06            js   0x63583C           ; negative -> skip
+00635836  50               push eax                ; positive/zero: do what
+                                                     ; the removed push would
+                                                     ; have done
+00635837  e9 dbf8ffff      jmp  0x635117            ; resume at the pow() call
+0063583C  58               pop  eax                 ; [skip] discard the
+                                                      ; Speed-Exponent already
+                                                      ; pushed at 0x63510A --
+                                                      ; the aborted call would
+                                                      ; otherwise have
+                                                      ; consumed it
+0063583D  e9 c2f9ffff      jmp  0x635204            ; shared no-damage exit
+0063583F..635843  cc cc                             ; unreached, out to
+                                                      ; 0x635844
+```
+
+`eax` is dead here: both exits (the `pow()` call and the shared `0x635204`
+exit) immediately overwrite it from a fresh `call` return before it is next
+read, and nothing between here and there reads it. Stack discipline: the
+skip path runs before anything the hooked site would have pushed, so
+`pop eax` restores exactly the stack depth every other jump into `0x635204`
+already expects; the continue path re-pushes the telegraph and resumes
+exactly where the original instruction stream would have, so `pow()` sees
+the identical two-argument stack layout it always did.
+
+### Confirmed against the reference binaries
+
+Both sites' original bytes (`0x635111`'s 6-byte push, and 44 bytes of zero
+`tc-helper-rewrite` padding starting `0x63582D`) read back identical across
+`sh3_vanilla.exe`, `sh3_UTanker.exe`, and `sh3_Diesel_Damage.exe` in
+`data/exe_with_hsie_patches/` — `tools/re-static/gen_manifest.py`'s
+reference-binary check (§`verify_against_reference`) passes clean. Idle
+(telegraph `== 0.0`) and forward behavior are untouched: neither site's
+instruction range overlaps `0x635129`/`0x63516C`/`0x63C0A8` (ticket 12's
+threshold path), so that path still runs exactly as before for any
+non-negative telegraph.
+
+### What this leaves
+
+- **Live confirmation in play**, per the ticket's own recommendation: not a
+  CE session on the cave's internals, but the shipped patcher's
+  forced-magnitude/high-rate test rig (umbrella ticket 12) while reversing,
+  confirming no hit lands.
+- **The exact astern-telegraph encoding is still unconfirmed** (same
+  epistemic position as §5's surfaced-gate identity) — if it turns out
+  reverse is not represented as a negative-signed float at all, this gate
+  becomes a no-op rather than wrong, since it only ever diverts on the sign
+  bit being set.
+
+## 7. Not yet established
 
 - `[0x5543DC + 0x18]` / `[+0x1C]` — the pre-condition sum tested against 0.0.
   Depth/surfaced is the guess, unproven. **⚠ Now load-bearing.** Ticket 04's

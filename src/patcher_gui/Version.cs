@@ -8,6 +8,6 @@ namespace ApePatcher
 {
     public static class ApeVersion
     {
-        public const string Current = "1.1";
+        public const string Current = "1.12";
     }
 }
