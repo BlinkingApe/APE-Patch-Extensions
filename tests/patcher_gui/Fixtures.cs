@@ -10,8 +10,12 @@
 // nothing left to admit -- a stock fixture is ready to open the moment its
 // bytes are in place.
 //
-// hsie.ini is the real thing -- fixtures/hsie.ini is a byte copy of OAE 1.5.2's,
-// trailing tabs and all. fixtures/en_menu.txt is a trimmed stand-in for
+// fixtures/hsie.ini is a synthetic stand-in, not a copy of any real OAE
+// install: it keeps the structural quirks the tests depend on (CRLF line
+// endings, key order, comment lines flanking the internal-values block,
+// trailing tabs on Val13/14/15) with placeholder values everywhere except
+// the eight keys the manifest names, which match the manifest's "original"
+// text exactly. fixtures/en_menu.txt is a trimmed stand-in for
 // data/Menu/en_menu.txt (ticket 10): only string 4893 and its neighbours,
 // since that is the only line APE's diesel-message site touches.
 

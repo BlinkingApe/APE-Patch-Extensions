@@ -6,8 +6,9 @@
 // whose surrounding text has to survive intact.  So every assertion here is
 // about what did *not* change.
 //
-// The fixture is the real OAE 1.5.2 hsie.ini, not a minimal one -- CRLF line
-// endings, trailing tabs on Val13/14/15, comment blocks between every key.
+// The fixture is a synthetic stand-in, not OAE's real file -- but it keeps
+// the shape that matters to these tests: CRLF line endings, trailing tabs
+// on Val13/14/15, comment blocks around the internal-values keys.
 
 using System;
 using System.IO;

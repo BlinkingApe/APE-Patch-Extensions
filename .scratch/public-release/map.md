@@ -17,6 +17,7 @@ The repo, including its full git history, is verified free of copyrighted third-
 ## Decisions so far
 
 - [Audit repo for copyrighted game data, secrets, and personal info](issues/01-audit-game-data-secrets-pii.md) — 4 findings: untracked `tests/APE Testing Missions/` (stock game missions, not yet committed, not gitignored), verbatim `hsie.ini`/`en_menu.txt` test fixtures, the already-tracked manifest attribution question, and the public commit-author email. No secrets, no leaked local paths, no stray game binaries in history.
+- [Decide and execute purge of audit findings](issues/02-decide-and-execute-purge.md) — Deleted the untracked missions folder; purged `hsie.ini` from git history (`git filter-repo`, no remote so no force-push needed) and replaced it with a synthetic fixture that keeps only the structural quirks the tests need; kept `en_menu.txt` and the author email as-is (low risk / already-public alias).
 
 ## Not yet specified
 
