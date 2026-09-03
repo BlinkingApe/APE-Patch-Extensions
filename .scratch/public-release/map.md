@@ -16,7 +16,7 @@ The repo, including its full git history, is verified free of copyrighted third-
 
 ## Decisions so far
 
-(none yet)
+- [Audit repo for copyrighted game data, secrets, and personal info](issues/01-audit-game-data-secrets-pii.md) — 4 findings: untracked `tests/APE Testing Missions/` (stock game missions, not yet committed, not gitignored), verbatim `hsie.ini`/`en_menu.txt` test fixtures, the already-tracked manifest attribution question, and the public commit-author email. No secrets, no leaked local paths, no stray game binaries in history.
 
 ## Not yet specified
 
