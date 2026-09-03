@@ -18,12 +18,12 @@ The repo, including its full git history, is verified free of copyrighted third-
 
 - [Audit repo for copyrighted game data, secrets, and personal info](issues/01-audit-game-data-secrets-pii.md) — 4 findings: untracked `tests/APE Testing Missions/` (stock game missions, not yet committed, not gitignored), verbatim `hsie.ini`/`en_menu.txt` test fixtures, the already-tracked manifest attribution question, and the public commit-author email. No secrets, no leaked local paths, no stray game binaries in history.
 - [Decide and execute purge of audit findings](issues/02-decide-and-execute-purge.md) — Deleted the untracked missions folder; purged `hsie.ini` from git history (`git filter-repo`, no remote so no force-push needed) and replaced it with a synthetic fixture that keeps only the structural quirks the tests need; kept `en_menu.txt` and the author email as-is (low risk / already-public alias).
+- [Settle attribution stance for reverse-engineered patch data](issues/03-re-patch-data-attribution-stance.md) — Low risk, treated as functional/interoperability data (like a binary-diff format), no legal-hedge language; README credits h.sie and Stiebler (the actual patch-logic sources) and names `sh3.exe` as the target binary — not OAE, GWX/KC, or NSAP.
 
 ## Not yet specified
 
 - Whether to set up public-facing CI (build/test workflow) before or after going public — not required for "ready," worth deciding later.
 - GitHub repo-level presentation (description, topics, social preview image) — cosmetic, not blocking.
-- Exact README wording for crediting OAE/h.sie/Stiebler/NSAP depends on [Settle attribution stance for reverse-engineered patch data](issues/03-re-patch-data-attribution-stance.md)'s outcome — not specifiable until that resolves.
 
 ## Out of scope
 
