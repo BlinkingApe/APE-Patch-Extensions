@@ -1,0 +1,60 @@
+# APE — Ape's Patch Extensions
+
+APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardcode patches, adding new tunable behavior — currently a reworked u-tanker hull-repair rate and a rewritten diesel-engine damage model.
+
+## Usage
+
+- **The GUI patcher** (`src/patcher_gui/`) — a standalone Windows tool you
+  drop in the SH3 game root. It finds your install, shows what's currently
+  applied, lets you edit the hull-repair and diesel-damage settings, and
+  commits every change as a verified static byte-write to `sh3.exe` and
+  `hsie.ini`. Unchecking a feature and applying it again restores the
+  original bytes exactly — that's the uninstaller.
+
+## Download
+
+Pre-built patcher binaries are published under this repo's
+[Releases](../../releases). Download the latest `ApePatchExtensions.exe`,
+drop it in your SH3 install root alongside `sh3.exe`, and run it.
+
+## Building from source
+
+Requires MSVC (Visual Studio Build Tools 2022 or later) with the **x86**
+toolset, CMake 3.21+, Ninja, and .NET Framework 4.x tooling for the GUI
+patcher.
+
+```
+src\patcher_gui\build.cmd            -> dist\ApePatchExtensions.exe
+src\patcher_gui\build.cmd run        build and launch against the live install
+tests\patcher_gui\run.cmd            run the patcher test suite
+```
+
+See [`src/patcher_gui/README.md`](src/patcher_gui/README.md) for the
+patcher's internal shape and test conventions.
+
+```
+
+## Project layout
+
+- `src/patcher_gui/` — the C# WinForms GUI patcher (the shipped tool).
+- `src/`, `third_party/` — the C++ `ape.act` runtime module and its vendored
+  dependencies (MinHook, doctest).
+- `tools/re-static/` — Python static-analysis scripts used to derive and
+  verify the patch manifest against real `sh3.exe` builds.
+- `docs/adr/` — architecture decisions. `CONTEXT.md` — project glossary and
+  domain vocabulary.
+- `.scratch/` — this project's issue tracker: PRDs and tickets as markdown,
+  organized one directory per feature effort.
+
+## Attribution
+
+APE's patch data (offsets, replacement bytes, and derived formulas) is
+reverse-engineered from **h.sie/Stiebler**'s hardcode patches. Credit
+to both for the original patch logic APE builds on. APE does not modify or
+redistribute `sh3.exe` itself — the patcher edits your own copy in place.
+
+## License
+
+APE's own code is licensed under the [MIT License](LICENSE). Vendored
+third-party libraries under `third_party/` (MinHook, doctest) keep their own
+licenses (both MIT).
