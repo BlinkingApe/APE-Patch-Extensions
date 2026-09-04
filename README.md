@@ -4,6 +4,8 @@ APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardco
 
 ## Usage
 
+![The APE GUI patcher, showing hull-repair and diesel-damage settings against a KC 2.5 install](images/APE%20v1.12.png)
+
 - **The GUI patcher** (`src/patcher_gui/`) — a standalone Windows tool you
   drop in the SH3 game root. It finds your install, shows what's currently
   applied, lets you edit the hull-repair and diesel-damage settings, and
