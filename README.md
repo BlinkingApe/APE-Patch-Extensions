@@ -1,4 +1,4 @@
-# APE — Ape's Patch Extensions
+# APE Patch Extensions
 
 APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardcode patches, adding new tunable behavior — currently a reworked u-tanker hull-repair rate and a rewritten diesel-engine damage model.
 
