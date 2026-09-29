@@ -9,7 +9,10 @@ REM   1. regenerate-and-diff the patch manifest (umbrella ticket 08's stale-
 REM      manifest guard) -- a drifted manifest fails the build
 REM   2. rebuild the application icon from the portrait art
 REM   3. compile, embedding the manifest, the art and the icon; binding the icon
-REM      to the exe and the DPI/common-controls manifest to its win32 resources
+REM      to the exe and the DPI/common-controls manifest to its win32 resources.
+REM      AssemblyInfo.cs (picked up by the *.cs wildcard below) supplies the
+REM      Win32 version resource -- FileDescription/CompanyName/ProductName --
+REM      so the exe doesn't ship with blank publisher metadata.
 setlocal
 set HERE=%~dp0
 set ROOT=%HERE%..\..
