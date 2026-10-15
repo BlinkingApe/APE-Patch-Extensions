@@ -100,6 +100,40 @@ HELPER_APE = (
 )
 
 
+# Ticket 15's pow() resolver, in the empty .pcode tail at 0x63B000. h.sie's
+# thunk at 0x6371A8 reached pow as [atol] - 0xDD50, which only lands on pow in
+# Microsoft's msvcr71 7.10.3052.4; under Wine's builtin msvcr71 it jumps into
+# arbitrary code. This asks the loader instead, through two KERNEL32 imports
+# sh3.exe already has. Both calls are stdcall, so the stack is back to the
+# thunk's two marshalled doubles on ret; only eax/ecx/edx are clobbered, as
+# the CRT call that follows clobbers them anyway. Stateless on purpose -- .pcode
+# is not writable, and two lookups per diesel tick (~1/real s) cost nothing.
+# (docs/re-notes/04-diesel-damage-signature.md sec.3c)
+POW_RESOLVER = (
+    "682cb06300"    # push 0x63B02C           ; "pow"
+    "6820b06300"    # push 0x63B020           ; "MSVCR71.dll"
+    "ff1548d25100"  # call [0x51D248]         ; KERNEL32!GetModuleHandleA
+    "50"            # push eax                ; hModule
+    "ff15dcd15100"  # call [0x51D1DC]         ; KERNEL32!GetProcAddress
+                     #                        ; -> eax = msvcr71!pow
+    "c3"            # ret
+    + "cc" * 8      # padding, out to 0x63B020
+    + "MSVCR71.dll\0".encode("ascii").hex()   # 0x63B020
+    + "pow\0".encode("ascii").hex()           # 0x63B02C
+)
+# The cave site runs 16 bytes past the resolver's end (0x63B030): they stay
+# zero in both runs, so they are the only context Verify can check. That
+# refuses a cave something else has since filled past 0x63B030, but not one
+# whose foreign bytes all fit inside the resolver's own 48 -- the same blind
+# spot every no-context fixed-rewrite site has.
+POW_CAVE_TAIL_LEN = 16
+
+# h.sie's pow() thunk at 0x6371A8, either side of the 10 bytes APE rewrites:
+# marshal the two float args to doubles on the stack, and call eax / return.
+POW_THUNK_HEAD = "558bec83ec10d9450cdd5c2408d94508dd1c24"
+POW_THUNK_TAIL = "ffd083c410c9c20800"
+
+
 def exe_site(sid, va, original, context, field=None, source=None,
              replacement=None, encoding=None, vmin=None, vmax=None, default=None,
              note=None):
@@ -286,6 +320,39 @@ def build():
                 note="1-(1-p)^TC quantizes p onto a float32 lattice with a "
                      "silent inert floor at 2.98e-8; APE replaces it with a "
                      "clamped p*TC",
+            ),
+            # -- sh3.exe .pcode: pow() by name, not by offset (ticket 15) -----
+            exe_site(
+                "pow-thunk-call-resolver", 0x6371A8,
+                original=POW_THUNK_HEAD
+                         + "a178d651002d50dd0000"   # mov eax, [atol]
+                                                     # sub eax, 0xDD50
+                         + POW_THUNK_TAIL,
+                # The rewritten 10 bytes share none with h.sie's, so the site
+                # is widened to the whole thunk and anchors on the unchanged
+                # prologue/marshalling and the call-eax tail.
+                context=[(0, POW_THUNK_HEAD),
+                         (len(POW_THUNK_HEAD) // 2 + 10, POW_THUNK_TAIL)],
+                replacement=POW_THUNK_HEAD
+                            + "e8403e0000"          # call 0x63B000 (resolver)
+                            + "9090909090"
+                            + POW_THUNK_TAIL,       # call eax -> pow, as before
+                encoding="fixed-rewrite",
+                note="h.sie reached the CRT's pow as [atol] - 0xDD50, which "
+                     "only holds for Microsoft's msvcr71 7.10.3052.4 and "
+                     "crashes under Wine's builtin; APE resolves pow by name "
+                     "instead (pow-resolver-cave)",
+            ),
+            exe_site(
+                "pow-resolver-cave", 0x63B000,
+                original="00" * (len(POW_RESOLVER) // 2 + POW_CAVE_TAIL_LEN),
+                context=[(len(POW_RESOLVER) // 2, "00" * POW_CAVE_TAIL_LEN)],
+                replacement=POW_RESOLVER + "00" * POW_CAVE_TAIL_LEN,
+                encoding="fixed-rewrite",
+                note="GetProcAddress(GetModuleHandleA(\"MSVCR71.dll\"), "
+                     "\"pow\") in the empty .pcode tail (0x63948C-0x63C000, "
+                     "all zero and unreferenced in every surveyed install); "
+                     "same address on Windows, Wine's own pow under Wine",
             ),
             # -- sh3.exe .pcode: the diesel damage report (tickets 09-10) -----
             exe_site(

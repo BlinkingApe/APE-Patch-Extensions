@@ -281,6 +281,76 @@ namespace ApePatcher.Tests
                 "reverted: h.sie's tc helper is back too, trampoline and all");
         }
 
+        public static void Test_ThePowThunkResolvesPowByNameAndIsRestored()
+        {
+            // Ticket 15: h.sie's pow() thunk at 0x6371A8 reached pow as
+            // [atol] - 0xDD50, which only holds for Microsoft's msvcr71
+            // 7.10.3052.4 and crashes under Wine's builtin. APE swaps that
+            // arithmetic for a call into a resolver in the .pcode tail that
+            // asks GetProcAddress(GetModuleHandleA("MSVCR71.dll"), "pow").
+            Fixtures.Install fx = Fixtures.Stock(true);
+            Site thunk = Find(fx.Manifest, Manifest.DieselPatchId, "pow-thunk-call-resolver");
+            Site cave = Find(fx.Manifest, Manifest.DieselPatchId, "pow-resolver-cave");
+
+            // The thunk's new call (19 bytes in, rel32 from the next instruction)
+            // must land exactly on the resolver site.
+            int callAt = Convert.ToInt32(thunk.Va, 16) + 19;
+            Check.Equal(0xE8, (int)thunk.Replacement[19], "the thunk's rewrite is a near call");
+            int target = callAt + 5 + BitConverter.ToInt32(thunk.Replacement, 20);
+            Check.Equal(Convert.ToInt32(cave.Va, 16), target, "and it calls the resolver");
+
+            PatchSession session = fx.Session();
+            Check.Bytes(thunk.Original, Slice(fx.ExeBytes(), thunk.Offset, thunk.Original.Length),
+                "stock: h.sie's [atol] - 0xDD50 address arithmetic");
+            Check.Bytes(cave.Original, Slice(fx.ExeBytes(), cave.Offset, cave.Original.Length),
+                "stock: the .pcode tail is empty");
+
+            Check.True(session.Apply(Both(session)).Ok, "apply");
+            Check.Bytes(thunk.Replacement, Slice(fx.ExeBytes(), thunk.Offset, thunk.Replacement.Length),
+                "applied: the thunk calls the resolver instead");
+            Check.Bytes(cave.Replacement, Slice(fx.ExeBytes(), cave.Offset, cave.Replacement.Length),
+                "applied: the resolver and its two strings are in the cave");
+
+            PatchSession applied = fx.Session();
+            PatchState off = applied.Current.Clone();
+            off.DieselApplied = false;
+            Check.True(applied.Apply(off).Ok, "uncheck");
+            Check.Bytes(thunk.Original, Slice(fx.ExeBytes(), thunk.Offset, thunk.Original.Length),
+                "reverted: h.sie's thunk is back");
+            Check.Bytes(cave.Original, Slice(fx.ExeBytes(), cave.Offset, cave.Original.Length),
+                "reverted: the cave is empty again");
+        }
+
+        public static void Test_AnInstallPatchedBeforeThePowFixPicksItUpOnOneMoreApply()
+        {
+            // Ticket 15's upgrade path: a v1.13 install holds every diesel site
+            // but the two pow ones. It still reads as applied, and applying the
+            // state it opens with -- no box touched -- writes just those two.
+            Fixtures.Install fx = Fixtures.Stock(true);
+            Site thunk = Find(fx.Manifest, Manifest.DieselPatchId, "pow-thunk-call-resolver");
+            Site cave = Find(fx.Manifest, Manifest.DieselPatchId, "pow-resolver-cave");
+            PatchSession first = fx.Session();
+            Check.True(first.Apply(Both(first)).Ok, "apply");
+
+            byte[] exe = fx.ExeBytes();
+            thunk.Original.CopyTo(exe, thunk.Offset);
+            cave.Original.CopyTo(exe, cave.Offset);
+            File.WriteAllBytes(fx.Sh3Exe, exe);
+
+            PatchSession old = fx.Session();
+            Check.True(old.Install.Applied(Manifest.DieselPatchId), "a v1.13 install reads as applied");
+            WriteReport report = old.Apply(old.Current.Clone());
+            Check.True(report.Ok, "applying it unchanged");
+            Check.Equal(2, report.SitesWritten.Count, "writes only two sites");
+            string written = string.Join("|", report.SitesWritten.ToArray());
+            Check.Contains("pow-thunk-call-resolver", written, "the thunk");
+            Check.Contains("pow-resolver-cave", written, "and the resolver");
+            Check.Bytes(thunk.Replacement, Slice(fx.ExeBytes(), thunk.Offset, thunk.Replacement.Length),
+                "the thunk now calls the resolver");
+            Check.Bytes(cave.Replacement, Slice(fx.ExeBytes(), cave.Offset, cave.Replacement.Length),
+                "and the resolver is in place");
+        }
+
         // -- 4. ini surgery through the session --------------------------------
 
         public static void Test_ApplyingDieselDamageWritesOnlyTheEightKeysItOwns()
@@ -421,11 +491,12 @@ namespace ApePatcher.Tests
 
             Check.True(report.Ok, "the commit lands");
             // 2 hull sites + 8 ini keys + 4 band immediates + 1 tc-helper
-            // rewrite + 1 reverse-telegraph skip jmp (ticket 14) + the
-            // diesel-message gate + its text, less Val11: h.sie already ships
-            // Factor-for-0-damaged as 1.0, which is what APE wants, so that
-            // site is not a change and is not claimed.
-            Check.Equal(17, report.SitesWritten.Count, "every site that actually changes is named");
+            // rewrite + 1 reverse-telegraph skip jmp (ticket 14) + the pow
+            // thunk and its resolver (ticket 15) + the diesel-message gate +
+            // its text, less Val11: h.sie already ships Factor-for-0-damaged
+            // as 1.0, which is what APE wants, so that site is not a change
+            // and is not claimed.
+            Check.Equal(19, report.SitesWritten.Count, "every site that actually changes is named");
             Check.DoesNotContain("Val11", string.Join("|", report.SitesWritten.ToArray()),
                 "and nothing that did not");
             Check.Contains("hsie.ini Val9", string.Join("|", report.SitesWritten.ToArray()),

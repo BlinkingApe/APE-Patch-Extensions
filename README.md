@@ -19,6 +19,15 @@ Pre-built patcher binaries are published under this repo's
 [Releases](../../releases). Download the latest `ApePatchExtensions.exe`,
 drop it in your SH3 install root alongside `sh3.exe`, and run it.
 
+### Linux (Wine/Proton)
+
+With diesel damage applied by APE v1.13 or earlier, the game crashes under
+Wine's builtin `msvcr71.dll`. On those versions, use the game folder's own copy:
+`WINEDLLOVERRIDES="msvcr71=n,b"`. Later versions look up `pow` by name rather
+than by a fixed offset into Microsoft's DLL, so no override is needed. If your
+install was patched by v1.13 or earlier, open the new patcher and press
+**Apply** once to pick up the fix.
+
 ## Building from source
 
 Requires MSVC (Visual Studio Build Tools 2022 or later) with the **x86**

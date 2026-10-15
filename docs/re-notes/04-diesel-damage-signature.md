@@ -184,9 +184,14 @@ constant tables.
 
 `0x6371A8` marshals two floats to doubles and calls `[0x51D678] - 0xDD50`.
 `0x51D678` is the import slot for `MSVCR71.dll!atol`; the fixed negative delta
-reaches an **unexported CRT `pow`**. (h.sie's trick for using `pow` without
-adding an import.) Likewise `0x417EE0` is `randRange(lo, hi)` built on
-`Kernel.dll!?Random32@@YAIXZ` (`0x51D57C`).
+reaches the CRT's `pow`. (h.sie's trick for using `pow` without adding an
+import.) Correction 2026-10-15: `pow` *is* exported by msvcr71, but sh3.exe
+doesn't import it. In the shipped msvcr71 7.10.3052.4, `atol` is at RVA
+`0x11D80` and `0x11D80 − 0xDD50 = 0x4030 = pow`, so the trick only works
+against that exact binary. Under Wine's builtin msvcr71 it jumps into
+arbitrary code. APE replaces the arithmetic with a lookup by name (§3c).
+Likewise `0x417EE0` is `randRange(lo, hi)` built on `Kernel.dll!?Random32@@YAIXZ`
+(`0x51D57C`).
 
 **`hsie.ini` states the formula verbatim:**
 
@@ -310,6 +315,65 @@ across the whole useful range.
 00635168  df f1 / ddd8     fcomip st(1); fstp
 0063516C  0f 83 92000000   jae  0x635204                   ; roll >= p -> no damage
 ```
+
+### 3c. APE resolves `pow` by name (ticket 15)
+
+The `[atol] - 0xDD50` trick in §3 is the reason Linux players have needed
+`WINEDLLOVERRIDES="msvcr71=n,b"`. The thunk's only callers are in the diesel
+cave (`0x635117`, plus `0x63582C` in the original TC helper that §3b removes).
+h.sie's Diesel Damage flag is off by default, so turning on APE's diesel damage
+is what makes the game run this code at all. A scan of every import-slot
+reference in `.pcode` and the second `.text` (`0x640000`) found no other
+DLL-layout dependency. The bytes below are identical in KC 2.5, OAE 1.5.2,
+OAE 2.0 TEST_1 and GWX 3.0 Gold.
+
+APE rewrites the thunk's address computation (site `pow-thunk-call-resolver`,
+file `0x1491A8`, the whole 38-byte thunk so the unchanged bytes anchor it):
+
+```
+006371A8  558bec83ec10 …    push ebp; mov ebp,esp; sub esp,0x10; marshal args
+006371BB  e8 403e0000       call 0x63B000            ; was mov eax,[atol]
+006371C0  90 90 90 90 90                              ;     sub eax,0xDD50
+006371C5  ff d0             call eax                 ; pow, as before
+006371C7  83c410 c9 c20800  add esp,0x10; leave; ret 8
+```
+
+and puts a resolver into the empty `.pcode` tail (site `pow-resolver-cave`,
+file `0x14D000`):
+
+```
+0063B000  68 2cb06300       push 0x63B02C            ; "pow"
+0063B005  68 20b06300       push 0x63B020            ; "MSVCR71.dll"
+0063B00A  ff15 48d25100     call [0x51D248]          ; KERNEL32!GetModuleHandleA
+0063B010  50                push eax                 ; hModule
+0063B011  ff15 dcd15100     call [0x51D1DC]          ; KERNEL32!GetProcAddress
+0063B017  c3                ret                      ; eax = msvcr71!pow
+0063B018  cc × 8
+0063B020  "MSVCR71.dll\0"
+0063B02C  "pow\0"
+```
+
+- `MSVCR71.dll` is a static import of sh3.exe, so it is always loaded.
+  Microsoft's and Wine's msvcr71 both export `pow` by name. On Windows the
+  lookup returns the same address the offset gave (RVA `0x4030`), so results
+  are bit-identical. Under Wine it returns Wine's own `pow`. It also survives a
+  different Microsoft build (such as 7.10.6030 SP1), which would break the
+  offset.
+- Both KERNEL32 calls are `stdcall`, so on `ret` the stack again holds the
+  thunk's two marshalled doubles. Only `eax/ecx/edx` are clobbered, and the
+  CRT call clobbers those anyway. The x87 stack is empty at this point.
+- The resolver keeps no state (`.pcode` is `R-X`). Two lookups per diesel tick,
+  about one per real second, cost nothing measurable.
+- `0x63948C`–`0x63C000` is all `00` in every surveyed install, and no absolute
+  or rel32 reference points into it. The site runs 16 zero bytes past the
+  resolver's end (`0x63B030`). Those bytes stay zero in both runs, so they are
+  the context Verify checks. That refuses a cave something else has filled
+  past `0x63B030`, but not foreign bytes that fit entirely inside the
+  resolver's 48.
+
+Upgrading: a v1.13-patched install already reads as applied (any site holding
+an APE value is enough), so pressing Apply once after updating writes both
+sites.
 
 ## 4. Applying the damage
 

@@ -307,6 +307,42 @@
           "note": "1-(1-p)^TC quantizes p onto a float32 lattice with a silent inert floor at 2.98e-8; APE replaces it with a clamped p*TC"
         },
         {
+          "id": "pow-thunk-call-resolver",
+          "store": "sh3.exe",
+          "encoding": "fixed-rewrite",
+          "va": "0x6371A8",
+          "offset": 1348008,
+          "original": "558bec83ec10d9450cdd5c2408d94508dd1c24a178d651002d50dd0000ffd083c410c9c20800",
+          "context": [
+            [
+              0,
+              "558bec83ec10d9450cdd5c2408d94508dd1c24"
+            ],
+            [
+              29,
+              "ffd083c410c9c20800"
+            ]
+          ],
+          "replacement": "558bec83ec10d9450cdd5c2408d94508dd1c24e8403e00009090909090ffd083c410c9c20800",
+          "note": "h.sie reached the CRT's pow as [atol] - 0xDD50, which only holds for Microsoft's msvcr71 7.10.3052.4 and crashes under Wine's builtin; APE resolves pow by name instead (pow-resolver-cave)"
+        },
+        {
+          "id": "pow-resolver-cave",
+          "store": "sh3.exe",
+          "encoding": "fixed-rewrite",
+          "va": "0x63B000",
+          "offset": 1363968,
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "context": [
+            [
+              48,
+              "00000000000000000000000000000000"
+            ]
+          ],
+          "replacement": "682cb063006820b06300ff1548d2510050ff15dcd15100c3cccccccccccccccc4d5356435237312e646c6c00706f770000000000000000000000000000000000",
+          "note": "GetProcAddress(GetModuleHandleA(\"MSVCR71.dll\"), \"pow\") in the empty .pcode tail (0x63948C-0x63C000, all zero and unreferenced in every surveyed install); same address on Windows, Wine's own pow under Wine"
+        },
+        {
           "id": "diesel-message-gate",
           "store": "sh3.exe",
           "encoding": "fixed-rewrite",
