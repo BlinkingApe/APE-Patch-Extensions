@@ -640,17 +640,11 @@ namespace ApePatcher.Ui
         {
             bool available = supported && install.Available(DepthStress.PatchId);
             bool deployed = supported && install.Applied(DepthStress.PatchId);
-            bool loads = DepthStress.LoadCallSiteExists;
 
-            // Until the load call site exists the section is shown disabled; the one
-            // thing still allowed is taking out an ape.act that is already there.
-            bool usable = available && loads;
-            bool canRemove = deployed && !loads;
-
-            depthOn.Enabled = usable || (canRemove && desired.DepthApplied);
-            depthOn.Checked = desired.DepthApplied && (usable || canRemove);
-            depthTitle.ForeColor = (usable || canRemove) ? SystemColors.ControlText : Look.Dim;
-            bool fieldsLive = usable && desired.DepthApplied;
+            depthOn.Enabled = available;
+            depthOn.Checked = desired.DepthApplied && available;
+            depthTitle.ForeColor = available ? SystemColors.ControlText : Look.Dim;
+            bool fieldsLive = available && desired.DepthApplied;
             foreach (DepthField f in depthInputs)
             {
                 f.Box.Enabled = fieldsLive;
@@ -660,7 +654,6 @@ namespace ApePatcher.Ui
 
             string state =
                 !supported ? "Unavailable — APE does not recognise this install."
-                : !loads ? (deployed ? DepthStress.NotLoadedButDeployed : DepthStress.NotLoadedYet)
                 : !available ? "Unavailable — this build of APE carries no depth-stress module."
                 : desired.DepthApplied && deployed
                     ? "APE is applied. Unchecking it and applying removes depth stress."

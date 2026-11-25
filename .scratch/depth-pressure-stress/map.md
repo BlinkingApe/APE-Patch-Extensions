@@ -204,7 +204,8 @@ write target is unlocated is not specified.
 - **Destination reached 2026-11-25.** `PRD.md` was rewritten in place for the tier
   model (`ready-for-agent`). No wayfinder tickets remain open. The next step is to
   split the PRD into implementation issues. The `ape.act` load call site is a hard
-  prerequisite that the umbrella map owns.
+  prerequisite that the umbrella map owns. *(2026-11-25: not needed after all. Stock
+  `sh3.exe` loads every `*.act` in the game folder; see ADR-0002's note. Ticket 02 closed.)*
 
 - **Grilling 2026-11-25: Stoss's feedback** (ADR-0012, `CONTEXT.md`, PRD amended).
   Leakage defaults halved to 2 / 7.5 %/min. Seepage moves to compartment 4, the electric
@@ -247,7 +248,8 @@ write target is unlocated is not specified.
   is inherently runtime, so this feature requires `ape.act` — which the umbrella map
   deferred *whole* from patcher v1 (ticket 07), precisely because crush-depth was
   blocked on dynamic hunts. It also re-raises the umbrella's open question of whether
-  `sh3.exe`'s `LoadLibrary` call site tolerates a missing file. Not a ticket here:
+  `sh3.exe`'s `LoadLibrary` call site tolerates a missing file *(moot: the stock `*.act`
+  loader only loads files that exist; ADR-0002's 2026-11-25 note)*. Not a ticket here:
   that is the umbrella map's decision to make, not this one's, and it is unblocked by
   this map's resolutions rather than blocking them.
 - **Whether depth wear should extend past the electric engines.** One system was

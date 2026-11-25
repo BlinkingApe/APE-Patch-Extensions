@@ -1,6 +1,6 @@
 # APE Patch Extensions
 
-APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardcode patches, adding new tunable behavior — currently a reworked u-tanker hull-repair rate and a rewritten diesel-engine damage model.
+APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardcode patches, adding new tunable behavior — currently a reworked u-tanker hull-repair rate, a rewritten diesel-engine damage model, depth stress, and one crush-time setting for every U-boat.
 
 ## Usage
 
@@ -8,10 +8,17 @@ APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardco
 
 - **The GUI patcher** (`src/patcher_gui/`) — a standalone Windows tool you
   drop in the SH3 game root. It finds your install, shows what's currently
-  applied, lets you edit the hull-repair and diesel-damage settings, and
-  commits every change as a verified static write to `sh3.exe`, `hsie.ini`
-  and `data/Menu/en_menu.txt`. Unchecking a feature and applying it again
-  restores the original bytes exactly — that's the uninstaller.
+  applied, lets you edit the hull-repair, diesel-damage, crush-time and
+  depth-stress settings, and commits every change as a verified write to
+  `sh3.exe`, `hsie.ini`, `data/Menu/en_menu.txt` and the U-boats' `.zon`
+  files. Unchecking a feature and applying it again restores the original
+  bytes exactly — that's the uninstaller.
+- **Depth stress** (`ape.act`) — below 100 m, and more below the player's
+  tier-2 depth, the electric engine room takes on water and hull damage is
+  multiplied. While that room is flooded past a threshold and the motors are
+  running, both motors take damage. The patcher deploys `ape.act` into the
+  game folder with the player's values written in. Stock `sh3.exe` loads
+  every `*.act` there at startup, so nothing else is installed.
 
 Diesel damage builds on h.sie's own Diesel Damage switch, which is off by
 default in OAE and GWX. If the patcher shows it as unavailable, turn the
@@ -43,7 +50,9 @@ toolset, CMake 3.21+, Ninja, and .NET Framework 4.x tooling for the GUI
 patcher.
 
 ```
-src\patcher_gui\build.cmd            -> dist\ApePatchExtensions.exe
+cmake --preset x86-release           in a vcvars32 shell, then
+cmake --build --preset x86-release   -> build\x86-release\ape.act (embedded by build.cmd)
+src\patcher_gui\build.cmd            -> dist\ApePatchExtensions_v<ver>.exe
 src\patcher_gui\build.cmd run        build and launch against the live install
 tests\patcher_gui\run.cmd            run the patcher test suite
 ```

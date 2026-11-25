@@ -38,6 +38,8 @@ loads.
   loads ape.act: set `DepthStress.LoadCallSiteExists = true`.** Until then the checkbox
   and fields are disabled with an explanation; an already-deployed ape.act can still be
   unchecked and removed.
+  *(2026-11-25: the gate is removed. Stock sh3.exe already loads every `*.act`, so the
+  section is always live; see ADR-0002's note.)*
 - `MainForm` gains the section (tier-2 depth, then four fields per tier) and tab order.
   It compiles clean; I did not open the window to check layout.
 

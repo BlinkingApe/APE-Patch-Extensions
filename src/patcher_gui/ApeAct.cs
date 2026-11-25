@@ -19,20 +19,8 @@ namespace ApePatcher
         public const string FileName = "ape.act";
         public const string TemplateResource = "ape.act";
 
-        /// <summary>The one switch (ticket 23). False until sh3.exe has a call site
-        /// that loads ape.act (ADR-0002, umbrella ticket 02): until then the UI
-        /// shows the depth-stress section disabled, so no player deploys a file
-        /// nothing loads. Flip it to true when that site exists.</summary>
-        public static readonly bool LoadCallSiteExists = false;
-
-        public const string NotLoadedYet =
-            "Not available yet — this version of the game does not load ape.act. "
-            + "Depth stress needs a change to sh3.exe that APE has not made yet, so "
-            + "deploying it now would do nothing.";
-
-        public const string NotLoadedButDeployed =
-            "ape.act is in the game folder, but nothing loads it yet. Unchecking this and "
-            + "applying removes it.";
+        // No sh3.exe change is needed to load ape.act: stock sh3.exe LoadLibrary's
+        // every *.act in the game folder at startup (ADR-0002's 2026-11-25 note).
 
         // Tooltips (user stories 31, 32, 37). Here rather than in the form so the
         // wording the stories ask for is held by test.

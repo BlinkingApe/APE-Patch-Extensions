@@ -314,6 +314,9 @@ mission load. AI boats of a patched class change too.
   a hard prerequisite: the patcher deploys `ape.act`, but nothing loads it until that
   site exists. It belongs to the umbrella map, as does which APE release ships this.
   Until then the depth-stress section is shown disabled, with an explanation.
+  *(2026-11-25: no call site is needed. Stock `sh3.exe` loads every `*.act` in the game
+  folder, so the deployed `ape.act` loads as it is (ADR-0002's note). The disabled state
+  is gone, and v1.14 ships depth stress.)*
 - Replacing stock's crush mechanism. APE sets its speed (crush time) and reads its
   onset, nothing more.
 - Amplifying anything but hull HP. Depth-charge flooding and equipment damage stay at

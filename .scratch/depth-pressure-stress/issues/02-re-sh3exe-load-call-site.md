@@ -1,6 +1,6 @@
 # RE: locate/construct the sh3.exe load call site for ape.act
 
-Status: ready-for-human
+Status: wontfix (not needed: stock sh3.exe loads every *.act in its folder; see ADR-0002's 2026-11-25 note)
 
 ## Parent
 
@@ -19,3 +19,10 @@ A confirmed location and patch shape within OAE sh3.exe for inserting a dedicate
 ## Blocked by
 
 None — can start immediately.
+
+## Answer
+
+Not needed. Stock `sh3.exe` loads every `*.act` in the game folder with `LoadLibraryA`
+(`_findfirst("*.act")` loop at `0x00401057`), so the `ape.act` the patcher deploys loads with
+no `sh3.exe` change. The owner's in-play sessions (ticket 27) already ran it that way.
+Recorded in ADR-0002 (2026-11-25 note); the patcher's `LoadCallSiteExists` gate is gone.

@@ -346,13 +346,6 @@ namespace ApePatcher.Tests
             Check.Contains("next game launch", DepthStress.MotorDamageTip, "next-launch timing");
         }
 
-        public static void Test_TheDepthStressSectionIsGatedByOneSwitchAndExplainsWhy()
-        {
-            // Flipping this to true is the whole change once sh3.exe loads ape.act.
-            Check.False(DepthStress.LoadCallSiteExists, "no load call site yet");
-            Check.Contains("does not load", DepthStress.NotLoadedYet, "the disabled section explains");
-        }
-
         /// <summary>The rate line legitimately carries no percent sign, but the
         /// band line's numbers must not be mistaken for one; strip the lines that
         /// are allowed to mention percentages before asserting.</summary>
