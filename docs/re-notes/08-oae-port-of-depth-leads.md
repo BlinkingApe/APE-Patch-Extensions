@@ -266,3 +266,49 @@ don't depend on class. Which compartment is "astern" does.
   These runs were driven step by step (`harness.drive`) with throwaway probe scripts
   in the harness's `work/` folder.
 - **Never seen on a VIIC**, because of the IIA substitution.
+
+## 8. Ticket 14 (narrowed): the three writes hold below crush depth
+
+2026-11-25, same lab and hashes as §7 (lab and owner `sh3.exe` both `20360fe8…`,
+checked before the run). Mission "0 Lab Crush Depth" (spawns at 200 m). The boat was a
+**Type IIA** again (§7): hull 400, `+0xC0` 25.1, `+0xC4` 0.8. Its crush onset at full hull
+is ~174 m, so the boat sat **below crush depth with stock's crush writer running** (cause 4
+throughout) for the whole run. Probe: `work/oae_below_crush.py`; rows:
+`work/oae-below-crush.json`; F7 shot: `work/drive/20261125T082855Z/t14-f7-ape.png`
+(all in the sh3-crush-pressure repo).
+
+A Frida **APE stand-in**, one poll per wall-second, ran at values stock can't produce. Three
+phases:
+
+| Phase | Game-s | Stand-in | Hull loss, HP/game-s | Stock ramp predicted (§5, ref. point gauge −2.6 m) |
+|---|---|---|---|---|
+| base | 20 | off | 0.266 | 0.258 |
+| ape | 61 | ×2 amplify, seep +0.005/s, port wear +0.01/s, stb := 0.9 | **0.812** | 0.411 |
+| after | 60 | off | 0.859 | 0.849 |
+
+- **Hull, poll-and-amplify on top of crush: holds.** In the stand-in phase the boat lost
+  49.5 HP: 24.4 to stock and 25.1 to APE's writes. That is ×1.97 the stock ramp at the same
+  hull and depth. None of the 59 writes was reverted (hull never rose after a write). With
+  the stand-in off, loss went back to the stock prediction within 1 %. (Crush damage is
+  *exempt* from the real multiplier, ADR-0011. It was amplified here only because it was
+  the one damage source on hand. The question was whether a write sticks on top of the
+  crush writer, not the exemption.)
+- **Stern water (IIA: compartment 4, zone 30, ticket 19's rule): holds and accumulates.**
+  Net rise was 0.00175 flood/game-s, which is the seep 0.005 minus the pump ~0.0033 (ticket 10
+  measured 0.00326). The peak was 0.112. F7 / CE reported "We have flooding, sir!". With
+  the stand-in off the crew pumped it out, to 0 within the phase (0.00186/game-s
+  averaged over the phase, which includes the time spent at 0). Nothing
+  reset it: only the stock pump removes water.
+- **Electric engines: hold.** Starboard was written to the 0.9 ceiling and stayed at exactly 0.9
+  through both later phases. That's 120 game-s, and the crew repairs one engine at a time
+  (§7.2). Port wear rose at the written 0.01/game-s to 0.604 (the clamp wasn't reached in
+  60 s). F7 reported "Port Electric Engine damaged, sir!" and showed damage gears on the
+  station. Once the stand-in stopped, the crew repaired port at **5.46e-5/game-s** (§7.2:
+  5.43e-5).
+- The boat sank 200 → 208 m with the water aboard. The onset rose from 174 m to 129 m as
+  hull fell. No abort was needed (hull ended at 73 %).
+
+**After the run:** the game was stopped by the drive server, and the session window
+closed and restored `Documents\SH3`. The owner's install `sh3.exe` was re-hashed
+unchanged (`20360fe8…`). The lab ledger is unchanged (no new lab changes). Nothing was
+ever written to the owner's install.
