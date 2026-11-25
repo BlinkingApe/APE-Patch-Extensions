@@ -131,7 +131,7 @@ crush damage and multiplies only the rest.
 | Electric-engine wear amount | T1, T2 | % of one engine's health per hit, engine picked at random | 1–90 % | 10 / 30 |
 | Electric-engine wear rate | T1, T2 | average game-minutes between hits | (to set from the lead's 0–0.01/s chance) | 120 / 20 |
 | Hull multiplier | T1, T2 | × | 1.0–5.0 | 1.25 / 1.5 |
-| Crush time | T3 | seconds | 1–3600 | 625 (ticket `16`) |
+| Crush time | T3 | seconds | 1–3600 | 5 (ticket `16`) |
 
 - **One fixed wear amount per hit replaces the lead's random ranges** (0.05–0.20 /
   0.15–0.45). Defaults are those ranges' midpoints, so the mean wear per hour is unchanged.

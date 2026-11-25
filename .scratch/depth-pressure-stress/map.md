@@ -181,7 +181,7 @@ write target is unlocated is not specified.
   writes `CrashSpeed = Hit_Points ÷ crush time` into each playable U-boat's `.zon`. It is
   static and can ship before `ape.act`. Basis: the owner's in-game testing that
   `CrashSpeed` is HP per second, which supersedes the external RE's
-  `excess × CrashSpeed × dt` reading. Tier-2 depth defaults to 150 m.
+  `excess × CrashSpeed × dt` reading. Tier-2 depth defaults to 150 m. Crush time defaults to 5 s for every U-boat (set after ticket `18`).
 
 ## Decisions so far
 
@@ -192,6 +192,7 @@ write target is unlocated is not specified.
 - [Retire the superseded band-decision model's C++ implementation and build wiring](issues/15-retire-superseded-model-source.md) — deleted the whole `src/mods/crush_depth_damage/` tree, `ape.cfg`, and `config_check` outright rather than keeping a reusable shell; `dllmain.cpp` reduced to a minimal stub. Build verified clean (PE32/x86), no live reference to the dead model remains outside historical prose.
 - [Live-value session A: current depth + mission clock](issues/08-live-values-depth-and-clock.md) — both resolved: mission clock is static VA `0x0063FF80`, no chain; current depth is `[[["sh3.exe"+002307BC]+4]+4]+0x54`, a 3-level static chain confirmed stable across two relaunches.
 - [Live-value session B: boat pointer chain for the hull-HP write](issues/09-live-values-hull-hp-write.md) — resolved: `[0x00554A88]→+0xC4→+0x2240→+0x24→+0x4C]+0xB8` confirmed live (write holds); found the engine's own universal hull-HP writer (`02C930D7`, per-frame, single `fsub` per collision, cause-agnostic) as a bonus, safe for poll-and-amplify by construction. Delta observed: `450 → 448.2609`.
+- [Which `.zon` files are playable U-boats? A discovery rule that works for OAE and KC](issues/18-playable-uboat-zon-discovery.md) — `[Unit] HumanPlayable=YES` in `data/Submarine/<X>/<X>.cfg`; the same 8 classes in both installs (2A, 2D, 7b, 7c, 9b, 9c, 9d2, 21), XIV and other AI U-boats excluded; `.zon` key/float layout confirmed for all 42 files. It also showed that live OAE crush speeds come from the owner's JSGME test mod (stock VIIC ≈ 6250 s, KC 250 s). The owner then set the crush-time default to 5 s for every U-boat. APE replaces the test mod, so there's no JSGME conflict.
 
 ## Not yet specified
 
