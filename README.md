@@ -9,24 +9,32 @@ APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardco
 - **The GUI patcher** (`src/patcher_gui/`) — a standalone Windows tool you
   drop in the SH3 game root. It finds your install, shows what's currently
   applied, lets you edit the hull-repair and diesel-damage settings, and
-  commits every change as a verified static byte-write to `sh3.exe` and
-  `hsie.ini`. Unchecking a feature and applying it again restores the
-  original bytes exactly — that's the uninstaller.
+  commits every change as a verified static write to `sh3.exe`, `hsie.ini`
+  and `data/Menu/en_menu.txt`. Unchecking a feature and applying it again
+  restores the original bytes exactly — that's the uninstaller.
+
+Diesel damage builds on h.sie's own Diesel Damage switch, which is off by
+default in OAE and GWX. If the patcher shows it as unavailable, turn the
+switch on in `HsieOptionsSelector`, then reopen APE. APE reads h.sie's
+switches but never changes them.
 
 ## Download
 
 Pre-built patcher binaries are published under this repo's
-[Releases](../../releases). Download the latest `ApePatchExtensions.exe`,
-drop it in your SH3 install root alongside `sh3.exe`, and run it.
+[Releases](../../releases). Download the latest release archive, extract
+the patcher exe into your SH3 install root alongside `sh3.exe`, and run it.
 
 ### Linux (Wine/Proton)
 
-With diesel damage applied by APE v1.13 or earlier, the game crashes under
-Wine's builtin `msvcr71.dll`. On those versions, use the game folder's own copy:
-`WINEDLLOVERRIDES="msvcr71=n,b"`. Later versions look up `pow` by name rather
-than by a fixed offset into Microsoft's DLL, so no override is needed. If your
-install was patched by v1.13 or earlier, open the new patcher and press
-**Apply** once to pick up the fix.
+As of v1.13, APE runs under Wine's builtin `msvcr71.dll`. No DLL override
+is needed.
+
+If you applied diesel damage with v1.12 or earlier, open the v1.13 patcher
+and press **Apply** once. Older versions found the C runtime's `pow` at a
+fixed offset that only exists in Microsoft's own `msvcr71.dll`, so the game
+crashed under Wine's version unless you set `WINEDLLOVERRIDES="msvcr71=n,b"`.
+v1.13 looks `pow` up by name instead. Once you've re-applied, you can remove
+that override.
 
 ## Building from source
 
@@ -43,8 +51,6 @@ tests\patcher_gui\run.cmd            run the patcher test suite
 See [`src/patcher_gui/README.md`](src/patcher_gui/README.md) for the
 patcher's internal shape and test conventions.
 
-```
-
 ## Project layout
 
 - `src/patcher_gui/` — the C# WinForms GUI patcher (the shipped tool).
@@ -52,8 +58,9 @@ patcher's internal shape and test conventions.
   dependencies (MinHook, doctest).
 - `tools/re-static/` — Python static-analysis scripts used to derive and
   verify the patch manifest against real `sh3.exe` builds.
-- `docs/adr/` — architecture decisions. `CONTEXT.md` — project glossary and
-  domain vocabulary.
+- `docs/adr/` — architecture decisions. `docs/re-notes/` — reverse-engineering
+  notes behind each patch site. `CONTEXT.md` — project glossary and domain
+  vocabulary.
 - `.scratch/` — this project's issue tracker: PRDs and tickets as markdown,
   organized one directory per feature effort.
 

@@ -49,3 +49,10 @@ at run time (for example, the stern room if present, else the electric room).
   motors; a VII or IX doesn't. The ceilings stay fixed and per class nothing changes:
   the crew pumps (~0.0033/game-s in a crewed compartment), and a short-range coastal
   boat in trouble at depth is the intended drama.
+
+## Superseded (2026-11-25, ADR-0012)
+
+Seepage now goes into compartment 4, the electric engine room, on **every** class, so
+that motor flooding damage reads the water in the motors' own room. The run-time lookup
+(never by class) stays; only the target changes. The power-cut side effect accepted here
+for II/XXI now applies to VII and IX too. Ticket 30.

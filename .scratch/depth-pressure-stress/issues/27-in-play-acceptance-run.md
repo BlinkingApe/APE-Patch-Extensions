@@ -6,12 +6,14 @@ the patcher with the player's values written in, does what the PRD claims. Hash
 
 1. A depth-charge or ramming hit at tier-2 depth removes `mult ×` the stock hull delta,
    while crush damage below crush depth is not multiplied.
-2. An undamaged, unattacked boat at tier-1 depth takes water in ticket 19's
-   compartment. The water stops rising above 100 m and isn't removed by APE. Run this
-   on a VII or IX from a career if possible.
-3. With wear forced near-certain, engine damage appears from depth alone, never exceeds
-   0.9, is repaired by the crew from 0.9, and stops above 100 m.
-4. All three effects keep acting below crush depth.
+2. An undamaged, unattacked boat at tier-1 depth takes water in the electric engine room
+   (compartment 4, ADR-0012). The water stops rising above 100 m and isn't removed by APE.
+   Run this on a VII or IX from a career if possible, and check that stock's power cut
+   follows the water there.
+3. With the room past the flooding threshold and the telegraph ahead, both motors take
+   damage, never past 0.9. Ordering stop ends it, as does pumping below the threshold. It
+   continues above 100 m while the room is flooded, and the crew repairs from 0.9.
+4. All effects keep acting below crush depth.
 5. Loading a damaged boat costs no amplified hull.
 
 Also run ticket 16's crush-time smoke test (timings for a VIIC and a IIA). Until the
@@ -20,7 +22,8 @@ shows guard 2 missing a restore, record that; it triggers the PRD's fallback gua
 (hold the baseline for ~2 game-seconds after an identity change) as a follow-up.
 
 **Blocked by:** 22 (The patcher deploys, reads back and removes `ape.act`), 25 (Seepage),
-26 (Electric-engine wear)
+30 (Seepage into the electric engine room), 31 (Motor flooding damage), 32 (Telegraph read
+on OAE)
 
 **Status:** ready-for-human
 

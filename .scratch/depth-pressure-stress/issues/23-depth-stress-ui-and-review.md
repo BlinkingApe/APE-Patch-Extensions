@@ -40,3 +40,9 @@ loads.
   unchecked and removed.
 - `MainForm` gains the section (tier-2 depth, then four fields per tier) and tab order.
   It compiles clean; I did not open the window to check layout.
+
+## Amended (2026-11-25, ADR-0012)
+
+The wear fields go and the leakage wording changes from "stern compartment" to "electric
+engine room". Tickets 30 and 31 change the UI, tooltips and Review to match; this ticket
+stays resolved.

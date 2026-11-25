@@ -111,7 +111,7 @@ Original: 48 × `00`.
 2. `tests/patcher_gui/PatchSessionTests.cs`: add round-trip coverage for both sites.
    Apply, then uncheck to restore the originals byte-exactly. Mirror the existing diesel
    `.pcode` site tests.
-3. Upgrade path: a v1.13-patched install reads as applied, because `IsApplied` is true
+3. Upgrade path: a v1.12-patched install reads as applied, because `IsApplied` is true
    when *any* site holds an APE value. Re-applying writes the new sites. Release notes
    should tell Linux players to press Apply once after updating.
 4. Update `docs/re-notes/04-diesel-damage-signature.md` §3 (the thunk, plus the
@@ -149,10 +149,15 @@ Original: 48 × `00`.
   context). Originals re-read from all three reference exes; capstone confirms
   the call lands on 0x63B000 and the resolver matches the listing above.
 - Tests: round trip for both sites (plus a check that the thunk's rel32 hits
-  the resolver site's VA), and the upgrade path: a v1.13-shaped install reads
+  the resolver site's VA), and the upgrade path: a v1.12-shaped install reads
   as applied and an unchanged Apply writes exactly the two pow sites.
 - Docs: re-notes 04 §3 correction + new §3c; README Linux/Wine note.
 - Still open (why this is `ready-for-human`): the Windows CE breakpoint at
   0x6371C5 / forced-rate rig check, and the Wine run with the msvcr71 override
   removed. The release notes for the next version must tell Linux players to
   press Apply once after updating — there is no in-repo changelog to carry it.
+
+**2026-10-15 — correction: not yet verified.** The in-game test on Windows and Linux used
+`dist/ApePatchExtensions_v1.13.exe` from 2026-09-29. That build predates this fix (it is now
+called v1.12_branch) and holds no pow sites, so it does not verify this ticket. Both
+Verification items above still need running on a fresh v1.13 build.

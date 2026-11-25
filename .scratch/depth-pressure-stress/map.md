@@ -206,6 +206,17 @@ write target is unlocated is not specified.
   split the PRD into implementation issues. The `ape.act` load call site is a hard
   prerequisite that the umbrella map owns.
 
+- **Grilling 2026-11-25: Stoss's feedback** (ADR-0012, `CONTEXT.md`, PRD amended).
+  Leakage defaults halved to 2 / 7.5 %/min. Seepage moves to compartment 4, the electric
+  engine room, on every class (supersedes ticket 19's rule). **Motor flooding damage**
+  replaces random electric-engine wear: while that room's flood is at or above a
+  threshold (default 30 %) and the ordered telegraph isn't at stop, both motors take a
+  fixed % per game-second (default 10, provisional), capped at 0.9, at any depth and
+  whatever flooded the room. Ordering stop is "putting the motors out of service". The
+  wear-rate fields go; one threshold and one amount field come in, not per tier. New
+  tickets `30` (seep compartment and defaults), `31` (motor flooding damage, supersedes
+  `26`), `32` (HITL: the telegraph read `[0x63E1D4]` on OAE while submerged).
+
 ## Decisions so far
 
 <!-- charted 2026-08-16; the model above was settled in the charting session's
@@ -227,6 +238,8 @@ write target is unlocated is not specified.
 - [Crush-time patch: write each U-boat's CrashSpeed from one player-chosen crush time](issues/16-crush-time-patch.md) — built and committed in the GUI patcher: a new `.zon` site kind, discovery by ticket 18's rule, `.ape-orig` revert, drift detection, and a "nominal" tooltip per ADR-0011. Whole-second T, 1–3600, default 5. The in-play timing run was **waived by the owner** for time; its checklist stays in the ticket as a smoke test.
 - [Seepage sinks the boat when the crew isn't pumping (silent running)](issues/29-seepage-sinks-the-boat-in-silent-running.md) — resolved by design (owner): Stiebler's Silent-running Fix was built to make a pump-less boat flood and sink at depth, and APE's flooding model replaces its kludge. Seep ceiling stays 0.8, no seepage cut-off, no patcher switch.
 - [Does `[0x63E1D4]` track the ordered telegraph on OAE while submerged?](issues/32-telegraph-read-on-oae.md) — yes, live on OAE: submerged, surfaced and after a load; stop is exactly 0.0, astern −0.26…−0.66 (IIA), so ticket 31's gate stands unchanged.
+
+- [Stoss's feedback: halve leakage, motor damage from flooding](../../docs/adr/0012-motor-damage-follows-the-water-in-the-motor-room.md) — leakage 2 / 7.5; seepage into compartment 4 on every class; motor flooding damage (threshold 30 %, 10 %/s provisional, telegraph ≠ stop, any depth, cap 0.9) replaces wear; tickets 30–32 open.
 
 ## Not yet specified
 
@@ -260,7 +273,9 @@ write target is unlocated is not specified.
   model hands tier 3 back to stock entirely and never reads CDT. Re-opening this
   would be redrawing the destination, not advancing toward it.
 - **Amplifying anything but hull HP.** Compartment damage, equipment damage and
-  flooding caused by depth charges stay at stock magnitude. APE's own seep and wear
+  flooding caused by depth charges stay at stock magnitude. *(Redrawn by ADR-0012: motor
+  flooding damage adds to the consequences of any water in the motor room, stock breach
+  flooding included. It is a new effect, not an amplification of stock's.)* APE's own seep and wear
   effects cover that ground instead. Scaling everything a hit produces would mean
   mapping every damage float the engine writes — open-ended RE with no known anchor.
 - **JSGME packaging and per-unit data edits.** *(Per-unit edits revived by ADR-0010 for `CrashSpeed` only, through the patcher, not JSGME; ticket `16`.)* Ruled out by the umbrella map

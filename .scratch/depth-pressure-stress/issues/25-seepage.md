@@ -25,3 +25,8 @@ rate·dt, 0.8)`, nothing at or above 0.8. `ape.act` scans the zone-list head and
 zone→compartment table AOBs (`docs/re-notes/09`), walks the list and picks compartment 8's
 zone, else 4's. No matching zone leaves `has_seep` false and logs `no seepage: <why>`.
 The last criterion (injected into OAE) is still to do, under ticket 27.
+
+## Amended (2026-11-25, ADR-0012)
+
+The seep compartment is now compartment 4 on every class, and the leakage defaults are
+2 / 7.5. Ticket 30 carries the change; the rest of this ticket stands.

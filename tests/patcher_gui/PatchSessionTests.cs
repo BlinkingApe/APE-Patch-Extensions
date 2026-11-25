@@ -323,7 +323,7 @@ namespace ApePatcher.Tests
 
         public static void Test_AnInstallPatchedBeforeThePowFixPicksItUpOnOneMoreApply()
         {
-            // Ticket 15's upgrade path: a v1.13 install holds every diesel site
+            // Ticket 15's upgrade path: a v1.12 install holds every diesel site
             // but the two pow ones. It still reads as applied, and applying the
             // state it opens with -- no box touched -- writes just those two.
             Fixtures.Install fx = Fixtures.Stock(true);
@@ -338,7 +338,7 @@ namespace ApePatcher.Tests
             File.WriteAllBytes(fx.Sh3Exe, exe);
 
             PatchSession old = fx.Session();
-            Check.True(old.Install.Applied(Manifest.DieselPatchId), "a v1.13 install reads as applied");
+            Check.True(old.Install.Applied(Manifest.DieselPatchId), "a v1.12 install reads as applied");
             WriteReport report = old.Apply(old.Current.Clone());
             Check.True(report.Ok, "applying it unchanged");
             Check.Equal(2, report.SitesWritten.Count, "writes only two sites");

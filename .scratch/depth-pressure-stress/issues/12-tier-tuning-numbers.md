@@ -219,3 +219,13 @@ so the clamp cannot round past it.
   `1 − (1 − q)^dt` in double; take seepage as one `rate × dt` step clamped at 0.8. Wear
   rate `m` minutes → per-second chance `q = 1/(60·m)`; at 600 min `q ≈ 2.8e-5`,
   representable with ample margin.
+
+## Amended (2026-11-25, ADR-0012, feedback from Stoss)
+
+- **Leakage halved to 2 / 7.5 %/min.** Any crew now holds tier 2 (tired pump ~14.6
+  %/min); only an unmanned room fills. This replaces "tier 2 punishes a tired crew".
+- **Electric-engine wear is replaced by motor flooding damage.** The wear amount and
+  wear rate fields, and the randomness constraint, go. In their place: one **flooding
+  threshold** (% flood, 5–95, default 30) and one **motor damage** amount (% of each
+  motor's health per game-second, 0–100, default 10, 0 = off). Both defaults are
+  provisional; Stoss will recommend values. The 0.9 ceiling stays. Tickets 30 and 31.

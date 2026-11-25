@@ -371,7 +371,7 @@ file `0x14D000`):
   past `0x63B030`, but not foreign bytes that fit entirely inside the
   resolver's 48.
 
-Upgrading: a v1.13-patched install already reads as applied (any site holding
+Upgrading: a v1.12-patched install already reads as applied (any site holding
 an APE value is enough), so pressing Apply once after updating writes both
 sites.
 
