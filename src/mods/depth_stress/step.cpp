@@ -102,10 +102,12 @@ StepResult step(const Constants& c, StepState& st, const Sample* sample,
   }
 
   // 6. Seepage: flood + rate*dt, clamped to the ceiling. At or above it there
-  //    is no write, so a bigger leak from elsewhere is never lowered.
+  //    is no write, so a bigger leak from elsewhere is never lowered. The level
+  //    is also floored at kSeepFloor so the crew never pumps it to exactly 0.
   if (tier != Tier::None && s.has_seep && k.seep_per_s > 0.0f && dt > 0 &&
       s.seep_flood < kSeepCeiling) {
     float next = s.seep_flood + k.seep_per_s * static_cast<float>(dt);
+    if (next < kSeepFloor) next = kSeepFloor;  // ticket 28: keep the report quiet
     if (next > kSeepCeiling) next = kSeepCeiling;
     if (next > s.seep_flood)
       r.writes.push_back({Write::Target::Flood, s.seep_flood, next});

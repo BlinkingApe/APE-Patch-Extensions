@@ -622,6 +622,21 @@ TEST_CASE("seep: steps by rate*dt") {
   CHECK(r.writes[0].value == doctest::Approx(0.11));
 }
 
+TEST_CASE("seep: a level the crew pumped dry is floored, not left at 0") {
+  const ds::Constants c = seep_only(0.0005f);  // one step is below the floor
+  ds::StepState st{};
+  const ds::Sample a = flooded(at(120.0f, 500.0f, 10), 0.0f);
+  const ds::Sample b = flooded(at(120.0f, 500.0f, 11), 0.0f);
+  ds::step(c, st, &a);
+  const ds::StepResult r = ds::step(c, st, &b);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].value == doctest::Approx(ds::kSeepFloor));
+  const ds::Sample at_floor = flooded(at(120.0f, 500.0f, 12), ds::kSeepFloor);
+  const ds::StepResult r2 = ds::step(c, st, &at_floor);
+  REQUIRE(r2.writes.size() == 1);
+  CHECK(r2.writes[0].value > ds::kSeepFloor);  // still only ever raised
+}
+
 TEST_CASE("seep: clamps at 0.8, then writes nothing, and never lowers") {
   const ds::Constants c = seep_only(0.05f);
   ds::StepState st{};

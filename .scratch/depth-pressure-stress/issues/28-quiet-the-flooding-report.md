@@ -1,7 +1,7 @@
 # 28: Quiet the "We have flooding, sir!" spam
 
 Type: grilling
-Status: needs-info
+Status: ready-for-human
 Blocked by: none
 
 ## Parent
@@ -88,3 +88,14 @@ Per compartment, with `L` the flood level at `[[node+0x14]+0x1C]`:
 
 Not implemented: no code change made, awaiting the choice. The floor variant needs one
 in-play check (does the pump really clamp to 0, and does the report stop repeating).
+
+## Implemented (2026-11-25): floor at epsilon
+
+Owner chose option 1. While seeping, the step now raises the level to `kSeepFloor` = 0.01
+(`src/mods/depth_stress/constants.hpp`, fixed, not in the struct) when a poll finds it
+lower; the floor is above one pump step (0.0024 to ~0.005 per game-second), so the crew
+shouldn't reach exactly 0 between polls. Unit test added; suite passes.
+
+**Still to check in play (needs the rebuilt `ape.act`):** dive below 100 m, let the crew pump
+level with seepage, and confirm "We have flooding, sir!" is said once and not repeated. If it
+still repeats, the poll interval is too slow for the pump: raise the floor or poll faster.

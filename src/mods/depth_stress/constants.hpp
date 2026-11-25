@@ -29,6 +29,11 @@ constexpr std::uint32_t kVersion = 1;
 // seepage alone never drowns the room's crew, and wear never leaves an engine
 // the crew can't repair.
 constexpr float kSeepCeiling = 0.8f;
+// While seeping, the level never rests below this. The crew pumps a compartment
+// to exactly 0, and stock re-arms its "We have flooding, sir!" report only at
+// exactly 0 (ticket 28); a floor above one pump step (~0.0024 to 0.005 per
+// game-second) keeps the report to one per dive. Not part of the struct.
+constexpr float kSeepFloor = 0.01f;
 constexpr float kWearCeiling = 0.9f;
 
 // Tier 1 starts at this depth whatever the class; it is not a field.
