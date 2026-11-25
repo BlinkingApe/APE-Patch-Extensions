@@ -63,8 +63,10 @@ namespace ApePatcher
         public double BandLo = 0.15;   // fraction of one engine, per event
         public double BandHi = 0.55;
 
-        // Crush time (depth-pressure-stress ticket 16): whole seconds a U-boat at
-        // full hull survives below crush depth. One value for every class.
+        // Crush time (depth-pressure-stress ticket 16): nominal whole seconds a U-boat
+        // at full hull survives below crush depth. One value for every class. Stock's
+        // crush damage is a hull-scaled ramp (ADR-0011), so real survival runs from
+        // ~1.3x this just past crush depth to ~0.3x at the rated crush depth.
         public const int CrushTimeMin = 1;
         public const int CrushTimeMax = 3600;
         public const int CrushTimeDefault = 5;

@@ -131,3 +131,8 @@ The owner has asked that the flat rate be assumed. The question is
 - **The in-play criterion** "both die in about that time" becomes: at full hull, a few
   metres past the onset, both last about 1.3·T; at the rated crush depth, about 0.3·T.
   At T = 5 s that is roughly 2–7 s.
+
+**Done (2026-11-25):** the tooltip (`ui/MainForm.cs`) and the Review's crush-time line
+(`Review.cs`) now call the time rough and give the "longer just past, a third at the
+rated crush depth" spread. `CrushTimeTests` checks the Review wording. The in-play
+criterion above is still open and still to be read as reworded.

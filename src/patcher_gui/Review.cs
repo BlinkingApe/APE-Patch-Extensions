@@ -104,8 +104,9 @@ namespace ApePatcher
             else
             {
                 g.Lines.Add(new ReviewLine("Below crush depth, a U-boat at full hull is crushed in "
-                    + "about " + Fmt.Int(d.CrushTime) + (d.CrushTime == 1 ? " second" : " seconds")
-                    + ", whatever its class.", false));
+                    + "roughly " + Fmt.Int(d.CrushTime) + (d.CrushTime == 1 ? " second" : " seconds")
+                    + ", whatever its class: a little longer just past crush depth, about a third "
+                    + "as long at its rated crush depth.", false));
                 foreach (ZonWrite w in plan.ZonWrites)
                     g.Lines.Add(new ReviewLine("Writes " + w.Boat.RelativePath + ": "
                         + Fmt.F1(w.Boat.Record.HitPoints) + " hull ÷ " + Fmt.Int(d.CrushTime)
