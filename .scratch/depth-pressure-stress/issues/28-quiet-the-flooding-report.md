@@ -1,7 +1,7 @@
 # 28: Quiet the "We have flooding, sir!" spam
 
 Type: grilling
-Status: needs-triage
+Status: needs-info
 Blocked by: none
 
 ## Parent
@@ -45,3 +45,46 @@ Real flooding (hits, collisions) must keep stock's report.
 Static look at the report routine: what decides when it speaks, whether it repeats on a
 timer or on a threshold crossing, and where its text comes from. Then ask the owner
 whether a data-level change is acceptable.
+
+## Static look (2026-11-25, OAE 1.5.2 `sh3.exe`)
+
+Disassembled the report routine around `0x00436BCB`–`0x00436F1A` (part of `0x435B30`).
+Per compartment, with `L` the flood level at `[[node+0x14]+0x1C]`:
+
+- **It is a latched threshold crossing, not a timer.** One latch byte per compartment per
+  band: `0 < L < 0.35` speaks string **592** ("We have flooding, sir!", latch
+  `+0x32B4`); `0.35 ≤ L < 0.60` speaks **593** (heavy, `+0x32C0`); `L ≥ 0.60` speaks
+  **594** (critical, `+0x32CC`). The text is looked up by id (`0x4CA800`, ids `0x250`–
+  `0x252`) from `en_menu.txt` lines 592–594.
+- **The latch re-arms when `L` is exactly 0** (`0x00436EED`: all three cleared), and the
+  lower band's latch re-arms when the level climbs into the next band.
+- **Likely cause of the repeat (inferred, not watched live):** the crew pumps only while
+  `0 < L < 0.99` and clamps to 0. Seepage under the pump rate drives `L` to exactly 0,
+  the latch re-arms, the next seep tick makes `L > 0`, and the report fires again. Each
+  pump-dry/seep-wet cycle is one "We have flooding, sir!".
+
+## Answers to the open questions
+
+- **ADR-0001:** replacing the text for APE's water only means changing the routine (a
+  hook) — ruled out by the ADR. A data change (`en_menu.txt` 592) is possible but changes
+  every flooding report, real ones included. So the requested tier 1/tier 2 wording and
+  "real flooding keeps stock's report" can't both be met without a hook.
+- **Quiet without replacing — possible without a hook.** APE writes the level, so it can
+  keep `L` from ever being exactly 0 while it is seeping (floor it at a tiny epsilon, such
+  as 1e-6, instead of letting the pump zero it). The latch then never re-arms: one
+  "We have flooding, sir!" per dive instead of one per cycle. Cost: the compartment never
+  reads fully dry while seeping (F7 shows a hair of water); on surfacing APE stops
+  flooring and the crew pumps it out, which re-arms the report normally. Real flooding is
+  untouched.
+- Telling APE's water from real water isn't needed for the floor variant: it only holds
+  while APE's seepage is active.
+
+## Decision for the owner
+
+1. Accept **floor-at-epsilon** (one stock report per dive, no custom wording)? Recommended.
+2. Or edit `en_menu.txt` 592 globally ("Water seeping through the stuffing box, sir!"),
+   accepting it appears for real flooding too? No tier-2 wording either way.
+3. Or reconsider a hook as a deliberate ADR-0001 exception? Not recommended.
+
+Not implemented: no code change made, awaiting the choice. The floor variant needs one
+in-play check (does the pump really clamp to 0, and does the report stop repeating).
