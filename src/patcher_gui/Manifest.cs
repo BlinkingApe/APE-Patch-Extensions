@@ -106,10 +106,37 @@ namespace ApePatcher
         }
     }
 
+    /// <summary>One magic-marked constants struct inside ape.act (ADR-0006): where
+    /// the build put it in the template, and where each float32 field sits in
+    /// it. Recorded by tools/re-static/gen_manifest.py from the built ape.act.</summary>
+    public class ApeActStruct
+    {
+        public string Id;
+        public int Offset;            // file offset of the struct in ape.act
+        public int Size;
+        public byte[] Magic;
+        public uint Version;
+        public readonly Dictionary<string, int> Fields =
+            new Dictionary<string, int>(StringComparer.Ordinal);
+
+        /// <summary>Where the fields start: after the marker and the u32 version.</summary>
+        public int FieldsStart { get { return Magic.Length + 4; } }
+
+        public int FieldAt(string id)
+        {
+            int at;
+            if (!Fields.TryGetValue(id, out at))
+                throw new PatchException("The manifest's ape.act struct " + Id
+                    + " has no field '" + id + "'.");
+            return at;
+        }
+    }
+
     public class Manifest
     {
         public const string HullPatchId = "hull-repair";
         public const string DieselPatchId = "diesel-damage";
+        public const string DepthStressStructId = "depth-stress";
 
         public int Schema;
         public int FlagTableOffset;
@@ -117,6 +144,10 @@ namespace ApePatcher
         public int VersionStringOffset;
         public int VersionStringLength;
         public List<Patch> Patches = new List<Patch>();
+
+        /// <summary>Depth stress's constants struct in ape.act; null when the
+        /// manifest records none.</summary>
+        public ApeActStruct DepthStressStruct;
 
         public Patch Patch(string id)
         {
@@ -177,7 +208,34 @@ namespace ApePatcher
                     patch.Sites.Add(ReadSite(Json.Obj(so)));
                 m.Patches.Add(patch);
             }
+
+            object apeAct = Json.Get(root, "apeAct");
+            if (apeAct != null)
+                foreach (object so in Json.Arr(Json.Get(Json.Obj(apeAct), "structs")))
+                {
+                    ApeActStruct st = ReadApeActStruct(Json.Obj(so));
+                    if (st.Id == DepthStressStructId) m.DepthStressStruct = st;
+                }
             return m;
+        }
+
+        static ApeActStruct ReadApeActStruct(Dictionary<string, object> s)
+        {
+            ApeActStruct st = new ApeActStruct();
+            st.Id = Json.Str(s, "id");
+            st.Offset = Json.Int(s, "offset");
+            st.Size = Json.Int(s, "size");
+            st.Magic = Hex.ToBytes(Json.Str(s, "magic"));
+            st.Version = (uint)Json.Int(s, "version");
+            foreach (object fo in Json.Arr(Json.Get(s, "fields")))
+            {
+                Dictionary<string, object> f = Json.Obj(fo);
+                if (Json.Str(f, "type") != "f32")
+                    throw new PatchException("The manifest's ape.act struct " + st.Id
+                        + " has a field that is not f32.");
+                st.Fields[Json.Str(f, "id")] = Json.Int(f, "at");
+            }
+            return st;
         }
 
         static Site ReadSite(Dictionary<string, object> s)

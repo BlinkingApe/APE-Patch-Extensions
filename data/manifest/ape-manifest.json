@@ -367,5 +367,62 @@
         }
       ]
     }
-  ]
+  ],
+  "apeAct": {
+    "store": "ape.act",
+    "template": "build/x86-release/ape.act",
+    "structs": [
+      {
+        "id": "depth-stress",
+        "offset": 34824,
+        "size": 40,
+        "magic": "4150454450544831",
+        "version": 2,
+        "fields": [
+          {
+            "id": "tier2_depth_m",
+            "at": 12,
+            "type": "f32",
+            "note": "metres"
+          },
+          {
+            "id": "flood_threshold",
+            "at": 16,
+            "type": "f32",
+            "note": "flooding threshold % / 100"
+          },
+          {
+            "id": "motor_damage_per_s",
+            "at": 20,
+            "type": "f32",
+            "note": "motor damage %/game-s / 100"
+          },
+          {
+            "id": "t1_seep_per_s",
+            "at": 24,
+            "type": "f32",
+            "note": "leakage %/min / 6000"
+          },
+          {
+            "id": "t1_hull_mult",
+            "at": 28,
+            "type": "f32",
+            "note": "multiplier"
+          },
+          {
+            "id": "t2_seep_per_s",
+            "at": 32,
+            "type": "f32",
+            "note": "leakage %/min / 6000"
+          },
+          {
+            "id": "t2_hull_mult",
+            "at": 36,
+            "type": "f32",
+            "note": "multiplier"
+          }
+        ]
+      }
+    ]
+  }
 }

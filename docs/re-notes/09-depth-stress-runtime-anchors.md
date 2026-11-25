@@ -1,0 +1,183 @@
+# RE note: the depth-stress runtime anchors (boat, depth, clock)
+
+Depth-pressure stress ticket 24, 2026-11-25. Static only. The PRD's three roots had
+proven static addresses but no recorded signature: the boat root `0x00554A88`, the
+depth root `0x006307BC` (`"sh3.exe"+0x2307BC`), and h.sie's clock mirror `0x0063FF80`.
+This note gives each one an AOB signature, the instruction it comes from, and the chain
+`ape.act` follows from it. The code is `src/ape_act/game_memory.cpp`.
+
+**Proven on:** OAE 1.5.2, `C:\games\OneAlex Extended 1.5.2\sh3.exe`, sha256
+`20360fe8398692172c7cc36e4337f1d5936ee9c9e0eac97e4c3214b2eb132561` (the build of
+`08-oae-port-of-depth-leads.md`), hashed at the start of the session.
+
+**Method.** Every instruction with an absolute memory operand (or a `push imm32`) naming
+each root was listed with `pefile` and `capstone`, across all three executable sections
+(`.text`, `.pcode`, and h.sie's second `.text` at `0x640000`). For each candidate, the
+bytes from the instruction onwards were grown with the root's four bytes wildcarded
+until the pattern matched once across all executable sections. A few bytes were then
+added as margin. `ape.act` runs the same scan in `src/core/aob.hpp`, and a throwaway
+x86 harness ran that header over the file and got the same single hits and roots.
+Scripts: session scratchpad, not kept.
+
+## Signatures
+
+The root's four bytes are always the only wildcard. They are wildcarded so the
+signature survives a relink that moves the variable. The address is then read from
+the match, at the offset given.
+
+| Root | Signature | Root at | Instruction (VA on `20360fe8`) | Stock? |
+|---|---|---|---|---|
+| Boat root `0x00554A88` | `89 0D ?? ?? ?? ?? 6A 58 89 5E 10 FF 15` | +2 | `mov [0x554A88],ecx; push 0x58; mov [esi+0x10],ebx; call [iat]` @`0x004BA972` | yes |
+| Depth root `0x006307BC` | `8B 3D ?? ?? ?? ?? 85 FF 74 15 8D 9B 00 00 00 00 8B 07` | +2 | `mov edi,[0x6307BC]; test edi,edi; je +0x15; lea ebx,[ebx+0]; mov eax,[edi]` @`0x0050EF70` | yes |
+| Clock `0x0063FF80` | `A3 ?? ?? ?? ?? 89 86 50 01 00 00 E9` | +1 | `mov [0x63FF80],eax; mov [esi+0x150],eax; jmp 0x4C211B` @`0x0051CFC7` | **no, h.sie's cave** |
+
+- **Boat root.** The PRD's note that "the only recorded reference to `0x554A88` is
+  h.sie's cave at `0x00633633`" is out of date: stock `.text` names it about 150 times,
+  almost all reads. The anchor chosen is stock's **store** of the root (a writer, so
+  it means "this is the variable", not "something reads it"). The `call [iat]`'s
+  operand is left out of the pattern.
+- **Depth root.** Eleven stock instructions name it. This one walks the list it heads
+  (`mov edi,[edi+4]` follows a few bytes later), which is consistent with the chain's
+  first `+0x4` link.
+- **Clock.** Nothing in stock code names `0x0063FF80`. The one reference is h.sie's cave
+  that replaces stock's clock store at `0x004C2115` (note 08 §3). The signature takes
+  in stock's `mov [esi+0x150],eax`, so it matches only where the mirror is written from
+  the same register as stock's clock. A bundle without that cave fails this anchor,
+  so every poll is skipped (fail inert), as the PRD asks.
+
+## Uniqueness, and other builds
+
+Each signature matched **exactly once across all executable sections**, and recovered
+the expected root, in all four binaries on hand:
+
+| Binary | sha256 (short) | Boat | Depth | Clock |
+|---|---|---|---|---|
+| OAE 1.5.2 (target) | `20360fe8` | 1 → `0x554A88` | 1 → `0x6307BC` | 1 → `0x63FF80` |
+| OAE 2.0 (TEST_2) | `0f1176b6` | 1, same | 1, same | 1, same |
+| GWC-KC 2.5 | `dc8bd5dc` | 1, same | 1, same | 1, same |
+| `data/exe_with_hsie_patches/sh3_vanilla.exe` | `ba59e4c8` | 1, same | 1, same | 1, same |
+
+The KC and OAE 2.0 rows only show the scan resolves. Nothing has been proven live
+there (PRD, Out of Scope).
+
+## Chains (from the PRD and note 08, unchanged)
+
+| Value | Chain from the root | Type |
+|---|---|---|
+| Gauge depth D | `[[[depth root]+0x4]+0x4]+0x54` | float, m |
+| Mission clock | `[clock]` | int32, game-s |
+| Boat | `[[[[[boat root]+0xC4]+0x2240]+0x24]+0x4C]`, the pointer itself being the identity | pointer |
+| Hull, max hull | boat `+0xB8`, `+0xB4` | float, HP |
+| Rated crush field CD | boat `+0xC0` | float, tens of m |
+| Crush speed CS | boat `+0xC4` | float, HP/s |
+
+The hull multiplier writes boat `+0xB8`, at the boat address read in the same poll.
+
+## Failure behaviour
+
+- **An anchor that doesn't resolve** (no match, or more than one) is logged once at loop
+  start, as `anchor '<name>' unresolved (<why>)`. Every poll then skips with "an anchor
+  did not resolve". The scan runs once, on `ape.act`'s own thread, never under the
+  loader lock.
+- **A null link or a failed read** (a pointer below `0x10000`, or `ReadProcessMemory`
+  failing) skips the poll with "depth chain unresolved", "clock unreadable", "boat chain
+  unresolved" or "boat fields unreadable".
+- **A failed plausibility gate** skips with the gate's reason. These are the step's
+  `implausible()` checks, covered by `tests/depth_stress_test.cpp`.
+
+Skips are logged when the reason changes. A reason that hasn't changed is logged again
+at most every 30 s, with a count.
+
+## Electric-engine anchors (ticket 26, 2026-11-25)
+
+Static only; the in-play check is ticket 27's test 3. The two AOBs recorded in
+`08-oae-port-of-depth-leads.md` §§1-2 are now scanned by `ape.act`, with the operand
+bytes wildcarded as above. Each matched exactly once, raw-file search, in OAE 1.5.2
+(`20360fe8`) and `sh3_vanilla.exe`, recovering the same operand.
+
+| Root | Signature | Value at +2 |
+|---|---|---|
+| Engine root | `89 35 ?? ?? ?? ?? 57 8D 7E 10` | `0x005543DC` |
+| Electric block offset | `8B 80 ?? ?? ?? ?? 8D 77 FC` | `0x37C` |
+
+Chain: `p = [[[root]+0x4]+off]`, then port = `[p+0]` and starboard = `[p+4]`, each the
+address of that engine's damage float (0 healthy, 1 destroyed). A sample needs both
+floats in [0, 1]; the offset must be in (0, 0x1000]. Any failure skips the poll with
+"engine chain unresolved". The writer stores the step's value at the address read in the
+same poll.
+
+## Seep-compartment anchors (ticket 25, 2026-11-25)
+
+Static only; the in-play check is ticket 27's test 2. Both operands are read from the
+crew-report routine's list loop (`0x0043601D` to `0x00436056`), the code that
+[ticket 10](../../.scratch/depth-pressure-stress/issues/10-sh3-flooding-model.md)
+anchored. Each pattern matched exactly once across all executable sections, raw-file
+search, in OAE 1.5.2 (`20360fe8`) and `sh3_vanilla.exe`, recovering the same operand.
+
+| Root | Signature | Value at +2 | Instruction (VA on `20360fe8`) |
+|---|---|---|---|
+| Zone-list head | `8B 3D ?? ?? ?? ?? 85 FF C7 44 24 40 00 00 00 00` | `0x005547D4` | `mov edi,[0x5547D4]` @`0x0043601D` |
+| Zone→compartment table | `8A 8D ?? ?? ?? ?? 80 F9 FF 89 6C 24 2C` | `0x00566898` | `mov cl,[ebp+0x566898]; cmp cl,0xFF` @`0x00436049` |
+
+The head's pattern is ticket 10's, with the operand wildcarded. The table is a run of
+signed bytes indexed by zone index; `0xFF` means "no compartment", and the routine only
+looks a zone up below index 200 (`cmp ebp,0xC8` @`0x436073`).
+
+Walk: `node = [head]`, then `node = [node+0x4]`. Zone state = `[node+0x14]`; zone index =
+`[[state+0x10]+0x8]`; compartment = `byte [table + zone]`; flood = float `state+0x1C`.
+The reader takes the first zone (list order) that maps to compartment 4, the electric
+engine room, on every class ([ADR-0012](../adr/0012-motor-damage-follows-the-water-in-the-motor-room.md),
+ticket 30). This supersedes ticket 19's "compartment 8, else 4": the motors sit in
+compartment 4 on every class, so seepage and the motors share one room, and that flood is
+what motor flooding damage reads (ticket 31). It never asks the boat's class; the pick is
+`depth_stress::pick_seep_zone`, tested at seam 1. The walk is bounded at 512 nodes.
+
+**No match is not a skip.** If no zone maps to 4, or the list is unreadable, the
+sample stands without seepage (`has_seep` false) and `ape_act.log` says
+`no seepage: <why>` when the reason changes. The hull multiplier carries on; motor
+flooding damage needs this flood, so it stops too. A
+flood read outside [0, 1] fails the plausibility gate like every other value, so it
+skips the poll.
+
+## Telegraph anchor (ticket 31, 2026-11-25)
+
+Static only; ticket 32 proves the read live (submerged, astern, save-load). Motor flooding
+damage ([ADR-0012](../adr/0012-motor-damage-follows-the-water-in-the-motor-room.md)) needs
+the ordered machine telegraph. h.sie's diesel cave copies it to `0x0063E1D4` once a
+second, before its enable-flag test, so it is kept whether or not Diesel Damage is on
+(`04-diesel-damage-signature.md` §2 and "a free, always-maintained telegraph anchor").
+Nothing in stock code names `0x63E1D4`. The anchor is the cave's own **store** of it.
+
+**Proven on:** OAE 1.5.2, `C:\games\OneAlex Extended 1.5.2\sh3.exe`, sha256
+`20360fe8398692172c7cc36e4337f1d5936ee9c9e0eac97e4c3214b2eb132561`, hashed this session.
+Same method as above (`pefile`, all executable sections, operand wildcarded).
+
+| Root | Signature | Root at | Instruction (VA on `20360fe8`) | Stock? |
+|---|---|---|---|---|
+| Telegraph `0x0063E1D4` | `8B 80 20 03 00 00 8B 00 89 05 ?? ?? ?? ??` | +10 | `mov eax,[eax+0x320]; mov eax,[eax]; mov [0x63E1D4],eax` @`0x00635065` (`.pcode`) | **no, h.sie's cave** |
+
+The store is `89 05 <imm32>`, not the one-byte `A3` form note 04's listing shorthands as
+"`a3 ->`". The `+0x320` is the engine object's telegraph slot, so the pattern also says
+"this is the telegraph". One match across all executable sections, recovering
+`0x0063E1D4`, in every binary on hand:
+
+| Binary | sha256 (short) | Telegraph |
+|---|---|---|
+| OAE 1.5.2 (target) | `20360fe8` | 1 → `0x63E1D4` |
+| OAE 2.0 (TEST_2) | `2525d418` | 1, same |
+| OAE 2.0 (TEST_3) | `bb453f40` | 1, same |
+| GWC-KC 2.5 | `b5fbcadb` | 1, same |
+| `data/exe_with_hsie_patches/sh3_vanilla.exe` | `ba59e4c8` | 1, same |
+
+(The OAE 2.0 TEST_2 and KC hashes differ from the ones in the table further up. Why was
+not looked into; the scan resolves on these files all the same.)
+
+Read: float `[0x63E1D4]`. 0.0 is stop, 1.0 flank ahead. Astern's encoding is not yet
+confirmed (ticket 32); any non-zero value counts as running. The reader's gate is
+`depth_stress::telegraph_plausible`: a finite value in [-1, 1].
+
+**Failure is not a skip.** An unreadable or implausible value leaves the sample standing
+with `has_telegraph` false: no motor damage that poll, everything else runs, and
+`ape_act.log` says `no motor damage: <why>` when the reason changes. Unlike the other
+anchors, an unresolved telegraph signature skips nothing either: it is logged once at loop
+start, and every poll runs without motor damage ("telegraph anchor unresolved").

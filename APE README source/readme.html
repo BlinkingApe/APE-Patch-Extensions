@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  @page content {
+    margin: 80px 60px 50px 60px;
+    @top-center {
+      content: element(pageheader);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", "DejaVu Sans", Arial, sans-serif;
+    color: #262626;
+    font-size: 11.5pt;
+    line-height: 1.55;
+  }
+
+  /* ---------- Title page ---------- */
+  .titlepage {
+    page: title;
+    width: 100%;
+    height: 297mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: #ffffff;
+    text-align: center;
+  }
+  .titlepage img.mascot {
+    display: block;
+    width: 150px;
+    margin: 0 auto 34px auto;
+  }
+  .titlepage .brand {
+    font-size: 30pt;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+  .titlepage .brand .ape {
+    color: #0058b0;
+  }
+  .titlepage .brand .rest {
+    color: #1a1a1a;
+  }
+  .titlepage .version {
+    margin-top: 10px;
+    font-size: 13pt;
+    color: #8a8a8a;
+    font-weight: 400;
+    letter-spacing: 1px;
+  }
+
+  /* ---------- Running page header (content pages) ---------- */
+  .pageheader {
+    position: running(pageheader);
+  }
+  .pageheader-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 60px;
+    background: #f2f3f5;
+    border-bottom: 1px solid #e2e3e6;
+    white-space: nowrap;
+  }
+  .pageheader-bar img {
+    width: 18px;
+    height: auto;
+    flex-shrink: 0;
+  }
+  .pageheader-bar span {
+    font-weight: 700;
+    font-size: 10.5pt;
+    color: #1a1a1a;
+    white-space: nowrap;
+  }
+  .pageheader-bar span .ape { color: #0058b0; }
+
+  /* ---------- Content page ---------- */
+  .content {
+    page: content;
+  }
+
+  h1.section {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #00437f;
+    margin: 30px 0 9px 0;
+    padding-bottom: 4px;
+    border-bottom: 1.5px solid #d8dce1;
+  }
+  h1.section:first-child {
+    margin-top: 0;
+  }
+
+  p {
+    margin: 0 0 13px 0;
+    color: #333333;
+  }
+
+  ul.changelog {
+    margin: 0 0 13px 0;
+    padding-left: 20px;
+    color: #333333;
+  }
+  ul.changelog li {
+    margin-bottom: 6px;
+  }
+
+  .shot {
+    display: block;
+    margin: 14px auto;
+    border: 1px solid #dfe1e4;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    background: #ffffff;
+  }
+
+  .shot-wide {
+    width: 100%;
+  }
+
+  .shot-caption {
+    text-align: center;
+    font-style: italic;
+    font-size: 9pt;
+    color: #8a8a8a;
+    margin: -6px 0 16px 0;
+  }
+
+  .mascot-divider {
+    display: block;
+    width: 60px;
+    margin: 12px auto;
+  }
+
+  p.callout {
+    margin: 4px 0 16px 0;
+    padding: 9px 14px;
+    border-left: 4px solid #00437f;
+    background: #eef3f9;
+    font-size: 13pt;
+    font-weight: 700;
+    color: #00437f;
+  }
+
+  strong.hl {
+    color: #1a1a1a;
+  }
+
+  code {
+    background: #f2f3f5;
+    border: 1px solid #e2e3e6;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: "Consolas", "DejaVu Sans Mono", monospace;
+    font-size: 10pt;
+    color: #00437f;
+  }
+</style>
+</head>
+<body>
+
+  <!-- TITLE PAGE -->
+  <div class="titlepage">
+    <img class="mascot" src="blinkingape.png">
+    <div class="brand"><span class="ape">APE</span> <span class="rest">Patch Extensions</span></div>
+    <div class="version">v1.14</div>
+  </div>
+
+  <!-- running header used on all content pages -->
+  <div class="pageheader">
+    <div class="pageheader-bar">
+      <img src="blinkingape.png">
+      <span><span class="ape">APE</span> Patch Extensions</span>
+    </div>
+  </div>
+
+  <!-- PAGE 1 -->
+  <div class="content">
+
+    <h1 class="section">Intro</h1>
+    <p>APE allows changing some of the hardcoded HSIE patches that I and others have found ahistorical (U-Tanker Mod and Diesel Damages Fix), and adds a new Depth Stress feature; more features may follow in future versions.</p>
+
+    <h1 class="section">Compatibility</h1>
+    <p>Tested in OAE and GWX-KC, should work for anything so long as hsie is installed.</p>
+
+    <img class="shot shot-wide" src="2.png">
+    <div class="shot-caption">If you're seeing "Install refused", you should install hsie</div>
+
+    <h1 class="section">Install</h1>
+    <p>Simply unpack the exe into your root game folder, alongside sh3.exe.</p>
+
+  </div>
+
+  <!-- PAGE 2 -->
+  <div class="content">
+
+    <h1 class="section">Usage</h1>
+    <p>For APE to edit an hsie patch, it must first be enabled using HsieOptionsSelector.</p>
+
+    <img class="shot shot-wide" src="5.png">
+    <div class="shot-caption">Uninstalled patched will appear greyed out in APE</div>
+
+    <p>With hsie patches enabled, you can check the boxes of whichever patch you would like to change.</p>
+
+    <p>Set the values to your preference &mdash; the effects of your choices are explained in the field "What will change". When you are done, click "Apply changes" in the bottom-right corner.</p>
+
+    <h1 class="section">Depth Stress</h1>
+    <p>Optional. Below 100 m (tier 1) a U-boat's electric engine room takes on water and hull damage is multiplied; below the tier-2 depth (default 150 m) both get worse. The crew pumps the water out, and a fresh crew keeps up. Every depth, rate and multiplier can be set in APE. APE installs its own <code>ape.act</code> module for this; unchecking Depth Stress removes it.</p>
+    <p class="callout">Disable &lsquo;Silent Running Fix&rsquo; from hsie/Stiebler Options!</p>
+    <p><strong class="hl">Motor flooding:</strong> once the electric engine room is flooded past the threshold (default 20 %), both electric motors take damage for as long as the engine telegraph is not at stop, at any depth and whatever flooded the room. Ordering <strong class="hl">all stop</strong>, or pumping the room back below the threshold, ends it. Damage never goes past the point where the crew can still repair it. The idea is Stoss's (M. Hamacher on YouTube): water in the motor room meant the motors had to be taken out of service. Five points below the threshold (15 % by default) the chief engineer warns you once: <em>&ldquo;Water in the motor room, sir! Pump it out or stop the motors!&rdquo;</em> The warning is English only and is off when Motor damage is 0.</p>
+    <p>In <strong class="hl">silent running</strong> (pumps off) a boat sitting deep will flood and slowly sink. This is intended: Stiebler's Silent-running Fix does the same, and Depth Stress replaces its depth-gauge workaround.</p>
+
+    <p><strong class="hl">Starboard motor in the bow quarters:</strong> OAE and other GWX-based installs put the starboard electric motor in the bow quarters in their damage model. When it is damaged, the damage screen shows the bow quarters damaged instead of the electric engine room, and only a repair team sent to the bow quarters repairs it. APE's optional <strong class="hl">Starboard motor zone fix</strong> puts the motor back in the electric engine room; it takes effect the next time you start SH3. Without it, send your repair team to the bow quarters.</p>
+
+    <h1 class="section">Crush Time</h1>
+    <p>Optional, and separate from Depth Stress. It rewrites every playable U-boat's crush speed from one setting (default 5 seconds). The time is nominal: it is the rough time a full-hull boat lasts below crush depth.</p>
+
+    <h1 class="section">Uninstall</h1>
+    <p>Simply uncheck the boxes in APE &mdash; all changes will revert back to hsie defaults.</p>
+
+    <h1 class="section">Special Thanks</h1>
+    <p><strong class="hl">Stoss (M. Hamacher on YouTube)</strong> shaped depth stress more than anyone else, generously giving his time to correcting my misconceptions. This module wouldn't have happened without his knowledge and insight, big thanks!</p>
+
+    <h1 class="section">Contact</h1>
+    <p>Feel free to DM me on Discord (BlinkingApe) with any questions, suggestions, or issues.</p>
+
+    <h1 class="section">Changelog</h1>
+    <ul class="changelog">
+      <li>v1.11 &mdash; now only checks for hsie compatibility</li>
+      <li>v1.12 &mdash; fixed rare bug where reversing would cause repeated damage</li>
+      <li>v1.13 &mdash; fixed diesel damage crash on Linux (Wine/Proton); if upgrading, click "Apply changes" once</li>
+      <li>v1.14 &mdash; new features:
+        <ul>
+          <li><strong>Depth Stress</strong>: below 100 m (and more below tier 2) the electric engine room takes on water and hull damage is multiplied; the crew pumps, and every depth, rate and multiplier is tunable</li>
+          <li><strong>Motor flooding damage</strong>: past the flooding threshold (default 20 %) the electric motors take damage until you order all stop or pump the room out, with a chief engineer warning at 15 %</li>
+          <li><strong>Crush Time</strong>: one crush-speed setting for every playable U-boat</li>
+          <li><strong>Starboard motor zone fix</strong>: optional, for OAE and other GWX-based installs</li>
+          <li>Depth Stress replaces Stiebler's Silent-running Fix depth-gauge workaround; no separate install step, APE deploys <code>ape.act</code> for you</li>
+        </ul>
+      </li>
+    </ul>
+
+  </div>
+
+</body>
+</html>

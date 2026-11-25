@@ -26,19 +26,23 @@ Stock's per-boat-class scale for hull damage below crush depth (the `CrashSpeed`
 The player's chosen nominal number of seconds a boat survives below crush depth from full hull. APE turns it into each U-boat class's crush speed (`Hit_Points ÷ crush time`), so every class crushes on the same scale. Nominal: just past crush depth a boat lasts somewhat longer, at its rated crush depth about a third as long. Not affected by the hull multiplier.
 
 **depth tier**:
-One of APE's absolute-depth bands of depth stress. Tier 1 runs from 100 m to the tier-2 depth; tier 2 from the player's tier-2 depth to crush depth. Each carries its own **hull multiplier**, **seepage** rate, and **electric-engine wear** (amount and rate). Crossing a boundary is a step change. Tier 3 (below crush depth, wherever damage has lifted it, even above tier 1 or 2) adds stock's crush damage, at the crush speed APE sets; seepage, wear and the hull multiplier carry on at tier-2 values, except that crush damage itself is never multiplied. See `.scratch/depth-pressure-stress/map.md`.
+One of APE's absolute-depth bands of depth stress. Tier 1 runs from 100 m to the tier-2 depth; tier 2 from the player's tier-2 depth to crush depth. Each carries its own **hull multiplier** and **seepage** rate. (**Motor flooding damage** is not tied to a tier.) Crossing a boundary is a step change. Tier 3 (below crush depth, wherever damage has lifted it, even above tier 1 or 2) adds stock's crush damage, at the crush speed APE sets; seepage and the hull multiplier carry on at tier-2 values, except that crush damage itself is never multiplied. See `.scratch/depth-pressure-stress/map.md`.
 _Avoid_: "damage window", "band" (terminology from the abandoned three-band, fraction-of-crush-depth model)
 
 **hull multiplier**:
 A depth tier's amplification of hull damage: APE notices hull HP fell by N since its last look and takes a further `(mult−1)·N`, whatever the cause — except crush damage below crush depth, which is never multiplied.
 
 **seepage**:
-Water APE adds to the sternmost compartment while the boat is in a depth tier, which the crew must pump out. Shown to players as "Leakage".
+Water APE adds to the electric engine room while the boat is in a depth tier, on every U-boat class, which the crew must pump out. Shown to players as "Leakage".
 _Avoid_: "leak rate", "flooding" (flooding is stock's own, from hull breaches)
 
-**electric-engine wear**:
-Damage APE adds to an electric engine while the boat is in a depth tier: a fixed amount per hit, at a tier's rate, never pushed past the point where the crew can still repair it.
-_Avoid_: "electrical engine damage" (damage is stock's, from hits)
+**motor flooding damage**:
+Damage APE adds to both electric engines, at a steady rate per game-second, while the water in their room is at or above the player's flooding threshold and the machine telegraph is not at stop, at any depth and whatever flooded the room. Never pushed past the point where the crew can still repair it. Ordering stop, or pumping the room below the threshold, ends it. Shown to players as "Motor damage".
+_Avoid_: "electrical engine damage" (damage is stock's, from hits); "electric-engine wear" (the superseded random-hit model)
+
+**flooding warning**:
+The chief engineer's message "Water in the motor room, sir! Pump it out or stop the motors!", spoken once when the electric engine room's water reaches 5 points below the player's flooding threshold (15 % by default) while the machine telegraph is not at stop. APE borrows stock's own flooding report for it and puts the original text back. Off when motor damage is 0. See ticket 35.
+_Avoid_: "alarm" (stock's "We have flooding, sir!" is the report it borrows)
 
 **AOB pattern scan** (array-of-bytes scan):
 Resolving an address at runtime by searching loaded process memory for a byte signature (with wildcards for bytes expected to vary), rather than trusting a fixed offset found once and hardcoded. `ape.act` uses it to anchor the pointer chains it follows to the live values it reads/writes (player boat, depth, hull HP, mission clock, and per-feature values like the diesel/electric-engine damage floats). Since stock sh3.exe never moves, the payoff is self-verification: a patch that shifts an anchor makes the scan miss, and APE fails inert rather than misreading.

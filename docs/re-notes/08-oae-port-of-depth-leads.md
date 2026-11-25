@@ -266,3 +266,95 @@ don't depend on class. Which compartment is "astern" does.
   These runs were driven step by step (`harness.drive`) with throwaway probe scripts
   in the harness's `work/` folder.
 - **Never seen on a VIIC**, because of the IIA substitution.
+
+## 8. Ticket 14 (narrowed): the three writes hold below crush depth
+
+2026-11-25, same lab and hashes as §7 (lab and owner `sh3.exe` both `20360fe8…`,
+checked before the run). Mission "0 Lab Crush Depth" (spawns at 200 m). The boat was a
+**Type IIA** again (§7): hull 400, `+0xC0` 25.1, `+0xC4` 0.8. Its crush onset at full hull
+is ~174 m, so the boat sat **below crush depth with stock's crush writer running** (cause 4
+throughout) for the whole run. Probe: `work/oae_below_crush.py`; rows:
+`work/oae-below-crush.json`; F7 shot: `work/drive/20261125T082855Z/t14-f7-ape.png`
+(all in the sh3-crush-pressure repo).
+
+A Frida **APE stand-in**, one poll per wall-second, ran at values stock can't produce. Three
+phases:
+
+| Phase | Game-s | Stand-in | Hull loss, HP/game-s | Stock ramp predicted (§5, ref. point gauge −2.6 m) |
+|---|---|---|---|---|
+| base | 20 | off | 0.266 | 0.258 |
+| ape | 61 | ×2 amplify, seep +0.005/s, port wear +0.01/s, stb := 0.9 | **0.812** | 0.411 |
+| after | 60 | off | 0.859 | 0.849 |
+
+- **Hull, poll-and-amplify on top of crush: holds.** In the stand-in phase the boat lost
+  49.5 HP: 24.4 to stock and 25.1 to APE's writes. That is ×1.97 the stock ramp at the same
+  hull and depth. None of the 59 writes was reverted (hull never rose after a write). With
+  the stand-in off, loss went back to the stock prediction within 1 %. (Crush damage is
+  *exempt* from the real multiplier, ADR-0011. It was amplified here only because it was
+  the one damage source on hand. The question was whether a write sticks on top of the
+  crush writer, not the exemption.)
+- **Stern water (IIA: compartment 4, zone 30, ticket 19's rule): holds and accumulates.**
+  Net rise was 0.00175 flood/game-s, which is the seep 0.005 minus the pump ~0.0033 (ticket 10
+  measured 0.00326). The peak was 0.112. F7 / CE reported "We have flooding, sir!". With
+  the stand-in off the crew pumped it out, to 0 within the phase (0.00186/game-s
+  averaged over the phase, which includes the time spent at 0). Nothing
+  reset it: only the stock pump removes water.
+- **Electric engines: hold.** Starboard was written to the 0.9 ceiling and stayed at exactly 0.9
+  through both later phases. That's 120 game-s, and the crew repairs one engine at a time
+  (§7.2). Port wear rose at the written 0.01/game-s to 0.604 (the clamp wasn't reached in
+  60 s). F7 reported "Port Electric Engine damaged, sir!" and showed damage gears on the
+  station. Once the stand-in stopped, the crew repaired port at **5.46e-5/game-s** (§7.2:
+  5.43e-5).
+- The boat sank 200 → 208 m with the water aboard. The onset rose from 174 m to 129 m as
+  hull fell. No abort was needed (hull ended at 73 %).
+
+**After the run:** the game was stopped by the drive server, and the session window
+closed and restored `Documents\SH3`. The owner's install `sh3.exe` was re-hashed
+unchanged (`20360fe8…`). The lab ledger is unchanged (no new lab changes). Nothing was
+ever written to the owner's install.
+
+## 9. Ticket 32: h.sie's telegraph copy `[0x63E1D4]`, live
+
+2026-11-25, same lab, hashes and ledger as §7–§8 (both `sh3.exe` `20360fe8…`, checked
+before and after). Mission "0 Lab Deep Water", 30 m start; the boat was a Type IIA again.
+A Frida logger attached at the main menu sampled five times a wall-second: the copy
+`[0x63E1D4]`, the cave's previous-second copy `[0x63E1D8]`, and the source the cave
+reads, `[[[[0x5543DC]+4]+0x320]]`, read straight. The orders were keys `1`–`9` and
+`All_stop`, sent through `harness.drive`. Probes and rows are in the sh3-crush-pressure
+repo: `work/oae_telegraph_{log,seq,summ}.py`, `work/oae-telegraph.jsonl`.
+
+- **Ticket 31's signature resolves once**, at `0x00635065`, to the store into `0x63E1D4`.
+- **The copy tracks submerged, on electric.** It changed with every order and always
+  equalled the source, one refresh (~1 s) or less behind. So the diesel cave runs
+  whatever the propulsion. (The first sequence's stop orders never reached the game, see
+  the trap below. Stop was then ordered from ahead flank, back emergency and ahead slow.)
+- **The encoding:**
+
+  | Order | Value |
+  |---|---|
+  | Stop | `0x00000000`, +0.0 |
+  | Ahead slow, one third, standard, full, flank | 0.40, 0.57, 0.80, 0.94, 1.0 |
+  | Back slow, standard, full, emergency | −0.26, −0.40, −0.53, −0.66 |
+
+  Astern is a plain negative float. These are the IIA's `[EngineProperties]` steps; stop
+  and the sign are the engine's.
+- **Surfaced:** the same values and the same tracking. Stop was ordered from ahead flank
+  and from back slow.
+- **Lag:** from key to source, 3.2–3.5 s for ahead and astern orders and 2.9–3.0 s for
+  stop (the crew's acknowledgement). The copy follows within about a second.
+- **Save-load:** saved at back standard (−0.40), set ahead flank, abandoned, loaded. In
+  the menus the copy kept the stale 1.0 (the source was gone). It dropped to 0 as loading
+  began, and read −0.40 one second after the clock resumed. For that second it read 0
+  while the source already read −0.40. After the load it tracked as before.
+
+**For APE:** ticket 31's gate needs nothing. Stop is exactly 0.0, astern is non-zero and
+inside [-1, 1]. The one-second 0 after a load reads as stop, so it costs at most one
+second of motor flooding damage, never adds any. The stale value in the menus never reaches the
+step, which needs a resolved boat.
+
+**For note 04 §6:** reverse is a negative-signed float. The v1.12 reverse-telegraph gate
+(a sign-bit test at `0x635111`) should therefore divert every astern order, not be a
+no-op. That is inferred from the encoding; the gate itself wasn't watched.
+
+**Lab trap:** on this UK keyboard layout the harness's `backquote` (scan 0x29) isn't
+`All_stop`. Its VK 0xC0 is scan 0x27 here.

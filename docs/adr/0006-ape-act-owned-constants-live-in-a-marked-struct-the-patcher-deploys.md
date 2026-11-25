@@ -1,6 +1,18 @@
 # ape.act-owned constants live in a marked struct inside a patcher-deployed ape.act, not a config file
 
-> **Status note (2026-08-17): unimplemented, deferred to crush-depth damage.** The beta
+> **Status note (2026-11-25): the `ape.act` half is implemented, for depth stress**
+> (`.scratch/depth-pressure-stress/`, ticket 21). Crush-depth damage was dropped (ADR-0008);
+> depth stress is the first mod with a struct. `ape.act` carries it in `.data`
+> (`src/mods/depth_stress/constants.hpp`, marker `APEDPTH1`, version 2 since ticket 31 (40 bytes; version 1 was 48), float32
+> fields in runtime units), verifies it at startup and fails inert on a mismatch. A Release
+> build records the struct's file offset and field layout under the manifest's `apeAct` key.
+> The patcher half (embed, deploy, read-back, delete on revert) is implemented too (ticket 22):
+> `src/patcher_gui/ApeAct.cs` and the `ape.act` store in `PatchSession`; `build.cmd` embeds
+> `build/x86-release/ape.act` and refuses to build without it. The
+> `config.{hpp,cpp}` and `tools/config_check` code the note below mentions was deleted with
+> the band model (ticket 15).
+>
+> **Earlier status note (2026-08-17): unimplemented, deferred to crush-depth damage.** The beta
 > patcher (`src/patcher_gui/`, commit `9165c5b`) implements none of this — no embedded
 > `ape.act` template, no marked struct, no deploy-on-enable or delete-on-revert. That is
 > intentional: this ADR exists to solve how APE-owned constants reach a *running* `ape.act`,

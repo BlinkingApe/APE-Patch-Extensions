@@ -10,6 +10,7 @@ Two modes:
 
     python gen_manifest.py                 write data/manifest/ape-manifest.json
     python gen_manifest.py --check         fail if the checked-in file has drifted
+    python gen_manifest.py --ape-act PATH  measure ape.act offsets from PATH
 
 `--check` is the build-time stale-manifest guard from ticket 08.  The C# build
 runs it before compiling and fails on any difference.
@@ -24,11 +25,35 @@ import argparse
 import hashlib
 import json
 import os
+import struct
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "data", "manifest", "ape-manifest.json")
 REF_DIR = os.path.join(ROOT, "data", "exe_with_hsie_patches")
+
+# The ape.act the patcher embeds as its template (ADR-0006): the release build.
+# Its struct offsets are measured from this file, so the patcher must embed
+# exactly this build. A Release build re-runs this script on itself
+# (CMakeLists.txt), so the manifest follows the binary.
+APE_ACT_TEMPLATE = "build/x86-release/ape.act"
+
+# Depth stress's constants struct (src/mods/depth_stress/constants.hpp). The
+# layout here is the contract with that header: change the two together, and
+# bump the version.
+DEPTH_STRESS_MAGIC = b"APEDPTH1"
+DEPTH_STRESS_VERSION = 2  # 2: motor flooding damage replaced wear (ticket 31)
+DEPTH_STRESS_FIELDS = [
+    # (name, offset in the struct, what the patcher writes there)
+    ("tier2_depth_m", 12, "metres"),
+    ("flood_threshold", 16, "flooding threshold % / 100"),
+    ("motor_damage_per_s", 20, "motor damage %/game-s / 100"),
+    ("t1_seep_per_s", 24, "leakage %/min / 6000"),
+    ("t1_hull_mult", 28, "multiplier"),
+    ("t2_seep_per_s", 32, "leakage %/min / 6000"),
+    ("t2_hull_mult", 36, "multiplier"),
+]
+DEPTH_STRESS_SIZE = 40
 
 # h.sie appends .pcode at VA 0x633000 / raw 0x145000 and .pconst at VA 0x63C000 /
 # raw 0x14E000 -- the same delta for both (docs/re-notes/03, sec.1).
@@ -189,7 +214,91 @@ def menu_site(sid, key, original, ape, note=None):
     return site
 
 
-def build():
+def pe32_sections(blob):
+    """(name, raw offset, raw size) per section of a PE32/x86 image.
+
+    Raises ValueError if the file isn't one: ape.act must be PE32 (x86), since
+    OAE's sh3.exe is 32-bit.
+    """
+    if blob[:2] != b"MZ":
+        raise ValueError("not a PE file (no MZ header)")
+    pe = struct.unpack_from("<I", blob, 0x3C)[0]
+    if blob[pe:pe + 4] != b"PE\0\0":
+        raise ValueError("not a PE file (no PE signature)")
+    machine, nsec = struct.unpack_from("<HH", blob, pe + 4)
+    opt_size = struct.unpack_from("<H", blob, pe + 20)[0]
+    magic = struct.unpack_from("<H", blob, pe + 24)[0]
+    if machine != 0x14C or magic != 0x10B:
+        raise ValueError("not PE32/x86 (machine 0x%X, optional header 0x%X)"
+                         % (machine, magic))
+    sections = []
+    at = pe + 24 + opt_size
+    for i in range(nsec):
+        name = blob[at:at + 8].rstrip(b"\0").decode("ascii", "replace")
+        raw_size, raw_ptr = struct.unpack_from("<II", blob, at + 16)
+        sections.append((name, raw_ptr, raw_size))
+        at += 40
+    return sections
+
+
+def locate_depth_stress(blob):
+    """File offset of the depth-stress constants struct in a built ape.act.
+
+    The marker and version together must occur exactly once, inside .data:
+    the bare marker also appears in .rdata, where verify()'s compare keeps
+    its copy, so the marker alone is not enough.
+    """
+    sections = pe32_sections(blob)
+    head = DEPTH_STRESS_MAGIC + struct.pack("<I", DEPTH_STRESS_VERSION)
+    hits = []
+    at = blob.find(head)
+    while at != -1:
+        hits.append(at)
+        at = blob.find(head, at + 1)
+    if len(hits) != 1:
+        raise ValueError("depth-stress marker+version found %d times, want 1"
+                         % len(hits))
+    at = hits[0]
+    for name, ptr, size in sections:
+        if name == ".data" and ptr <= at and at + DEPTH_STRESS_SIZE <= ptr + size:
+            return at
+    raise ValueError("depth-stress struct at 0x%X is not inside .data" % at)
+
+
+def ape_act_block(path, previous):
+    """The manifest's ape.act store: where each constants struct sits.
+
+    With the template built, the offset is measured from it. Without it, only
+    the previously recorded offset is carried over (with a warning), so the
+    sh3.exe half of the manifest can still be regenerated and checked; the
+    rest of the block is still rebuilt from this file, so a layout change here
+    still shows up as drift.
+    """
+    if os.path.exists(path):
+        offset = locate_depth_stress(open(path, "rb").read())
+    elif previous is not None:
+        print("manifest: %s not built; reusing the recorded ape.act offset, "
+              "unmeasured" % path, file=sys.stderr)
+        offset = previous["structs"][0]["offset"]
+    else:
+        raise ValueError("%s not built and no ape.act offsets recorded; build "
+                         "the x86-release preset first" % path)
+    return {
+        "store": "ape.act",
+        "template": APE_ACT_TEMPLATE,
+        "structs": [{
+            "id": "depth-stress",
+            "offset": offset,
+            "size": DEPTH_STRESS_SIZE,
+            "magic": DEPTH_STRESS_MAGIC.hex(),
+            "version": DEPTH_STRESS_VERSION,
+            "fields": [{"id": n, "at": a, "type": "f32", "note": note}
+                       for n, a, note in DEPTH_STRESS_FIELDS],
+        }],
+    }
+
+
+def build(ape_act):
     hull = {
         "id": "hull-repair",
         "name": "Hull repair at sea",
@@ -396,6 +505,7 @@ def build():
         "versionStringLength": 7,
         "clobberedAddresses": ["0x%06X" % a for a in CLOBBERED],
         "patches": [hull, diesel],
+        "apeAct": ape_act,
     }
 
 
@@ -437,6 +547,13 @@ def verify_against_reference(manifest):
 
 def check_invariants(manifest):
     problems = []
+    for s in manifest["apeAct"]["structs"]:
+        head = len(bytes.fromhex(s["magic"])) + 4   # marker, then u32 version
+        for f in s["fields"]:
+            if f["at"] < head or f["at"] + 4 > s["size"]:
+                problems.append("ape.act struct %s: field %s at %d is outside "
+                                "the %d-byte struct's fields"
+                                % (s["id"], f["id"], f["at"], s["size"]))
     clobber = set(int(a, 16) for a in manifest["clobberedAddresses"])
     for patch in manifest["patches"]:
         for site in patch["sites"]:
@@ -480,9 +597,21 @@ def main():
     ap.add_argument("--check", action="store_true",
                     help="fail if the checked-in manifest differs from this "
                          "generator's output")
+    ap.add_argument("--ape-act", default=os.path.join(ROOT, APE_ACT_TEMPLATE),
+                    help="the built ape.act template to measure struct "
+                         "offsets from (default: %s)" % APE_ACT_TEMPLATE)
     args = ap.parse_args()
 
-    manifest = build()
+    previous = None
+    if os.path.exists(OUT):
+        previous = json.load(open(OUT, "r", encoding="utf-8")).get("apeAct")
+    try:
+        ape_act = ape_act_block(args.ape_act, previous)
+    except ValueError as e:
+        print("manifest: ape.act: %s" % e, file=sys.stderr)
+        return 2
+
+    manifest = build(ape_act)
 
     problems = check_invariants(manifest) + verify_against_reference(manifest)
     if problems:

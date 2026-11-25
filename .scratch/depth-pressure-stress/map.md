@@ -201,6 +201,31 @@ write target is unlocated is not specified.
     conflicts with the owner's in-game experience and ADR-0010's basis. Settled by
     ticket `20` in favour of the ramp (ADR-0011).
 
+- **Destination reached 2026-11-25.** `PRD.md` was rewritten in place for the tier
+  model (`ready-for-agent`). No wayfinder tickets remain open. The next step is to
+  split the PRD into implementation issues. The `ape.act` load call site is a hard
+  prerequisite that the umbrella map owns. *(2026-11-25: not needed after all. Stock
+  `sh3.exe` loads every `*.act` in the game folder; see ADR-0002's note. Ticket 02 closed.)*
+
+- **Grilling 2026-11-25: Stoss's feedback** (ADR-0012, `CONTEXT.md`, PRD amended).
+  Leakage defaults halved to 2 / 7.5 %/min. Seepage moves to compartment 4, the electric
+  engine room, on every class (supersedes ticket 19's rule). **Motor flooding damage**
+  replaces random electric-engine wear: while that room's flood is at or above a
+  threshold (default 30 %) and the ordered telegraph isn't at stop, both motors take a
+  fixed % per game-second (default 10, provisional), capped at 0.9, at any depth and
+  whatever flooded the room. Ordering stop is "putting the motors out of service". The
+  wear-rate fields go; one threshold and one amount field come in, not per tier. New
+  tickets `30` (seep compartment and defaults), `31` (motor flooding damage, supersedes
+  `26`), `32` (HITL: the telegraph read `[0x63E1D4]` on OAE while submerged).
+
+- **Stoss, second note (2026-11-25):** "at 15 % flooding, a warning message to pump or
+  shut down the motors; at 20 % damage, rapid catastrophic damage." The flooding threshold
+  default is now **20 %**; motor damage stays at **10 %/game-s**, which the owner accepts as
+  rapid and catastrophic. Both are no longer provisional. The 15 % warning is ticket `34`:
+  a static look found the stock flooding report's string table is static (`0x566058`), so a
+  memory-only route (point string 592 at APE's text, re-arm the latch) fits ADR-0001. The
+  latch's object root is not located yet.
+
 ## Decisions so far
 
 <!-- charted 2026-08-16; the model above was settled in the charting session's
@@ -217,6 +242,15 @@ write target is unlocated is not specified.
 
 - [Which compartment seeps on U-boats with no stern torpedo room (II, XXI)?](issues/19-astern-compartment-without-stern-room.md) — compartment 8 if the boat has one, else 4 (electric engine room), chosen at run time from the zone→compartment table, no class lookup; on II/XXI the water also cuts electric power, accepted.
 - [Crush damage measured as a hull-scaled ramp on OAE: does ADR-0010's crush time and exemption still hold?](issues/20-crush-rate-ramp-vs-adr-0010.md) — the ramp governs (ADR-0011): crush depth = live onset `0.7·E`, `.zon` value = rated crush depth; crush time nominal (~1.3·T to ~0.3·T), patch unchanged, tooltip reworded; exemption = ramp share at gauge depth.
+- [Tuning: what the tier boundaries, multiplier, seep rate and wear chance actually are](issues/12-tier-tuning-numbers.md) — defaults T1/T2: leakage 4 / 15 %/min, wear 7.5 / 22.5 % every 200 / 130 min, multiplier 1.25 / 1.5; tier-2 150 m, crush 5 s; neutral value = off, no cross-field checks; a fresh crew holds tier-2 leakage and wear never outpaces repair, by intent; 32-bit RNG per game-second is a PRD constraint. Owner may retune after testing.
+- [Black-box proof: do APE's depth effects take effect in play?](issues/14-blackbox-proof-in-play.md) — narrowed by the owner: targets already proven by `09`/`10`/`11`/`17`; one OAE-lab stand-in run showed hull ×2 amplify (×1.97 measured), stern seep and engine wear all hold **below crush depth** with stock crush running; by-construction claims (ceiling, tier-1 cut-off, depth-charge multiplier, save-load) become five PRD acceptance tests listed in the ticket. Owner's install untouched.
+- [Crush-time patch: write each U-boat's CrashSpeed from one player-chosen crush time](issues/16-crush-time-patch.md) — built and committed in the GUI patcher: a new `.zon` site kind, discovery by ticket 18's rule, `.ape-orig` revert, drift detection, and a "nominal" tooltip per ADR-0011. Whole-second T, 1–3600, default 5. The in-play timing run was **waived by the owner** for time; its checklist stays in the ticket as a smoke test.
+- [Seepage sinks the boat when the crew isn't pumping (silent running)](issues/29-seepage-sinks-the-boat-in-silent-running.md) — resolved by design (owner): Stiebler's Silent-running Fix was built to make a pump-less boat flood and sink at depth, and APE's flooding model replaces its kludge. Seep ceiling stays 0.8, no seepage cut-off, no patcher switch.
+- [Does `[0x63E1D4]` track the ordered telegraph on OAE while submerged?](issues/32-telegraph-read-on-oae.md) — yes, live on OAE: submerged, surfaced and after a load; stop is exactly 0.0, astern −0.26…−0.66 (IIA), so ticket 31's gate stands unchanged.
+
+- [Stoss's feedback: halve leakage, motor damage from flooding](../../docs/adr/0012-motor-damage-follows-the-water-in-the-motor-room.md) — leakage 2 / 7.5; seepage into compartment 4 on every class; motor flooding damage (threshold 30 %, 10 %/s provisional, telegraph ≠ stop, any depth, cap 0.9) replaces wear; tickets 30–32 open.
+
+- [Motor-room flooding warning: how, when, what text?](issues/34-motor-room-flooding-warning.md) — borrow the stock report (swap the band string pointer, clear compartment 4's latch, restore); telegraph ≠ stop, any water, threshold − 5 points, once per crossing (5-point hysteresis), off with damage amount 0; build is ticket `35`.
 
 ## Not yet specified
 
@@ -224,14 +258,10 @@ write target is unlocated is not specified.
   is inherently runtime, so this feature requires `ape.act` — which the umbrella map
   deferred *whole* from patcher v1 (ticket 07), precisely because crush-depth was
   blocked on dynamic hunts. It also re-raises the umbrella's open question of whether
-  `sh3.exe`'s `LoadLibrary` call site tolerates a missing file. Not a ticket here:
+  `sh3.exe`'s `LoadLibrary` call site tolerates a missing file *(moot: the stock `*.act`
+  loader only loads files that exist; ADR-0002's 2026-11-25 note)*. Not a ticket here:
   that is the umbrella map's decision to make, not this one's, and it is unblocked by
   this map's resolutions rather than blocking them.
-- **Is pumping while still deep a losing battle by design?** Continuous seepage means
-  a crew pumping at 150m may never win until the boat ascends. That may be exactly
-  the intended drama or may be miserable in play; it cannot be judged before the seep
-  rate is a real number against real pump rates. Tuning, not mechanism — expected to
-  be absorbed by ticket 12 or by play.
 - **Whether depth wear should extend past the electric engines.** One system was
   chosen to keep the RE bill to one unmapped value, with expansion left open. The
   historian's list (cooling water, thrust bearings, motor bearings) plausibly reaches
@@ -244,9 +274,9 @@ write target is unlocated is not specified.
   someone tries it live.
 - **How the tier constants reach `ape.act`.** ADR-0006 already decides the mechanism
   (a magic-marked struct in `ape.act`'s own `.data`, written by the C# patcher at a
-  build-recorded offset), so this is not an open decision — but the specific field
-  list, ranges, and defaults for this feature's manifest sites are unwritten and
-  follow ticket 12's numbers.
+  build-recorded offset), so this is not an open decision. The field list, ranges and
+  defaults are now fixed by ticket 12's answer; only the manifest-site layout is
+  unwritten, which is implementation detail for the PRD rather than a decision.
 
 ## Out of scope
 
@@ -255,7 +285,9 @@ write target is unlocated is not specified.
   model hands tier 3 back to stock entirely and never reads CDT. Re-opening this
   would be redrawing the destination, not advancing toward it.
 - **Amplifying anything but hull HP.** Compartment damage, equipment damage and
-  flooding caused by depth charges stay at stock magnitude. APE's own seep and wear
+  flooding caused by depth charges stay at stock magnitude. *(Redrawn by ADR-0012: motor
+  flooding damage adds to the consequences of any water in the motor room, stock breach
+  flooding included. It is a new effect, not an amplification of stock's.)* APE's own seep and wear
   effects cover that ground instead. Scaling everything a hit produces would mean
   mapping every damage float the engine writes — open-ended RE with no known anchor.
 - **JSGME packaging and per-unit data edits.** *(Per-unit edits revived by ADR-0010 for `CrashSpeed` only, through the patcher, not JSGME; ticket `16`.)* Ruled out by the umbrella map

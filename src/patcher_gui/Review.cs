@@ -11,6 +11,7 @@
 // It lives in the core rather than the form for the same reason the arithmetic
 // does: it is the part worth testing, and the WinForms layer only lays it out.
 
+using System;
 using System.Collections.Generic;
 
 namespace ApePatcher
@@ -65,12 +66,36 @@ namespace ApePatcher
             if (plan.Touches(Manifest.HullPatchId)) r.Groups.Add(Hull(desired));
             if (plan.Touches(Manifest.DieselPatchId)) r.Groups.Add(Diesel(desired));
             if (plan.Touches(CrushTime.PatchId)) r.Groups.Add(Crush(install, plan, desired));
+            if (plan.Touches(MotorZoneFix.PatchId)) r.Groups.Add(MotorZone(desired));
+            if (plan.Touches(DepthStress.PatchId)) r.Groups.Add(Depth(plan, desired));
             r.FeatureCount = r.Groups.Count;
 
             if (r.Groups.Count == 0)
                 r.NothingText = "Nothing. Every feature is left exactly as this install "
                     + "already has it.";
             return r;
+        }
+
+        /// <summary>The starboard motor zone fix (ticket 33), in what the player
+        /// sees on the damage screen.</summary>
+        static ReviewGroup MotorZone(PatchState d)
+        {
+            ReviewGroup g = new ReviewGroup();
+            g.Title = MotorZoneFix.PatchName;
+            if (d.MotorZoneFixApplied)
+            {
+                g.Lines.Add(new ReviewLine("The starboard electric motor moves back into the electric "
+                    + "engine room: its damage shows there, and a repair team sent there repairs it.", false));
+                g.Lines.Add(new ReviewLine("Hits in the bow quarters no longer damage it.", false));
+            }
+            else
+            {
+                g.Lines.Add(new ReviewLine("The starboard electric motor goes back to the bow quarters, "
+                    + "as this install shipped: its damage shows there, and only a repair team sent "
+                    + "there repairs it.", false));
+            }
+            g.Lines.Add(new ReviewLine("Takes effect the next time you start SH3.", false));
+            return g;
         }
 
         /// <summary>Why a class the crush-time patch will not touch is left alone,
@@ -123,6 +148,79 @@ namespace ApePatcher
             g.Lines.Add(new ReviewLine("The game reads this when a mission loads, so it takes "
                 + "effect from the next mission you start or load.", false));
             return g;
+        }
+
+        /// <summary>Depth stress, in game terms: where the tiers begin and what each
+        /// does. An effect at its neutral value is said to be off (ticket 23).</summary>
+        static ReviewGroup Depth(WritePlan plan, PatchState d)
+        {
+            ReviewGroup g = new ReviewGroup();
+            g.Title = DepthStress.PatchName;
+
+            if (!d.DepthApplied)
+            {
+                g.Lines.Add(new ReviewLine("Depth stress is taken out. Deep water costs a boat "
+                    + "nothing until it reaches crush depth, as stock has it.", false));
+                g.Lines.Add(new ReviewLine(DepthStress.LaunchNote, false));
+                return g;
+            }
+
+            if (plan.ApeAct != null && plan.ApeAct.Refusal != null)
+                g.Lines.Add(new ReviewLine("APE cannot set depth stress up from this build, so Apply will refuse.", true));
+
+            string t2 = Fmt.Int((int)Math.Round(d.Tier2Depth)) + " m";
+            g.Lines.Add(new ReviewLine("Above 100 m nothing changes. Tier 1 runs from 100 m to "
+                + t2 + ", and tier 2 from " + t2 + " down.", false));
+            g.Lines.Add(new ReviewLine("Tier 1: " + Tier(d.HullMult1, d.Leakage1), false));
+            g.Lines.Add(new ReviewLine("Tier 2: " + Tier(d.HullMult2, d.Leakage2), false));
+            g.Lines.Add(new ReviewLine("Below crush depth (tier 3) all of it carries on at tier 2's "
+                + "values. A class whose crush depth is shallower than " + t2 + " goes straight "
+                + "from tier 1 to tier 3.", false));
+            g.Lines.Add(new ReviewLine("Crush damage itself is never multiplied. Coming up above "
+                + "100 m stops the leakage; water already in the boat stays until the crew "
+                + "pumps it.", false));
+
+            if (d.Leakage1 > 0 || d.Leakage2 > 0)
+                g.Lines.Add(new ReviewLine("Leakage fills the electric engine room, and never past "
+                    + "80% full. The electric engine room must be crewed for its water to be "
+                    + "pumped.", false));
+            g.Lines.Add(new ReviewLine(Motor(d), false));
+            if (d.MotorDamage > 0)
+                g.Lines.Add(new ReviewLine("Ordering stop protects the motors. Motor damage never "
+                    + "takes a motor past 90%, so the crew can always repair it.", false));
+            if (NeutralTier(d.HullMult1, d.Leakage1) && NeutralTier(d.HullMult2, d.Leakage2)
+                && d.MotorDamage <= 0)
+                g.Lines.Add(new ReviewLine("Every effect is at its neutral value, so depth stress "
+                    + "will do nothing.", true));
+            g.Lines.Add(new ReviewLine(DepthStress.LaunchNote, false));
+            return g;
+        }
+
+        static bool NeutralTier(double mult, double leak)
+        {
+            return mult <= 1.0 && leak <= 0;
+        }
+
+        /// <summary>Motor flooding damage (ticket 31, ADR-0012): one threshold
+        /// and one amount, at any depth, not per tier.</summary>
+        static string Motor(PatchState d)
+        {
+            if (d.MotorDamage <= 0) return "Motor damage off (0).";
+            return "Motor damage, at any depth: while the electric engine room is at least "
+                + Fmt.F1(d.FloodThreshold) + "% flooded and the motors are ordered to run "
+                + "(ahead or astern), each electric motor loses " + Fmt.F1(d.MotorDamage)
+                + "% of its health per game-second.";
+        }
+
+        static string Tier(double mult, double leak)
+        {
+            string hull = mult > 1.0
+                ? "hull damage is multiplied by " + Fmt.F2(mult)
+                : "hull multiplier off (1.0)";
+            string seep = leak > 0
+                ? "water seeps in at " + Fmt.F1(leak) + "% of the electric engine room per game-minute"
+                : "leakage off (0)";
+            return hull + "; " + seep + ".";
         }
 
         /// <summary>The derived-stats block under the diesel fields. Threshold

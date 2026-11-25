@@ -47,6 +47,22 @@ namespace ApePatcher.Ui
         Control crushFields;
         ToolTip tips;
 
+        // depth stress (depth-pressure-stress ticket 23)
+        CheckBox depthOn;
+        Label depthTitle, depthState, depthNote;
+        Control depthFields;
+        List<DepthField> depthInputs = new List<DepthField>();
+
+        // starboard motor zone fix (depth-pressure-stress ticket 33)
+        CheckBox zoneOn;
+        Label zoneTitle, zoneState;
+
+        class DepthField
+        {
+            public NumericUpDown Box;
+            public Func<double> Get;
+        }
+
         // right column
         Label reviewHeading, reviewCount;
         Panel reviewList;
@@ -277,7 +293,105 @@ namespace ApePatcher.Ui
             crushNote.Margin = new Padding(22, 2, 0, 12);
             column.Controls.Add(crushNote);
 
+            // ---- depth stress
+            depthOn = new CheckBox();
+            depthOn.AutoSize = true;
+            depthOn.Text = "";
+            depthTitle = Widgets.Label(DepthStress.PatchName, Look.Bold, SystemColors.ControlText);
+            column.Controls.Add(Row(depthOn, depthTitle));
+            depthOn.CheckedChanged += delegate { if (!binding) { desired.DepthApplied = depthOn.Checked; Sync(); } };
+
+            depthState = Widgets.Wrapped("", Look.Base, Look.Dim, inner);
+            depthState.Margin = new Padding(22, 2, 0, 4);
+            column.Controls.Add(depthState);
+
+            FlowLayoutPanel depthStack = new FlowLayoutPanel();
+            depthStack.FlowDirection = FlowDirection.TopDown;
+            depthStack.WrapContents = false;
+            depthStack.AutoSize = true;
+            depthStack.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            depthStack.Margin = new Padding(0, 0, 0, 0);
+            depthFields = depthStack;
+            column.Controls.Add(depthStack);
+
+            AddDepth(depthStack, "Tier-2 depth", "m", PatchState.Tier2DepthMin, PatchState.Tier2DepthMax,
+                0, 1, DepthStress.Tier2DepthTip, delegate { return desired.Tier2Depth; },
+                delegate(double v) { desired.Tier2Depth = v; });
+            depthStack.Controls.Add(Widgets.Label("Tier 1 — from 100 m", Look.Bold, Look.Dim));
+            AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
+                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage1; },
+                delegate(double v) { desired.Leakage1 = v; });
+            AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
+                (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
+                delegate { return desired.HullMult1; }, delegate(double v) { desired.HullMult1 = v; });
+            depthStack.Controls.Add(Widgets.Label("Tier 2 — from the tier-2 depth", Look.Bold, Look.Dim));
+            AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
+                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage2; },
+                delegate(double v) { desired.Leakage2 = v; });
+            AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
+                (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
+                delegate { return desired.HullMult2; }, delegate(double v) { desired.HullMult2 = v; });
+            depthStack.Controls.Add(Widgets.Label("Motor flooding — at any depth", Look.Bold, Look.Dim));
+            AddDepth(depthStack, "Flooding threshold", "% flood", PatchState.FloodThresholdMin,
+                PatchState.FloodThresholdMax, 0, 5, DepthStress.FloodThresholdTip,
+                delegate { return desired.FloodThreshold; }, delegate(double v) { desired.FloodThreshold = v; });
+            AddDepth(depthStack, "Motor damage", "% per game-second", PatchState.MotorDamageMin,
+                PatchState.MotorDamageMax, 1, 0.5m, DepthStress.MotorDamageTip,
+                delegate { return desired.MotorDamage; }, delegate(double v) { desired.MotorDamage = v; });
+
+            depthNote = Widgets.Wrapped("", Look.Base, Look.Warn, inner);
+            depthNote.Margin = new Padding(22, 2, 0, 12);
+            column.Controls.Add(depthNote);
+
+            // ---- starboard motor zone fix
+            zoneOn = new CheckBox();
+            zoneOn.AutoSize = true;
+            zoneOn.Text = "";
+            zoneTitle = Widgets.Label(MotorZoneFix.PatchName, Look.Bold, SystemColors.ControlText);
+            column.Controls.Add(Row(zoneOn, zoneTitle));
+            zoneOn.CheckedChanged += delegate { if (!binding) { desired.MotorZoneFixApplied = zoneOn.Checked; Sync(); } };
+
+            zoneState = Widgets.Wrapped("", Look.Base, Look.Dim, inner);
+            zoneState.Margin = new Padding(22, 2, 0, 12);
+            column.Controls.Add(zoneState);
+
+            string zoneTip = "OAE's damage model (from GWX) puts the starboard electric motor in the "
+                + "bow quarters instead of the electric engine room. The damage screen then shows "
+                + "its damage there, and only a repair team sent to the bow quarters repairs it."
+                + Environment.NewLine
+                + "This puts it back in the electric engine room, as in the stock game. APE keeps "
+                + "a copy of the file as it was and puts it back when you uncheck this."
+                + Environment.NewLine
+                + "The game reads it at startup, so it takes effect the next time you start SH3.";
+            tips.SetToolTip(zoneOn, zoneTip);
+            tips.SetToolTip(zoneTitle, zoneTip);
+            tips.SetToolTip(zoneState, zoneTip);
+
             return column;
+        }
+
+        void AddDepth(FlowLayoutPanel into, string label, string unit, double min, double max,
+            int decimals, decimal step, string tip, Func<double> get, Action<double> set)
+        {
+            AddDepth(into, label, unit, (decimal)min, (decimal)max, decimals, step, tip, get, set);
+        }
+
+        void AddDepth(FlowLayoutPanel into, string label, string unit, decimal min, decimal max,
+            int decimals, decimal step, string tip, Func<double> get, Action<double> set)
+        {
+            NumericUpDown box = Widgets.Num((decimal)get(), min, max, decimals, step, 72);
+            box.ValueChanged += delegate { if (!binding) { set((double)box.Value); Sync(); } };
+            Label name = Widgets.Label(label, Look.Base, Look.Dim);
+            name.AutoSize = false;
+            name.Width = 110;
+            Label units = Widgets.Label(unit, Look.Base, Look.Dim);
+            tips.SetToolTip(box, tip);
+            tips.SetToolTip(name, tip);
+            into.Controls.Add(Fields(new Control[] { name, box, units }));
+            DepthField f = new DepthField();
+            f.Box = box;
+            f.Get = get;
+            depthInputs.Add(f);
         }
 
         Site SiteOf(string patchId, string siteId)
@@ -389,9 +503,12 @@ namespace ApePatcher.Ui
         void SetTabOrder()
         {
             // Top to bottom through the left column, ending on Apply.
-            Control[] order = { hullOn, hullMin, hullMax, dieselOn, rate, bandLo, bandHi,
-                                crushOn, crushTime, apply };
-            for (int i = 0; i < order.Length; i++)
+            List<Control> order = new List<Control>(new Control[] { hullOn, hullMin, hullMax,
+                dieselOn, rate, bandLo, bandHi, crushOn, crushTime, depthOn });
+            foreach (DepthField f in depthInputs) order.Add(f.Box);
+            order.Add(zoneOn);
+            order.Add(apply);
+            for (int i = 0; i < order.Count; i++)
             {
                 order[i].TabIndex = i;
                 order[i].TabStop = true;
@@ -496,6 +613,8 @@ namespace ApePatcher.Ui
                 }
 
                 RenderCrush(install, supported);
+                RenderDepth(install, supported);
+                RenderZoneFix(install, supported);
                 RenderReview();
                 RenderApplyButton();
             }
@@ -545,6 +664,69 @@ namespace ApePatcher.Ui
                 : string.Join(" ", leftAlone.ToArray());
             Widgets.SetWrappedText(crushNote, problem, crushNote.Width);
             crushNote.Visible = problem.Length > 0;
+        }
+
+        void RenderZoneFix(InstallReport install, bool supported)
+        {
+            bool usable = supported && install.Available(MotorZoneFix.PatchId);
+            bool applied = supported && install.Applied(MotorZoneFix.PatchId);
+            ZonesCfg z = install.Zones;
+
+            zoneOn.Enabled = usable;
+            zoneOn.Checked = desired.MotorZoneFixApplied && usable;
+            zoneTitle.ForeColor = usable ? SystemColors.ControlText : Look.Dim;
+
+            string state =
+                !supported ? "Unavailable — APE does not recognise this install."
+                : z.State == ZonesState.Absent ? "Unavailable — this install has no "
+                    + MotorZoneFix.RelativePath + "."
+                : z.State == ZonesState.NotNeeded ? "Not needed — this install already puts the "
+                    + "starboard electric motor in the electric engine room."
+                : z.State == ZonesState.ChangedByOtherMod ? "Unavailable — "
+                    + MotorZoneFix.RelativePath + " was changed by another mod after APE wrote it. "
+                    + "APE leaves it alone."
+                : z.State == ZonesState.Unreadable ? "Unavailable — APE cannot read "
+                    + MotorZoneFix.RelativePath + " safely (" + z.Problem + "). APE leaves it alone."
+                : desired.MotorZoneFixApplied && applied
+                    ? "APE is applied. Unchecking it and applying puts this install's own file back."
+                : desired.MotorZoneFixApplied
+                    ? "Moves the starboard electric motor back into the electric engine room."
+                : "Not applied — this install puts the starboard electric motor in the bow "
+                    + "quarters, so its damage shows there and is repaired from there.";
+            Widgets.SetWrappedText(zoneState, state, zoneState.Width);
+        }
+
+        void RenderDepth(InstallReport install, bool supported)
+        {
+            bool available = supported && install.Available(DepthStress.PatchId);
+            bool deployed = supported && install.Applied(DepthStress.PatchId);
+
+            depthOn.Enabled = available;
+            depthOn.Checked = desired.DepthApplied && available;
+            depthTitle.ForeColor = available ? SystemColors.ControlText : Look.Dim;
+            bool fieldsLive = available && desired.DepthApplied;
+            foreach (DepthField f in depthInputs)
+            {
+                f.Box.Enabled = fieldsLive;
+                f.Box.Value = Clamp((decimal)f.Get(), f.Box);
+            }
+            depthFields.Visible = supported;
+
+            string state =
+                !supported ? "Unavailable — APE does not recognise this install."
+                : !available ? "Unavailable — this build of APE carries no depth-stress module."
+                : desired.DepthApplied && deployed
+                    ? "APE is applied. Unchecking it and applying removes depth stress."
+                : desired.DepthApplied
+                    ? "Depth stress begins at 100 m. " + DepthStress.LaunchNote
+                : "Not applied — depth costs a boat nothing until crush depth.";
+            Widgets.SetWrappedText(depthState, state, depthState.Width);
+
+            string problem = desired.DepthApplied && !desired.DepthStressValid
+                ? "A depth-stress value is out of range. Hover a field to see what it allows."
+                : "";
+            Widgets.SetWrappedText(depthNote, problem, depthNote.Width);
+            depthNote.Visible = problem.Length > 0;
         }
 
         static decimal Clamp(decimal v, NumericUpDown n)
@@ -635,7 +817,8 @@ namespace ApePatcher.Ui
         {
             bool valid = (!desired.HullApplied || desired.HullValid)
                       && (!desired.DieselApplied || desired.DieselValid)
-                      && (!desired.CrushApplied || desired.CrushTimeValid);
+                      && (!desired.CrushApplied || desired.CrushTimeValid)
+                      && (!desired.DepthApplied || desired.DepthStressValid);
             bool anything = !session.Plan(desired).Empty;
 
             apply.Enabled = session.Install.Supported && valid && anything;
