@@ -28,3 +28,18 @@ shows guard 2 missing a restore, record that; it triggers the PRD's fallback gua
 - [ ] Tests 1–5 are each recorded as pass or fail, with the `ape_act.log` excerpt that shows it
 - [ ] The VIIC and IIA crush-time timings are recorded against the nominal 1.3·T / 0.3·T (ADR-0011)
 - [ ] Any failure is filed as its own ticket in this folder
+
+## Comments
+
+### 2026-11-25: first session (owner, not by the checklist; issues reported as found)
+
+Build: Release `ape.act` at `6ea7e25`, patcher with `LoadCallSiteExists` flipped for the
+test (uncommitted). `sh3.exe` hash and `ape_act.log` excerpts not yet recorded here.
+
+- **Seepage (test 2, informal): works.** Leaking starts below 100 m, and the rate rises
+  below 150 m (tier 2).
+- **Normal running:** trivially pumped at both tiers.
+- **Filed:** [28](28-quiet-the-flooding-report.md) (flooding report spam),
+  [29](29-seepage-sinks-the-boat-in-silent-running.md) (silent running sinks the boat).
+- **Hull below crush depth:** a Type II crushes in about 5 s. The owner calls that good
+  enough; no numbers were taken. The owner bets it matches the vanilla tests.
