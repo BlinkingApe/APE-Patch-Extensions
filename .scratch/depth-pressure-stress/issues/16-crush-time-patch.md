@@ -1,7 +1,7 @@
 # Crush-time patch: write each U-boat's CrashSpeed from one player-chosen crush time
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 18
 
 ## Parent
@@ -60,7 +60,7 @@ mod: VIIC, 500 HP, 0.8 → ~625 s).
 - [x] Unchecking restores every `.zon` byte-for-byte from its `.ape-orig` copy.
 - [x] A `.zon` replaced by another mod shows as such and isn't overwritten.
 - [x] Tests in `tests/patcher_gui/` for the `.zon` read, write, revert and drift paths.
-- [ ] In play: with crush time set to a short value, a VIIC and a IIA (or IID) at full hull below
+- [~] *(Waived by the owner, 2026-11-25, for time.)* In play: with crush time set to a short value, a VIIC and a IIA (or IID) at full hull below
       crush depth both die in about that time.
 
 ## Answer (built 2026-11-25; the in-play criterion is still open)
@@ -136,3 +136,41 @@ The owner has asked that the flat rate be assumed. The question is
 (`Review.cs`) now call the time rough and give the "longer just past, a third at the
 rated crush depth" spread. `CrushTimeTests` checks the Review wording. The in-play
 criterion above is still open and still to be read as reworded.
+
+## In-play checklist (not run: waived)
+
+The last open criterion. Expected values use OAE's own `.zon` files (the JSGME backup
+column of re-note 07), which are what the boats carry once the test mod is gone.
+
+1. **Remove the test mod.** In JSGME, deactivate "[TEST] - Sub Crush Speed Modded".
+   Check that `NSS_Uboat7c.zon` and `NSS_Uboat2A.zon` match their `MODS/!BACKUP` copies.
+2. **Hash `sh3.exe`** (playbook) and note it. The expected hash is `20360fe8…`.
+3. **Patch.** Open the GUI patcher, tick Crush time, and set **T = 60 s**. 60 s is still
+   short next to stock's thousands of seconds, but it gives timings a stopwatch can
+   resolve; 5 s would give 1.5–6.5 s. The review should list 8 `.zon` files with VIIC
+   `500 ÷ 60 = 8.33` and IIA `400 ÷ 60 = 6.67`. Apply, then confirm a `.ape-orig`
+   sits beside each file.
+4. **VIIC, just past the onset.** Rated 350 m, so the onset is 245 m reference, about
+   248–250 m on the gauge. Load a fresh mission (crush speed is cached at load), take the
+   boat down at full hull to about **255 m**, hold depth, and time it from the first hull
+   loss to the sinking. **Expect about 1.3·T, roughly 60–90 s.**
+5. **VIIC at its rated crush depth.** Repeat at full hull, going to **350 m** as fast as
+   the boat allows. Time it from reaching 350 m. **Expect about 0.3·T, roughly 15–25 s.**
+6. **IIA or IID, the same two runs.** Rated 230 m, so the onset is about 164–166 m on the
+   gauge. Run at **~170 m**, then at **230 m**. Same expectations.
+7. **Revert.** Untick Crush time and apply. Each `.zon` should match its `!BACKUP` copy
+   byte for byte, and the `.ape-orig` files should be gone.
+
+Report the four times (and the hash) here. Pass: each time sits in its band. A time
+an order of magnitude off would mean the patch isn't reaching the game (wrong file, or
+a mod still overriding it).
+
+## Resolution (2026-11-25)
+
+**Resolved, with the in-play criterion waived by the owner for time.** The patch is
+built and committed (`ccb8bd5`, tooltip reworded in `c271aa6`). It is covered by 17
+`CrushTimeTests` cases and checked read-only against both installs. Nothing proves in
+play that the written `CrashSpeed` gives the nominal crush time. What stands in for it:
+ticket 17 showed live `+0xC4` equals the `.zon` `CrashSpeed` after load, and ticket 20
+fitted stock's ramp to that value within 5 %. The unrun checklist above stays as the
+smoke test, for a release check or for when a player reports crush times that are off.
