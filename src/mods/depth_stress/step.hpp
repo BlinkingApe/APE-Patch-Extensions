@@ -9,6 +9,7 @@
 // and their writes to the result.
 
 #include <cstdint>
+#include <random>
 #include <vector>
 
 #include "mods/depth_stress/constants.hpp"
@@ -25,6 +26,28 @@ struct Sample {
   float max_hull;       // boat +0xB4
   float crush_field;    // CD, boat +0xC0: .zon CrashDepth / 10
   float crush_speed;    // CS, boat +0xC4
+  float engine_port;    // port electric engine damage, 0 healthy -> 1 destroyed
+  float engine_stbd;    // starboard electric engine damage
+};
+
+// The step's source of randomness: uniform doubles in [0, 1). Taken as an
+// input so tests can force hits and seed runs (PRD "The depth-stress step").
+class Random {
+ public:
+  virtual ~Random() = default;
+  virtual double uniform() = 0;
+};
+
+// The shipped generator: a 32-bit Mersenne twister, never MSVC rand()
+// (ticket 12's trap), seeded once by the caller.
+class Mt19937Random : public Random {
+ public:
+  explicit Mt19937Random(std::uint32_t seed) : gen_(seed) {}
+  double uniform() override { return dist_(gen_); }
+
+ private:
+  std::mt19937 gen_;
+  std::uniform_real_distribution<double> dist_{0.0, 1.0};
 };
 
 // Null when every plausibility gate holds (PRD "Plausibility gates"), else
@@ -70,9 +93,10 @@ struct StepResult {
   bool baselined = false;
 };
 
-// `sample` is null when the reader couldn't produce one this poll.
+// `sample` is null when the reader couldn't produce one this poll. `rng` feeds
+// electric-engine wear; with none, there is no wear.
 StepResult step(const Constants& constants, StepState& state,
-                const Sample* sample);
+                const Sample* sample, Random* rng = nullptr);
 
 }  // namespace depth_stress
 }  // namespace ape

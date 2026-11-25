@@ -4,7 +4,10 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <cmath>
 #include <cstring>
+#include <random>
+#include <vector>
 
 #include "mods/depth_stress/constants.hpp"
 #include "mods/depth_stress/step.hpp"
@@ -322,4 +325,264 @@ TEST_CASE("a failed verdict says why") {
   bad_version.version = 7;
   CHECK(std::strlen(ds::verify(bad_marker).reason) > 0);
   CHECK(std::strlen(ds::verify(bad_version).reason) > 0);
+}
+
+// -- electric-engine wear (ticket 26) ----------------------------------------
+
+namespace {
+
+// A generator that replays a script, then repeats its last value.
+class Scripted : public ds::Random {
+ public:
+  explicit Scripted(std::vector<double> v) : v_(std::move(v)) {}
+  double uniform() override {
+    ++draws;
+    const double x = i_ < v_.size() ? v_[i_] : v_.back();
+    if (i_ < v_.size()) ++i_;
+    return x;
+  }
+  int draws = 0;
+
+ private:
+  std::vector<double> v_;
+  std::size_t i_ = 0;
+};
+
+// Every trial hits; the engine pick is `pick`.
+class Always : public ds::Random {
+ public:
+  explicit Always(double pick) : pick_(pick) {}
+  double uniform() override {
+    flip_ = !flip_;
+    return flip_ ? 0.0 : pick_;
+  }
+
+ private:
+  double pick_;
+  bool flip_ = false;
+};
+
+class Mt : public ds::Random {
+ public:
+  explicit Mt(unsigned seed) : g_(seed) {}
+  double uniform() override {
+    return std::uniform_real_distribution<double>(0.0, 1.0)(g_);
+  }
+
+ private:
+  std::mt19937 g_;
+};
+
+ds::Constants wear_only(float amount, float chance) {
+  ds::Constants c = ds::kDefaultConstants;
+  for (auto& k : c.tier) {
+    k.hull_mult = 1.0f;
+    k.seep_per_s = 0.0f;
+    k.wear_amount = amount;
+    k.wear_chance_per_s = chance;
+  }
+  return c;
+}
+
+ds::Sample engines(ds::Sample s, float port, float stbd) {
+  s.engine_port = port;
+  s.engine_stbd = stbd;
+  return s;
+}
+
+const ds::Write* write_to(const ds::StepResult& r, ds::Write::Target t) {
+  for (const ds::Write& w : r.writes)
+    if (w.target == t) return &w;
+  return nullptr;
+}
+
+}  // namespace
+
+TEST_CASE("wear: a hit adds the tier's amount to the picked engine") {
+  const ds::Constants c = wear_only(0.075f, 1.0f);
+  const ds::Sample a = engines(at(120.0f, 500.0f, 10), 0.1f, 0.2f);
+  const ds::Sample b = engines(at(120.0f, 500.0f, 11), 0.1f, 0.2f);
+
+  ds::StepState st{};
+  Always port_rng(0.25);  // < 0.5: port
+  ds::step(c, st, &a, &port_rng);
+  const ds::StepResult r = ds::step(c, st, &b, &port_rng);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].target == ds::Write::Target::PortEngine);
+  CHECK(r.writes[0].old_value == doctest::Approx(0.1));
+  CHECK(r.writes[0].value == doctest::Approx(0.175));
+
+  ds::StepState st2{};
+  Always stbd_rng(0.75);  // >= 0.5: starboard
+  ds::step(c, st2, &a, &stbd_rng);
+  const ds::StepResult r2 = ds::step(c, st2, &b, &stbd_rng);
+  REQUIRE(r2.writes.size() == 1);
+  CHECK(r2.writes[0].target == ds::Write::Target::StarboardEngine);
+  CHECK(r2.writes[0].value == doctest::Approx(0.275));
+}
+
+TEST_CASE("wear: tier 2 uses tier-2 values, and so does tier 3") {
+  ds::Constants c = wear_only(0.075f, 1.0f);
+  c.tier[1].wear_amount = 0.225f;
+  for (float depth : {152.0f, 200.0f}) {  // tier 2; tier 3 (onset 154.8 at 480)
+    ds::StepState st{};
+    Always rng(0.0);
+    const ds::Sample a = engines(at(depth, 480.0f, 10), 0.0f, 0.0f);
+    const ds::Sample b = engines(at(depth, 480.0f, 11), 0.0f, 0.0f);
+    ds::step(c, st, &a, &rng);
+    const ds::StepResult r = ds::step(c, st, &b, &rng);
+    CAPTURE(depth);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0].value == doctest::Approx(0.225));
+  }
+}
+
+TEST_CASE("wear: never past 0.9 under thousands of forced hits") {
+  const ds::Constants c = wear_only(0.225f, 1.0f);
+  ds::StepState st{};
+  Always rng(0.0);  // always port
+  float port = 0.0f;
+  const ds::Sample first = engines(at(120.0f, 500.0f, 0), port, 0.0f);
+  ds::step(c, st, &first, &rng);
+  for (int t = 1; t <= 3000; ++t) {
+    const ds::Sample s = engines(at(120.0f, 500.0f, t), port, 0.0f);
+    const ds::StepResult r = ds::step(c, st, &s, &rng);
+    for (const ds::Write& w : r.writes) {
+      CHECK(w.value <= ds::kWearCeiling);
+      CHECK(w.value > w.old_value);  // never lowers, never a no-op write
+      port = w.value;
+    }
+  }
+  CHECK(port == doctest::Approx(0.9));
+}
+
+TEST_CASE("wear: many hits in one poll still stop at 0.9") {
+  const ds::Constants c = wear_only(0.225f, 1.0f);
+  ds::StepState st{};
+  Always rng(0.0);
+  const ds::Sample a = engines(at(120.0f, 500.0f, 0), 0.0f, 0.0f);
+  const ds::Sample b = engines(at(120.0f, 500.0f, 5000), 0.0f, 0.0f);
+  ds::step(c, st, &a, &rng);
+  const ds::StepResult r = ds::step(c, st, &b, &rng);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].value == ds::kWearCeiling);
+}
+
+TEST_CASE("wear: no write at or above 0.9, and a big hit clamps to it") {
+  const ds::Constants c = wear_only(0.5f, 1.0f);
+  ds::StepState st{};
+  Always rng(0.0);
+  const ds::Sample a = engines(at(120.0f, 500.0f, 1), ds::kWearCeiling, 0.0f);
+  const ds::Sample b = engines(at(120.0f, 500.0f, 2), ds::kWearCeiling, 0.0f);
+  ds::step(c, st, &a, &rng);
+  CHECK(ds::step(c, st, &b, &rng).writes.empty());
+  const ds::Sample hi = engines(at(120.0f, 500.0f, 3), 0.99f, 0.0f);
+  CHECK(ds::step(c, st, &hi, &rng).writes.empty());  // never lowers
+
+  const ds::Sample low = engines(at(120.0f, 500.0f, 4), 0.7f, 0.0f);
+  const ds::StepResult r = ds::step(c, st, &low, &rng);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].value == ds::kWearCeiling);
+}
+
+TEST_CASE("wear: hit frequency matches q, at default rates and at high dt") {
+  struct Case {
+    std::int32_t dt;
+    float q;
+    long seconds;
+  };
+  const Case cases[] = {
+      {1, 0.05f, 400000}, {8, 0.05f, 400000}, {8, 1.0f / 7800.0f, 40000000}};
+  for (const Case& k : cases) {
+    const ds::Constants c = wear_only(0.001f, k.q);
+    ds::StepState st{};
+    Mt rng(12345);
+    std::int32_t clock = 0;
+    long port_hits = 0, stbd_hits = 0;
+    const ds::Sample first = engines(at(120.0f, 500.0f, 0), 0.0f, 0.0f);
+    ds::step(c, st, &first, &rng);
+    for (long done = 0; done < k.seconds; done += k.dt) {
+      clock += k.dt;
+      // Engines are read back as 0 so the ceiling never interferes: each
+      // write's size is the number of hits it carried.
+      const ds::Sample s = engines(at(120.0f, 500.0f, clock), 0.0f, 0.0f);
+      const ds::StepResult r = ds::step(c, st, &s, &rng);
+      for (const ds::Write& w : r.writes) {
+        const long n = std::lround((w.value - w.old_value) / 0.001f);
+        (w.target == ds::Write::Target::PortEngine ? port_hits : stbd_hits) += n;
+      }
+    }
+    const double hits = static_cast<double>(port_hits + stbd_hits);
+    CAPTURE(k.dt);
+    CAPTURE(k.q);
+    CHECK(hits == doctest::Approx(static_cast<double>(k.seconds) * k.q).epsilon(0.06));
+    CHECK(port_hits > 0.4 * hits);
+    CHECK(stbd_hits > 0.4 * hits);
+  }
+}
+
+TEST_CASE("wear: none above 100 m, when paused, or when the clock goes back") {
+  const ds::Constants c = wear_only(0.075f, 1.0f);
+  Always rng(0.0);
+  {
+    ds::StepState st{};
+    const ds::Sample a = engines(at(60.0f, 500.0f, 1), 0.0f, 0.0f);
+    const ds::Sample b = engines(at(60.0f, 500.0f, 2), 0.0f, 0.0f);
+    ds::step(c, st, &a, &rng);
+    CHECK(ds::step(c, st, &b, &rng).writes.empty());
+  }
+  {
+    ds::StepState st{};
+    const ds::Sample a = engines(at(120.0f, 500.0f, 5), 0.0f, 0.0f);
+    ds::step(c, st, &a, &rng);
+    CHECK(ds::step(c, st, &a, &rng).writes.empty());  // dt 0
+    const ds::Sample back = engines(at(120.0f, 500.0f, 3), 0.0f, 0.0f);
+    CHECK(ds::step(c, st, &back, &rng).writes.empty());  // dt < 0
+  }
+}
+
+TEST_CASE("wear: amount 0 switches it off on its own") {
+  const ds::Constants c = wear_only(0.0f, 1.0f);
+  Scripted rng({0.0});
+  ds::StepState st{};
+  const ds::Sample a = engines(at(120.0f, 500.0f, 1), 0.0f, 0.0f);
+  const ds::Sample b = engines(at(120.0f, 500.0f, 5), 0.0f, 0.0f);
+  ds::step(c, st, &a, &rng);
+  CHECK(ds::step(c, st, &b, &rng).writes.empty());
+  CHECK(rng.draws == 0);
+}
+
+TEST_CASE("wear: one draw per game-second, and a pick draw per hit") {
+  const ds::Constants c = wear_only(0.01f, 0.5f);
+  // Trials: miss (0.9), hit (0.1) then pick 0.2 = port, miss (0.7).
+  Scripted rng({0.9, 0.1, 0.2, 0.7});
+  ds::StepState st{};
+  const ds::Sample a = engines(at(120.0f, 500.0f, 0), 0.0f, 0.0f);
+  const ds::Sample b = engines(at(120.0f, 500.0f, 3), 0.0f, 0.0f);
+  ds::step(c, st, &a, &rng);
+  const ds::StepResult r = ds::step(c, st, &b, &rng);
+  CHECK(rng.draws == 4);
+  const ds::Write* w = write_to(r, ds::Write::Target::PortEngine);
+  REQUIRE(w);
+  CHECK(w->value == doctest::Approx(0.01));
+  CHECK(write_to(r, ds::Write::Target::StarboardEngine) == nullptr);
+}
+
+TEST_CASE("wear: an engine damage outside [0, 1] fails the plausibility gate") {
+  ds::Sample s = at(120.0f, 500.0f, 1);
+  CHECK(ds::implausible(s) == nullptr);
+  s.engine_port = 1.1f;
+  CHECK(ds::implausible(s) != nullptr);
+  s.engine_port = 0.0f;
+  s.engine_stbd = -0.1f;
+  CHECK(ds::implausible(s) != nullptr);
+}
+
+TEST_CASE("wear: with no generator there is no wear") {
+  const ds::Constants c = wear_only(0.075f, 1.0f);
+  ds::StepState st{};
+  const ds::Sample a = engines(at(120.0f, 500.0f, 1), 0.0f, 0.0f);
+  const ds::Sample b = engines(at(120.0f, 500.0f, 2), 0.0f, 0.0f);
+  ds::step(c, st, &a);
+  CHECK(ds::step(c, st, &b).writes.empty());
 }

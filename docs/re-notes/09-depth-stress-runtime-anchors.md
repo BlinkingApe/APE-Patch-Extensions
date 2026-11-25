@@ -87,3 +87,21 @@ The hull multiplier writes boat `+0xB8`, at the boat address read in the same po
 
 Skips are logged when the reason changes. A reason that hasn't changed is logged again
 at most every 30 s, with a count.
+
+## Electric-engine anchors (ticket 26, 2026-11-25)
+
+Static only; the in-play check is ticket 27's test 3. The two AOBs recorded in
+`08-oae-port-of-depth-leads.md` §§1-2 are now scanned by `ape.act`, with the operand
+bytes wildcarded as above. Each matched exactly once, raw-file search, in OAE 1.5.2
+(`20360fe8`) and `sh3_vanilla.exe`, recovering the same operand.
+
+| Root | Signature | Value at +2 |
+|---|---|---|
+| Engine root | `89 35 ?? ?? ?? ?? 57 8D 7E 10` | `0x005543DC` |
+| Electric block offset | `8B 80 ?? ?? ?? ?? 8D 77 FC` | `0x37C` |
+
+Chain: `p = [[[root]+0x4]+off]`, then port = `[p+0]` and starboard = `[p+4]`, each the
+address of that engine's damage float (0 healthy, 1 destroyed). A sample needs both
+floats in [0, 1]; the offset must be in (0, 0x1000]. Any failure skips the poll with
+"engine chain unresolved". The writer stores the step's value at the address read in the
+same poll.

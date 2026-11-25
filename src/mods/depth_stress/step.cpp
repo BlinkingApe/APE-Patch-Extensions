@@ -11,6 +11,8 @@ const char* implausible(const Sample& s) {
   if (!(s.crush_field > 1.0f)) return "rated crush field not > 1";
   if (!(s.crush_speed >= 0.0f)) return "crush speed below 0";
   if (s.clock_s < 0) return "clock below 0";
+  if (!(s.engine_port >= 0.0f && s.engine_port <= 1.0f)) return "port engine damage outside [0, 1]";
+  if (!(s.engine_stbd >= 0.0f && s.engine_stbd <= 1.0f)) return "starboard engine damage outside [0, 1]";
   return nullptr;
 }
 
@@ -26,7 +28,8 @@ void baseline(StepState& st, const Sample& s, float hull) {
 
 }  // namespace
 
-StepResult step(const Constants& c, StepState& st, const Sample* sample) {
+StepResult step(const Constants& c, StepState& st, const Sample* sample,
+                Random* rng) {
   StepResult r;
   // 1. No sample (or one that fails a gate): nothing is written, and the
   //    next sample re-baselines.
@@ -75,8 +78,8 @@ StepResult step(const Constants& c, StepState& st, const Sample* sample) {
   //    clock-0 poll is a save restore, not damage (guard 2).
   float new_hull = s.hull;
   const float n = r.diag.drop;
+  const TierConstants& k = c.tier[tier == Tier::One ? 0 : 1];
   if (tier != Tier::None && n > 0.0f && !st.clock_was_zero) {
-    const TierConstants& k = c.tier[tier == Tier::One ? 0 : 1];
     if (k.hull_mult > 1.0f) {
       float x = 0.0f;
       if (tier == Tier::Three) {
@@ -95,6 +98,27 @@ StepResult step(const Constants& c, StepState& st, const Sample* sample) {
       }
     }
   }
+
+  // 7. Electric-engine wear: dt Bernoulli trials at q, one per game-second.
+  //    Hits are tallied on local copies so a poll writes each engine once.
+  if (tier != Tier::None && rng && k.wear_amount > 0.0f && dt > 0) {
+    float damage[2] = {s.engine_port, s.engine_stbd};
+    bool hit[2] = {false, false};
+    for (std::int32_t i = 0; i < dt; ++i) {
+      if (!(rng->uniform() < static_cast<double>(k.wear_chance_per_s))) continue;
+      const int e = rng->uniform() < 0.5 ? 0 : 1;  // 0 port, 1 starboard
+      if (damage[e] >= kWearCeiling) continue;
+      const float next = damage[e] + k.wear_amount;
+      damage[e] = next < kWearCeiling ? next : kWearCeiling;
+      hit[e] = true;
+    }
+    const float old[2] = {s.engine_port, s.engine_stbd};
+    const Write::Target target[2] = {Write::Target::PortEngine,
+                                     Write::Target::StarboardEngine};
+    for (int e = 0; e < 2; ++e)
+      if (hit[e]) r.writes.push_back({target[e], old[e], damage[e]});
+  }
+
   baseline(st, s, new_hull);
   return r;
 }

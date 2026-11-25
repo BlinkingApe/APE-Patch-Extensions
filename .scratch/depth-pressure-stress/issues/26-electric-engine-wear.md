@@ -11,10 +11,18 @@ ticket 12's trap). Each hit picks port or starboard at random. The step writes
 
 **Blocked by:** 24 (Hull multiplier, first end-to-end slice)
 
-**Status:** ready-for-agent
+**Status:** done in code (2026-11-25); in-play check is ticket 27 test 3
 
-- [ ] The step takes the generator as an input, so tests can force hits and seed runs
-- [ ] Step tests: under thousands of forced hits the damage never exceeds 0.9 (allowing for the 0.89999998 float32 store); no write at or above 0.9; never lowers
-- [ ] Step tests: over a long seeded run, hit frequency matches `q` at default rates and at high dt (time compression); both engines get picked
-- [ ] Step tests: no wear above 100 m, when paused, or when the clock goes back; wear amount 0 turns it off on its own; wear continues at tier-2 values below crush depth
+- [x] The step takes the generator as an input, so tests can force hits and seed runs
+- [x] Step tests: under thousands of forced hits the damage never exceeds 0.9 (allowing for the 0.89999998 float32 store); no write at or above 0.9; never lowers
+- [x] Step tests: over a long seeded run, hit frequency matches `q` at default rates and at high dt (time compression); both engines get picked
+- [x] Step tests: no wear above 100 m, when paused, or when the clock goes back; wear amount 0 turns it off on its own; wear continues at tier-2 values below crush depth
 - [ ] Injected into OAE with wear forced near-certain, engine damage appears from depth alone and the crew repairs it from 0.9 (in-play test 3, informally)
+
+## Notes (2026-11-25)
+
+Built: `Sample` gained `engine_port`/`engine_stbd`; `step()` takes an optional `Random*`
+(null means no wear); `Mt19937Random` is the shipped generator, seeded once from
+`std::random_device` in the loop. Hits in one poll are tallied, so each engine gets at
+most one write per poll. The last criterion (injected into OAE) is still to do, under
+ticket 27.

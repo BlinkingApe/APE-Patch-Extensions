@@ -39,6 +39,14 @@ constexpr aob::Signature kDepthRoot = {
 constexpr aob::Signature kClock = {
     "clock", "A3 ?? ?? ?? ?? 89 86 50 01 00 00 E9", 1};
 
+// The electric engines: the engine singleton's root, and the offset of the
+// electric block's pair of damage-float pointers (docs/re-notes/08 s1; both
+// unique on OAE). The chain is [[[[root]+0x4]+off]+0] / [...+0x4].
+constexpr aob::Signature kEngineRoot = {
+    "engine root", "89 35 ?? ?? ?? ?? 57 8D 7E 10", 2};
+constexpr aob::Signature kEngineBlockOff = {
+    "engine block offset", "8B 80 ?? ?? ?? ?? 8D 77 FC", 2};
+
 bool read_u32(std::uint32_t addr, std::uint32_t& out) {
   if (addr < 0x10000) return false;  // null, or a null plus an offset
   SIZE_T n = 0;
@@ -99,9 +107,11 @@ const char* resolve(const aob::Signature& sig, std::uint32_t& out) {
 
 Anchors resolve_anchors() {
   Anchors a;
-  const aob::Signature* sigs[] = {&kBoatRoot, &kDepthRoot, &kClock};
-  std::uint32_t* outs[] = {&a.boat_root, &a.depth_root, &a.clock};
-  for (int i = 0; i < 3; ++i) {
+  const aob::Signature* sigs[] = {&kBoatRoot, &kDepthRoot, &kClock,
+                                  &kEngineRoot, &kEngineBlockOff};
+  std::uint32_t* outs[] = {&a.boat_root, &a.depth_root, &a.clock,
+                           &a.engine_root, &a.engine_block_off};
+  for (int i = 0; i < 5; ++i) {
     if (const char* why = resolve(*sigs[i], *outs[i])) {
       a.failed = sigs[i]->name;
       a.why = why;
@@ -111,7 +121,8 @@ Anchors resolve_anchors() {
   return a;
 }
 
-bool read_sample(const Anchors& a, depth_stress::Sample& out, const char** why) {
+bool read_sample(const Anchors& a, depth_stress::Sample& out, Targets& targets,
+                 const char** why) {
   if (a.failed) {
     *why = "an anchor did not resolve";
     return false;
@@ -142,10 +153,26 @@ bool read_sample(const Anchors& a, depth_stress::Sample& out, const char** why) 
     return false;
   }
   out.boat = boat;
+  targets.boat = boat;
   if (!read_f32(boat + kHull, out.hull) || !read_f32(boat + kMaxHull, out.max_hull) ||
       !read_f32(boat + kRatedCrushField, out.crush_field) ||
       !read_f32(boat + kCrushSpeed, out.crush_speed)) {
     *why = "boat fields unreadable";
+    return false;
+  }
+
+  // The electric engines: a pair of pointers, each to the engine's damage
+  // float ([port, starboard]). The offset is bounded so a misread anchor
+  // cannot send the chain far afield.
+  std::uint32_t block;
+  const std::uint32_t engine_links[] = {0x4, a.engine_block_off};
+  if (a.engine_block_off == 0 || a.engine_block_off > 0x1000 ||
+      !chain(a.engine_root, engine_links, 2, block) ||
+      !read_u32(block + 0, targets.engine_port) ||
+      !read_u32(block + 4, targets.engine_stbd) ||
+      !read_f32(targets.engine_port, out.engine_port) ||
+      !read_f32(targets.engine_stbd, out.engine_stbd)) {
+    *why = "engine chain unresolved";
     return false;
   }
   return true;
@@ -155,6 +182,15 @@ bool write_hull(std::uint32_t boat, float value) {
   SIZE_T n = 0;
   return WriteProcessMemory(GetCurrentProcess(),
                             reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(boat + kHull)),
+                            &value, sizeof value, &n) &&
+         n == sizeof value;
+}
+
+bool write_engine(std::uint32_t address, float value) {
+  if (address < 0x10000) return false;
+  SIZE_T n = 0;
+  return WriteProcessMemory(GetCurrentProcess(),
+                            reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(address)),
                             &value, sizeof value, &n) &&
          n == sizeof value;
 }

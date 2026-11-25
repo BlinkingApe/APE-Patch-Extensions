@@ -14,6 +14,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <random>
 #include <string>
 
 #include "ape_act/depth_stress_constants.hpp"
@@ -102,6 +103,16 @@ class SkipLog {
 void log_writes(ape::Logger& log, const ds::Sample& s, const ds::StepResult& r,
                 bool ok) {
   for (const ds::Write& w : r.writes) {
+    if (w.target == ds::Write::Target::PortEngine ||
+        w.target == ds::Write::Target::StarboardEngine) {
+      log.logf("[depth-stress] wear%s: D %.2f m, tier %d, dt %ld s, %s engine "
+               "%.4f -> %.4f",
+               ok ? "" : " FAILED", s.depth_m, static_cast<int>(r.diag.tier),
+               static_cast<long>(r.diag.dt_s),
+               w.target == ds::Write::Target::PortEngine ? "port" : "starboard",
+               w.old_value, w.value);
+      continue;
+    }
     log.logf("[depth-stress] write%s: D %.2f m, tier %d, onset %.2f m, dt %ld s, "
              "N %.4f, X %.4f, hull %.4f -> %.4f (max %.1f)",
              ok ? "" : " FAILED", s.depth_m, static_cast<int>(r.diag.tier),
@@ -136,24 +147,43 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
              anchors.failed, anchors.why);
   else
     log.logf("[depth-stress] anchors: boat root 0x%08lX, depth root 0x%08lX, "
-             "clock 0x%08lX",
+             "clock 0x%08lX, engine root 0x%08lX (+0x%lX)",
              static_cast<unsigned long>(anchors.boat_root),
              static_cast<unsigned long>(anchors.depth_root),
-             static_cast<unsigned long>(anchors.clock));
+             static_cast<unsigned long>(anchors.clock),
+             static_cast<unsigned long>(anchors.engine_root),
+             static_cast<unsigned long>(anchors.engine_block_off));
 
   SkipLog skips(log);
+  // Seeded once, from the OS entropy source, for the life of the loop.
+  std::random_device entropy;
+  ds::Mt19937Random rng(entropy());
   ds::StepState state{};
   std::uint32_t last_boat = 0;
   while (!g_stop.load()) {
     ds::Sample sample{};
+    ape::game::Targets targets;
     const char* why = nullptr;
-    const bool have = ape::game::read_sample(anchors, sample, &why);
-    const ds::StepResult r = ds::step(g_loaded, state, have ? &sample : nullptr);
+    const bool have = ape::game::read_sample(anchors, sample, targets, &why);
+    const ds::StepResult r =
+        ds::step(g_loaded, state, have ? &sample : nullptr, &rng);
 
     bool ok = true;
-    for (const ds::Write& w : r.writes)
-      if (w.target == ds::Write::Target::Hull)
-        ok = ape::game::write_hull(sample.boat, w.value) && ok;
+    for (const ds::Write& w : r.writes) {
+      switch (w.target) {
+        case ds::Write::Target::Hull:
+          ok = ape::game::write_hull(targets.boat, w.value) && ok;
+          break;
+        case ds::Write::Target::PortEngine:
+          ok = ape::game::write_engine(targets.engine_port, w.value) && ok;
+          break;
+        case ds::Write::Target::StarboardEngine:
+          ok = ape::game::write_engine(targets.engine_stbd, w.value) && ok;
+          break;
+        case ds::Write::Target::Flood:  // ticket 25
+          break;
+      }
+    }
     if (!r.writes.empty()) log_writes(log, sample, r, ok);
     // The step's baseline assumed its write landed; if it didn't, start over
     // rather than measure the next drop from a hull the game never held.
