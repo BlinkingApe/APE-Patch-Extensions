@@ -73,14 +73,14 @@ static_assert(offsetof(TierConstants, seep_per_s) == 0, "patcher contract");
 static_assert(offsetof(TierConstants, hull_mult) == 4, "patcher contract");
 
 // Ticket 12's defaults, leakage halved by ticket 30 (ADR-0012), motor flooding
-// damage's provisional ones (ticket 31), after the patcher's conversions:
+// damage's as Stoss recommended (threshold 20 %, 10 %/s), after the patcher's conversions:
 // leakage p %/min is p/6000 per game-second, the flooding threshold t % is
 // t/100, motor damage a % per game-second is a/100.
 constexpr Constants kDefaultConstants = {
     {'A', 'P', 'E', 'D', 'P', 'T', 'H', '1'},
     kVersion,
     150.0f,
-    0.30f,
+    0.20f,
     0.10f,
     {
         {2.0f / 6000.0f, 1.25f},

@@ -132,8 +132,8 @@ namespace ApePatcher.Tests
         public static void Test_AFreshStateHoldsTheMotorFloodingDefaults()
         {
             PatchState d = new PatchState();
-            Check.Equal(30.0, d.FloodThreshold, "30 % flood (ticket 31, provisional)");
-            Check.Equal(10.0, d.MotorDamage, "10 %/game-s (ticket 31, provisional)");
+            Check.Equal(20.0, d.FloodThreshold, "20 % flood (Stoss)");
+            Check.Equal(10.0, d.MotorDamage, "10 %/game-s (Stoss)");
         }
 
         public static void Test_TheShippedTemplateHoldsTheCurrentDefaults()
@@ -143,7 +143,7 @@ namespace ApePatcher.Tests
             Check.Equal(150.0, d.Tier2Depth, "150 m");
             Check.Equal(2.0, d.Leakage1, "2 %/min (halved, ticket 30)");
             Check.Equal(7.5, d.Leakage2, "7.5 %/min (halved, ticket 30)");
-            Check.Equal(30.0, d.FloodThreshold, "30 % flood (ticket 31)");
+            Check.Equal(20.0, d.FloodThreshold, "20 % flood (Stoss)");
             Check.Equal(10.0, d.MotorDamage, "10 %/game-s (ticket 31)");
             Check.Equal(1.25, d.HullMult1, "x1.25");
             Check.Equal(1.5, d.HullMult2, "x1.5");

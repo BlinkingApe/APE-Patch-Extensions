@@ -79,7 +79,7 @@ unchecked (ADR-0006).
 11. As an OAE player, I want an uncrewed electric engine room to keep filling (to the 0.8 cap), so that crewing it is my lever and the tooltip tells me so.
 12. As an OAE player of any class, I want seepage in the electric engine room, where the motors and shaft glands are, so that the water and the motors share one room and one crewing decision (ADR-0012).
 13. As an OAE player, I accept that unpumped seepage cuts my electric power (stock's cut starts at 0.2 flood and is total at 0.7, below the 0.8 cap), so that losing the motors is the price of leaving the room unmanned.
-14. As an OAE player, I want both motors to take damage while their room's water is at or above my flooding threshold (30 % by default) and the telegraph isn't at stop (10 % per game-second by default, provisional), so that the motors suffer from water, as the historian and Stoss describe.
+14. As an OAE player, I want both motors to take damage while their room's water is at or above my flooding threshold (20 % by default) and the telegraph isn't at stop (10 % per game-second by default), so that the motors suffer from water, as the historian and Stoss describe.
 15. As an OAE player, I want motor flooding damage never to push an engine past 0.9 damage, so that my crew can always repair it at sea.
 16. As an OAE player, I want ordering all stop, or pumping the room below the threshold, to stop the damage, so that I can put the motors out of service to save them.
 17. As an OAE player, I want motor flooding damage to act at any depth, whatever flooded the room (APE's seepage or a breach), so that ascending with a flooded motor room doesn't make running the motors safe.
@@ -164,11 +164,11 @@ unchecked (ADR-0006).
 | Tier-2 depth | m | 101–300 | — | from 100 m, fixed | **150** |
 | Leakage | % of the electric engine room per game-minute | 0–60 | 0 | **2** | **7.5** |
 | Hull multiplier | × | 1.0–5.0 | 1.0 | **1.25** | **1.5** |
-| Flooding threshold (one, not per tier) | % flood of the electric engine room | 5–95 | (damage 0) | **30** | |
-| Motor damage (one, not per tier) | % of each motor's health per game-second | 0–100 | 0 | **10** (provisional) | |
+| Flooding threshold (one, not per tier) | % flood of the electric engine room | 5–95 | (damage 0) | **20** | |
+| Motor damage (one, not per tier) | % of each motor's health per game-second | 0–100 | 0 | **10** | |
 | Crush time (built) | s, whole | 1–3600 | — | 5 | |
 
-The threshold and motor damage defaults are provisional: Stoss will recommend values.
+The threshold and motor damage defaults are Stoss's recommendation (2026-11-25).
 Not exposed, fixed in `ape.act`: **seep ceiling 0.8**, **motor damage ceiling 0.9**. No
 cross-field validation. Conversions happen in the patcher or at load, never per poll:
 leakage `p` %/min is `p/6000` flood per game-second; threshold `t` % is `t/100` flood;
@@ -237,6 +237,13 @@ Outputs: the new step state and a list of writes
    damage is ≥ 0.9, no write; else write `min(d + amount·dt, 0.9)`. Never lower it.
    No telegraph value (unresolved or implausible) means no motor damage this poll; the
    other effects still run.
+7a. **Flooding warning** (ticket 35, `warning.hpp`). With amount > 0 and the room's flood
+   ≥ the warning level (threshold − 0.05, floor 0.01) while the telegraph is not 0.0, once
+   per crossing: swap APE's text into stock's flooding-report string for the band the level
+   is in (592 / 593 / 594), clear the motor room's latch for that band, and put the string
+   back when the latch reads set again or after 10 real seconds. It re-arms when the flood
+   falls more than 0.05 below the level (or is 0), the telegraph reads stop, or the boat
+   changes. Only memory writes (ADR-0001); the text must not contain `%`.
 8. **Fallback guard.** If live play shows guard 2 missing a restore, hold the baseline
    for ~2 game-seconds after a boat-identity change. Guard 1 plus guard 2 is the
    specified behaviour.
@@ -303,6 +310,9 @@ mission load. AI boats of a patched class change too.
      continues above 100 m while the room is flooded; the crew repairs from 0.9.
   4. All effects keep acting below crush depth.
   5. Loading a damaged boat costs no amplified hull.
+  6. Ticket 35: with the telegraph ahead and the room filling past 15 %, the message log
+     shows the chief's warning once; it doesn't repeat while the level hovers, and stock's
+     own flooding report afterwards still shows stock's text.
 
   Also, unrun from ticket 16 and kept as a smoke test: crush-time timings for a VIIC
   and a IIA.
@@ -341,7 +351,7 @@ mission load. AI boats of a patched class change too.
 - **On every class, seepage cuts electric power** above 0.2 flood, total at 0.7, below
   the 0.8 cap. Accepted (ticket 19 for II/XXI, ADR-0012 for all).
 - **OAE repairs 60× slower** (h.sie's Realistic Repair Times): ~0.19 damage per
-  game-hour, ~4.6 game-hours from 0.9. At the provisional 10 %/s, a motor reaches 0.9
+  game-hour, ~4.6 game-hours from 0.9. At the default 10 %/s, a motor reaches 0.9
   about 9 game-seconds after the room crosses the threshold with the telegraph ahead.
 - **Every OAE single mission spawned a Type IIA** in the lab. Compartment 4 on a VII or
   IX, and stock's power cut there, are from data, not live on OAE. In-play test 2 should

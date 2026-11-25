@@ -218,6 +218,14 @@ write target is unlocated is not specified.
   tickets `30` (seep compartment and defaults), `31` (motor flooding damage, supersedes
   `26`), `32` (HITL: the telegraph read `[0x63E1D4]` on OAE while submerged).
 
+- **Stoss, second note (2026-11-25):** "at 15 % flooding, a warning message to pump or
+  shut down the motors; at 20 % damage, rapid catastrophic damage." The flooding threshold
+  default is now **20 %**; motor damage stays at **10 %/game-s**, which the owner accepts as
+  rapid and catastrophic. Both are no longer provisional. The 15 % warning is ticket `34`:
+  a static look found the stock flooding report's string table is static (`0x566058`), so a
+  memory-only route (point string 592 at APE's text, re-arm the latch) fits ADR-0001. The
+  latch's object root is not located yet.
+
 ## Decisions so far
 
 <!-- charted 2026-08-16; the model above was settled in the charting session's
@@ -241,6 +249,8 @@ write target is unlocated is not specified.
 - [Does `[0x63E1D4]` track the ordered telegraph on OAE while submerged?](issues/32-telegraph-read-on-oae.md) — yes, live on OAE: submerged, surfaced and after a load; stop is exactly 0.0, astern −0.26…−0.66 (IIA), so ticket 31's gate stands unchanged.
 
 - [Stoss's feedback: halve leakage, motor damage from flooding](../../docs/adr/0012-motor-damage-follows-the-water-in-the-motor-room.md) — leakage 2 / 7.5; seepage into compartment 4 on every class; motor flooding damage (threshold 30 %, 10 %/s provisional, telegraph ≠ stop, any depth, cap 0.9) replaces wear; tickets 30–32 open.
+
+- [Motor-room flooding warning: how, when, what text?](issues/34-motor-room-flooding-warning.md) — borrow the stock report (swap the band string pointer, clear compartment 4's latch, restore); telegraph ≠ stop, any water, threshold − 5 points, once per crossing (5-point hysteresis), off with damage amount 0; build is ticket `35`.
 
 ## Not yet specified
 

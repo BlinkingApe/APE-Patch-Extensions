@@ -91,8 +91,8 @@ namespace ApePatcher
         // than tier 1 is allowed, and each effect switches off at its neutral
         // value (leakage 0, motor damage 0, multiplier 1.0).
         // Motor flooding damage (ticket 31, ADR-0012) is one threshold and one
-        // amount, not per tier, and acts at any depth. Both defaults are
-        // provisional, pending Stoss.
+        // amount, not per tier, and acts at any depth. Defaults are Stoss's:
+        // 20 % flood, 10 % per game-second.
         public const double Tier2DepthMin = 101, Tier2DepthMax = 300;
         public const double LeakageMin = 0, LeakageMax = 60;          // % of the compartment per game-minute
         public const double FloodThresholdMin = 5, FloodThresholdMax = 95;  // % flood in the electric engine room
@@ -102,7 +102,7 @@ namespace ApePatcher
         public bool DepthApplied;
         public double Tier2Depth = 150;
         public double Leakage1 = 2, Leakage2 = 7.5;
-        public double FloodThreshold = 30;
+        public double FloodThreshold = 20;
         public double MotorDamage = 10;
         public double HullMult1 = 1.25, HullMult2 = 1.5;
 
