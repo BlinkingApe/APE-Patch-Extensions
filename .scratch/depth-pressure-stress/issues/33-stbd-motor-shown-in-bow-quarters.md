@@ -7,7 +7,7 @@ the game later reports "Stb engine repaired". Seen on a Type XXI and on the lab'
 
 **Blocked by:** none
 
-**Status:** ready-for-human (decide what APE does about it)
+**Status:** resolved (owner chose both: patcher fix and README note, 2026-11-25)
 
 ## Answer: OAE's damage model parents the starboard motor to the bow quarters
 
@@ -62,3 +62,28 @@ lab file is byte-identical to the owner's again.
 3. Both.
 
 Not yet checked: whether GWX itself or other GWX-based mods (GWX-KC) carry the same line.
+
+## Comments
+
+### 2026-11-25: built, both options
+
+- **Patcher fix**, "Starboard motor zone fix", optional, off until checked:
+  - `src/patcher_gui/MotorZoneFix.cs` finds `[ElectricEngine1]`'s uncommented `Father`
+    in `data/Zones.cfg`. It is offered only when that value is exactly 24.
+  - On first apply it keeps `Zones.cfg.ape-orig` and changes those two bytes to `30`.
+    Unchecking puts the file back byte for byte and deletes the copy.
+  - It reads as **not needed** when the value is anything else, such as vanilla's 30.
+  - A file changed by another mod after APE wrote it is left alone, and so is one
+    without the line.
+  - It goes through `PatchSession`'s usual verify-then-write, with full rollback, and
+    is written after the `.zon` files and before `ape.act`.
+  - The UI section sits under Depth stress. The Review describes it in game terms.
+- **Tests:** `tests/patcher_gui/MotorZoneFixTests.cs`, 12 cases, both cultures. The
+  full suite passes, 254. A one-off run on the real files found OAE 1.5.2's
+  `Zones.cfg` faulty, with exactly 2 bytes changing (line 2477, `Father=24`), and
+  vanilla's not needed.
+- **README:** a note in the release `readme.html`, which renders to the v1.14 PDF, and in
+  `README.md`. It also tells players without the fix to send repair teams to the bow
+  quarters.
+- **Not checked live:** whether the game re-reads `Zones.cfg` when a mission loads. The
+  lab test relaunched the game, so the patcher says "the next time you start SH3".

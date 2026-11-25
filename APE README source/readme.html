@@ -213,6 +213,8 @@
     <p><strong class="hl">Motor flooding:</strong> once the electric engine room is flooded past the threshold (default 30 %), both electric motors take damage for as long as the engine telegraph is not at stop, at any depth and whatever flooded the room. Ordering <strong class="hl">all stop</strong>, or pumping the room back below the threshold, ends it. Damage never goes past the point where the crew can still repair it. The idea is Stoss's (M. Hamacher on YouTube): water in the motor room meant the motors had to be taken out of service.</p>
     <p>In <strong class="hl">silent running</strong> (pumps off) a boat sitting deep will flood and slowly sink. This is intended: Stiebler's Silent-running Fix does the same, and Depth Stress replaces its depth-gauge workaround.</p>
 
+    <p><strong class="hl">Starboard motor in the bow quarters:</strong> OAE and other GWX-based installs put the starboard electric motor in the bow quarters in their damage model. When it is damaged, the damage screen shows the bow quarters damaged instead of the electric engine room, and only a repair team sent to the bow quarters repairs it. APE's optional <strong class="hl">Starboard motor zone fix</strong> puts the motor back in the electric engine room; it takes effect the next time you start SH3. Without it, send your repair team to the bow quarters.</p>
+
     <h1 class="section">Crush Time</h1>
     <p>Optional, and separate from Depth Stress. It rewrites every playable U-boat's crush speed from one setting (default 5 seconds). The time is nominal: it is the rough time a full-hull boat lasts below crush depth.</p>
 
@@ -227,7 +229,7 @@
       <li>v1.11 &mdash; now only checks for hsie compatibility</li>
       <li>v1.12 &mdash; fixed rare bug where reversing would cause repeated damage</li>
       <li>v1.13 &mdash; fixed diesel damage crash on Linux (Wine/Proton); if upgrading, click "Apply changes" once</li>
-      <li>v1.14 &mdash; new Depth Stress and Crush Time (release candidate)</li>
+      <li>v1.14 &mdash; new Depth Stress, Crush Time and Starboard motor zone fix (release candidate)</li>
     </ul>
 
   </div>

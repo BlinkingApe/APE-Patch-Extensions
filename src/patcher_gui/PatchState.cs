@@ -74,6 +74,10 @@ namespace ApePatcher
         public bool CrushApplied;
         public int CrushTime = CrushTimeDefault;
 
+        // Starboard motor zone fix (depth-pressure-stress ticket 33): data/Zones.cfg's
+        // [ElectricEngine1] Father 24 -> 30. No values, only on or off.
+        public bool MotorZoneFixApplied;
+
         public bool CrushTimeValid
         {
             get { return CrushTime >= CrushTimeMin && CrushTime <= CrushTimeMax; }

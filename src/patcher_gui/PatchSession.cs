@@ -35,6 +35,9 @@ namespace ApePatcher
         /// the crush-time patch (ticket 16). Empty when there are none.</summary>
         public List<UBoatZon> UBoats = new List<UBoatZon>();
 
+        /// <summary>data/Zones.cfg, for the starboard motor zone fix (ticket 33).</summary>
+        public ZonesCfg Zones = new ZonesCfg();
+
         readonly Dictionary<string, bool> available = new Dictionary<string, bool>(StringComparer.Ordinal);
         readonly Dictionary<string, bool> applied = new Dictionary<string, bool>(StringComparer.Ordinal);
 
@@ -94,6 +97,15 @@ namespace ApePatcher
         public float CrashSpeed;      // what NewBytes holds
     }
 
+    /// <summary>The starboard motor zone fix's one file, data/Zones.cfg: APE's
+    /// fix, or the install's own file back when Restore is set.</summary>
+    public class ZonesCfgWrite
+    {
+        public ZonesCfg File;
+        public bool Restore;
+        public byte[] NewBytes;
+    }
+
     /// <summary>Depth stress's one file: ape.act deployed with the desired
     /// values, or deleted (ADR-0006).</summary>
     public class ApeActWrite
@@ -109,11 +121,13 @@ namespace ApePatcher
     {
         public List<PlannedWrite> Writes = new List<PlannedWrite>();
         public List<ZonWrite> ZonWrites = new List<ZonWrite>();
+        public ZonesCfgWrite Zones;   // null when Zones.cfg stays as it is
         public ApeActWrite ApeAct;    // null when ape.act stays as it is
 
         public bool Touches(string patchId)
         {
             if (patchId == CrushTime.PatchId) return ZonWrites.Count > 0;
+            if (patchId == MotorZoneFix.PatchId) return Zones != null;
             if (patchId == DepthStress.PatchId) return ApeAct != null;
             foreach (PlannedWrite w in Writes)
                 if (w.Patch.Id == patchId) return true;
@@ -127,11 +141,15 @@ namespace ApePatcher
                 List<string> seen = new List<string>();
                 foreach (PlannedWrite w in Writes)
                     if (!seen.Contains(w.Patch.Id)) seen.Add(w.Patch.Id);
-                return seen.Count + (ZonWrites.Count > 0 ? 1 : 0) + (ApeAct != null ? 1 : 0);
+                return seen.Count + (ZonWrites.Count > 0 ? 1 : 0) + (Zones != null ? 1 : 0)
+                    + (ApeAct != null ? 1 : 0);
             }
         }
 
-        public bool Empty { get { return Writes.Count == 0 && ZonWrites.Count == 0 && ApeAct == null; } }
+        public bool Empty
+        {
+            get { return Writes.Count == 0 && ZonWrites.Count == 0 && Zones == null && ApeAct == null; }
+        }
     }
 
     public class PatchSession
@@ -275,6 +293,14 @@ namespace ApePatcher
             Install.SetAvailable(CrushTime.PatchId, anyWritable);
             Install.SetApplied(CrushTime.PatchId, anyApplied);
 
+            // The starboard motor zone fix (ticket 33): offered only where the
+            // fault is, or where APE's own fix is there to take out.
+            try { Install.Zones = MotorZoneFix.Discover(dir); }
+            catch (Exception) { Install.Zones = new ZonesCfg(); }
+            Install.SetAvailable(MotorZoneFix.PatchId,
+                Install.Zones.State == ZonesState.Faulty || Install.Zones.State == ZonesState.Applied);
+            Install.SetApplied(MotorZoneFix.PatchId, Install.Zones.State == ZonesState.Applied);
+
             // Depth stress is applied exactly when ape.act is in the game root:
             // APE deploys it only for a runtime feature, and depth stress is the
             // only one (ADR-0006).
@@ -375,6 +401,7 @@ namespace ApePatcher
             if (!DepthStress.Read(apeAct, manifest.DepthStressStruct, Current))
                 DepthStress.Read(apeActTemplate, manifest.DepthStressStruct, Current);
 
+            Current.MotorZoneFixApplied = Install.Applied(MotorZoneFix.PatchId);
             Current.CrushApplied = Install.Applied(CrushTime.PatchId);
             foreach (UBoatZon b in Install.UBoats)
             {
@@ -491,8 +518,29 @@ namespace ApePatcher
                 }
             }
             PlanZons(plan, desired);
+            PlanZonesFix(plan, desired);
             PlanApeAct(plan, desired);
             return plan;
+        }
+
+        /// <summary>The starboard motor zone fix's write: the fix onto the
+        /// install's own file when wanted and the fault is there, the install's own
+        /// file back when not wanted and APE's fix is there. A file in any other
+        /// state is never written.</summary>
+        void PlanZonesFix(WritePlan plan, PatchState desired)
+        {
+            ZonesCfg z = Install.Zones;
+            ZonesCfgWrite w = new ZonesCfgWrite();
+            w.File = z;
+            if (desired.MotorZoneFixApplied && z.State == ZonesState.Faulty)
+                w.NewBytes = MotorZoneFix.Fixed(z.Pristine);
+            else if (!desired.MotorZoneFixApplied && z.State == ZonesState.Applied)
+            {
+                w.Restore = true;
+                w.NewBytes = z.Original;
+            }
+            else return;
+            plan.Zones = w;
         }
 
         /// <summary>Depth stress's write: the template with the desired values when
@@ -727,6 +775,7 @@ namespace ApePatcher
             }
 
             string zonChanged = VerifyZons(plan);
+            if (zonChanged == null) zonChanged = VerifyZonesFix(plan);
             if (zonChanged != null)
             {
                 report.Message = zonChanged;
@@ -766,6 +815,9 @@ namespace ApePatcher
             }
             foreach (ZonWrite z in plan.ZonWrites)
                 report.SitesWritten.Add(z.Boat.RelativePath + " CrashSpeed");
+            if (plan.Zones != null)
+                report.SitesWritten.Add(MotorZoneFix.RelativePath
+                    + (plan.Zones.Restore ? " restored" : " [ElectricEngine1] Father"));
             if (plan.ApeAct != null)
                 report.SitesWritten.Add(DepthStress.FileName
                     + (plan.ApeAct.Delete ? " removed" : " depth-stress constants"));
@@ -848,6 +900,7 @@ namespace ApePatcher
             undo.Ini = iniChanged ? iniBackup : null;
             undo.Menu = menuChanged ? menuBackup : null;
             string lateFailure = WriteZons(plan, undo);
+            if (lateFailure == null) lateFailure = WriteZonesFix(plan, undo);
             if (lateFailure == null) lateFailure = WriteApeAct(plan, undo);
             if (lateFailure != null)
             {
@@ -856,6 +909,7 @@ namespace ApePatcher
                 return report;
             }
             FinishZons(plan);
+            FinishZonesFix(plan);
 
             exe = newExe;
             ini = newIni;
@@ -934,6 +988,9 @@ namespace ApePatcher
             if (plan.ZonWrites.Count > 0)
                 parts.Add(CrushTime.PatchName + " (" + Fmt.Int(plan.ZonWrites.Count)
                     + (plan.ZonWrites.Count == 1 ? " U-boat file)" : " U-boat files)"));
+            if (plan.Zones != null)
+                parts.Add(MotorZoneFix.PatchName + " (" + MotorZoneFix.RelativePath
+                    + (plan.Zones.Restore ? " restored)" : ")"));
             if (plan.ApeAct != null)
                 parts.Add(DepthStress.PatchName + " (" + DepthStress.FileName
                     + (plan.ApeAct.Delete ? " removed)" : " deployed)"));
@@ -1047,6 +1104,7 @@ namespace ApePatcher
             public IniFile Ini;
             public IniFile Menu;
             public List<UBoatZon> ZonsWritten = new List<UBoatZon>();
+            public ZonesCfg ZonesWritten;   // null when Zones.cfg wasn't written
             public List<string> CopiesMade = new List<string>();
         }
 
@@ -1059,6 +1117,11 @@ namespace ApePatcher
             foreach (UBoatZon b in undo.ZonsWritten)
             {
                 try { WriteZonBytes(b.ZonPath, b.Bytes); }
+                catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+            }
+            if (undo.ZonesWritten != null)
+            {
+                try { WriteZonBytes(undo.ZonesWritten.Path, undo.ZonesWritten.Bytes); }
                 catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
             }
             foreach (string copy in undo.CopiesMade)
@@ -1093,7 +1156,8 @@ namespace ApePatcher
                 + rollbackFailure.Message + ")."
                 + Environment.NewLine + Environment.NewLine
                 + "Your install may now be inconsistent: " + Sh3ExeName + ", " + HsieIniName + ", "
-                + MenuTextName + ", a data/Submarine .zon file or " + DepthStress.FileName
+                + MenuTextName + ", a data/Submarine .zon file, " + MotorZoneFix.RelativePath
+                + " or " + DepthStress.FileName
                 + " may still hold the change APE just made."
                 + Environment.NewLine + Environment.NewLine
                 + "To recover: close APE, make sure the game folder is writable (not read-only, "
@@ -1145,6 +1209,68 @@ namespace ApePatcher
                 try { DeleteFile(w.Boat.OrigPath); }
                 catch (Exception) { }
             }
+        }
+
+        /// <summary>data/Zones.cfg must still be exactly what this session read,
+        /// its pristine copy included, as for the .zon files.</summary>
+        string VerifyZonesFix(WritePlan plan)
+        {
+            if (plan.Zones == null) return null;
+            ZonesCfg z = plan.Zones.File;
+            bool same;
+            try
+            {
+                same = File.Exists(z.Path) && Same(File.ReadAllBytes(z.Path), z.Bytes)
+                    && (z.Original == null
+                        ? !File.Exists(z.OrigPath)
+                        : File.Exists(z.OrigPath) && Same(File.ReadAllBytes(z.OrigPath), z.Original));
+            }
+            catch (Exception)
+            {
+                same = false;
+            }
+            if (same) return null;
+            return "APE refused to write. " + MotorZoneFix.RelativePath + " changed after APE "
+                + "opened this install." + Environment.NewLine
+                + "Nothing was written, in any file. Reopen APE and try again.";
+        }
+
+        /// <summary>Writes Zones.cfg (its pristine copy first, on APE's first
+        /// write), recording it in `undo`. On a failure it puts back everything
+        /// this attempt wrote, in every store, and returns the message; null on
+        /// success. A revert's copy is deleted only by FinishZonesFix.</summary>
+        string WriteZonesFix(WritePlan plan, Undo undo)
+        {
+            ZonesCfgWrite w = plan.Zones;
+            if (w == null) return null;
+            try
+            {
+                if (!w.Restore && w.File.Original == null)
+                {
+                    WriteZonBytes(w.File.OrigPath, w.File.Bytes);
+                    undo.CopiesMade.Add(w.File.OrigPath);
+                }
+                undo.ZonesWritten = w.File;
+                WriteZonBytes(w.File.Path, w.NewBytes);
+            }
+            catch (Exception failure)
+            {
+                Exception rollbackFailure = RollBack(undo);
+                if (rollbackFailure == null)
+                    return CannotWrite(MotorZoneFix.RelativePath, failure);
+                return PartlyRolledBack("write " + MotorZoneFix.RelativePath, failure, rollbackFailure);
+            }
+            return null;
+        }
+
+        /// <summary>Once every store is written: deletes APE's copy after a
+        /// revert. A copy that won't delete leaves the install's own file beside
+        /// it, which reads as the fault again; the next apply reuses it.</summary>
+        void FinishZonesFix(WritePlan plan)
+        {
+            if (plan.Zones == null || !plan.Zones.Restore) return;
+            try { DeleteFile(plan.Zones.File.OrigPath); }
+            catch (Exception) { }
         }
 
         /// <summary>Deploys or deletes ape.act, the last store written. On a

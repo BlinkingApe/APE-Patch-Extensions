@@ -53,6 +53,10 @@ namespace ApePatcher.Ui
         Control depthFields;
         List<DepthField> depthInputs = new List<DepthField>();
 
+        // starboard motor zone fix (depth-pressure-stress ticket 33)
+        CheckBox zoneOn;
+        Label zoneTitle, zoneState;
+
         class DepthField
         {
             public NumericUpDown Box;
@@ -339,6 +343,30 @@ namespace ApePatcher.Ui
             depthNote.Margin = new Padding(22, 2, 0, 12);
             column.Controls.Add(depthNote);
 
+            // ---- starboard motor zone fix
+            zoneOn = new CheckBox();
+            zoneOn.AutoSize = true;
+            zoneOn.Text = "";
+            zoneTitle = Widgets.Label(MotorZoneFix.PatchName, Look.Bold, SystemColors.ControlText);
+            column.Controls.Add(Row(zoneOn, zoneTitle));
+            zoneOn.CheckedChanged += delegate { if (!binding) { desired.MotorZoneFixApplied = zoneOn.Checked; Sync(); } };
+
+            zoneState = Widgets.Wrapped("", Look.Base, Look.Dim, inner);
+            zoneState.Margin = new Padding(22, 2, 0, 12);
+            column.Controls.Add(zoneState);
+
+            string zoneTip = "OAE's damage model (from GWX) puts the starboard electric motor in the "
+                + "bow quarters instead of the electric engine room. The damage screen then shows "
+                + "its damage there, and only a repair team sent to the bow quarters repairs it."
+                + Environment.NewLine
+                + "This puts it back in the electric engine room, as in the stock game. APE keeps "
+                + "a copy of the file as it was and puts it back when you uncheck this."
+                + Environment.NewLine
+                + "The game reads it at startup, so it takes effect the next time you start SH3.";
+            tips.SetToolTip(zoneOn, zoneTip);
+            tips.SetToolTip(zoneTitle, zoneTip);
+            tips.SetToolTip(zoneState, zoneTip);
+
             return column;
         }
 
@@ -478,6 +506,7 @@ namespace ApePatcher.Ui
             List<Control> order = new List<Control>(new Control[] { hullOn, hullMin, hullMax,
                 dieselOn, rate, bandLo, bandHi, crushOn, crushTime, depthOn });
             foreach (DepthField f in depthInputs) order.Add(f.Box);
+            order.Add(zoneOn);
             order.Add(apply);
             for (int i = 0; i < order.Count; i++)
             {
@@ -585,6 +614,7 @@ namespace ApePatcher.Ui
 
                 RenderCrush(install, supported);
                 RenderDepth(install, supported);
+                RenderZoneFix(install, supported);
                 RenderReview();
                 RenderApplyButton();
             }
@@ -634,6 +664,36 @@ namespace ApePatcher.Ui
                 : string.Join(" ", leftAlone.ToArray());
             Widgets.SetWrappedText(crushNote, problem, crushNote.Width);
             crushNote.Visible = problem.Length > 0;
+        }
+
+        void RenderZoneFix(InstallReport install, bool supported)
+        {
+            bool usable = supported && install.Available(MotorZoneFix.PatchId);
+            bool applied = supported && install.Applied(MotorZoneFix.PatchId);
+            ZonesCfg z = install.Zones;
+
+            zoneOn.Enabled = usable;
+            zoneOn.Checked = desired.MotorZoneFixApplied && usable;
+            zoneTitle.ForeColor = usable ? SystemColors.ControlText : Look.Dim;
+
+            string state =
+                !supported ? "Unavailable — APE does not recognise this install."
+                : z.State == ZonesState.Absent ? "Unavailable — this install has no "
+                    + MotorZoneFix.RelativePath + "."
+                : z.State == ZonesState.NotNeeded ? "Not needed — this install already puts the "
+                    + "starboard electric motor in the electric engine room."
+                : z.State == ZonesState.ChangedByOtherMod ? "Unavailable — "
+                    + MotorZoneFix.RelativePath + " was changed by another mod after APE wrote it. "
+                    + "APE leaves it alone."
+                : z.State == ZonesState.Unreadable ? "Unavailable — APE cannot read "
+                    + MotorZoneFix.RelativePath + " safely (" + z.Problem + "). APE leaves it alone."
+                : desired.MotorZoneFixApplied && applied
+                    ? "APE is applied. Unchecking it and applying puts this install's own file back."
+                : desired.MotorZoneFixApplied
+                    ? "Moves the starboard electric motor back into the electric engine room."
+                : "Not applied — this install puts the starboard electric motor in the bow "
+                    + "quarters, so its damage shows there and is repaired from there.";
+            Widgets.SetWrappedText(zoneState, state, zoneState.Width);
         }
 
         void RenderDepth(InstallReport install, bool supported)

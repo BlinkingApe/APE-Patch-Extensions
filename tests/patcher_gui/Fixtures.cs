@@ -215,6 +215,32 @@ namespace ApePatcher.Tests
         static void Text(MemoryStream m, string s) { Raw(m, System.Text.Encoding.ASCII.GetBytes(s)); }
         static void Raw(MemoryStream m, byte[] b) { m.Write(b, 0, b.Length); }
 
+        // -- data/Zones.cfg (depth-pressure-stress ticket 33) -----------------
+
+        /// <summary>A trimmed Zones.cfg in OAE's shape: the electric engine room,
+        /// then both motors' zones, CRLF, with a commented-out Father line in
+        /// another section to catch a parser that doesn't respect sections or
+        /// comments. stbdFather is [ElectricEngine1]'s Father: "24" in OAE/GWX,
+        /// "30" in vanilla.</summary>
+        public static string ZonesCfgText(string stbdFather)
+        {
+            return ";GWX Damage Model\r\n"
+                + "[Zones List]\r\n22=ElectricEngine1\r\n24=Quarters1\r\n30=ElectricEngineRoom\r\n56=ElectricEngine2\r\n\r\n"
+                + "[ElectricEngineRoom]\r\nCategory=Engines Room\r\nHitPoints=400\r\n;Father=24\r\n\r\n"
+                + "[ElectricEngine1]\r\nCategory=Engines Room\r\nHitPoints=180\r\nCritical=No\r\n"
+                + "Father=" + stbdFather + "\r\nFloodingTime=59.999996\r\n\r\n"
+                + "[ElectricEngine2]\r\nCategory=Engines Room\r\nHitPoints=170\r\nFather=30\r\n";
+        }
+
+        /// <summary>Writes data/Zones.cfg into an install; returns its path.</summary>
+        public static string AddZonesCfg(Install install, string stbdFather)
+        {
+            string path = Path.Combine(Path.Combine(install.Dir, "data"), "Zones.cfg");
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllBytes(path, System.Text.Encoding.ASCII.GetBytes(ZonesCfgText(stbdFather)));
+            return path;
+        }
+
         /// <summary>The CrashSpeed a .zon currently holds, found the same way APE
         /// finds it.</summary>
         public static float CrashSpeedIn(string zonPath)

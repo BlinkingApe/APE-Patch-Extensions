@@ -66,6 +66,7 @@ namespace ApePatcher
             if (plan.Touches(Manifest.HullPatchId)) r.Groups.Add(Hull(desired));
             if (plan.Touches(Manifest.DieselPatchId)) r.Groups.Add(Diesel(desired));
             if (plan.Touches(CrushTime.PatchId)) r.Groups.Add(Crush(install, plan, desired));
+            if (plan.Touches(MotorZoneFix.PatchId)) r.Groups.Add(MotorZone(desired));
             if (plan.Touches(DepthStress.PatchId)) r.Groups.Add(Depth(plan, desired));
             r.FeatureCount = r.Groups.Count;
 
@@ -73,6 +74,28 @@ namespace ApePatcher
                 r.NothingText = "Nothing. Every feature is left exactly as this install "
                     + "already has it.";
             return r;
+        }
+
+        /// <summary>The starboard motor zone fix (ticket 33), in what the player
+        /// sees on the damage screen.</summary>
+        static ReviewGroup MotorZone(PatchState d)
+        {
+            ReviewGroup g = new ReviewGroup();
+            g.Title = MotorZoneFix.PatchName;
+            if (d.MotorZoneFixApplied)
+            {
+                g.Lines.Add(new ReviewLine("The starboard electric motor moves back into the electric "
+                    + "engine room: its damage shows there, and a repair team sent there repairs it.", false));
+                g.Lines.Add(new ReviewLine("Hits in the bow quarters no longer damage it.", false));
+            }
+            else
+            {
+                g.Lines.Add(new ReviewLine("The starboard electric motor goes back to the bow quarters, "
+                    + "as this install shipped: its damage shows there, and only a repair team sent "
+                    + "there repairs it.", false));
+            }
+            g.Lines.Add(new ReviewLine("Takes effect the next time you start SH3.", false));
+            return g;
         }
 
         /// <summary>Why a class the crush-time patch will not touch is left alone,
