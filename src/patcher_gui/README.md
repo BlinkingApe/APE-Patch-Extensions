@@ -32,10 +32,15 @@ install was readable, `2` built but the install was refused, `1` it threw.
 ## Shape
 
 ```
-PatchState    the desired-state model -- the two features' fields and every
+PatchState    the desired-state model -- the features' fields and every
               statistic derived from them. No I/O, no WinForms.
 Review        "what will change", in game terms. Never names a file, an
-              address or a ValN key.
+              address or a ValN key -- except the crush-time patch, which
+              names each .zon it writes.
+ZonFile       the crush-time patch's store: finds the playable U-boat .zon
+              files, parses Hit_Points/CrashSpeed by key, and judges each as
+              stock, APE's, changed by another mod, or unreadable. Keeps a
+              pristine <name>.zon.ape-orig for the revert (ADR-0010).
 PatchSession  the only seam. Open reports what an install is and holds; Apply
               verifies every site and writes all of it or none of it.
 IniFile       surgical hsie.ini editing -- named keys only, everything else

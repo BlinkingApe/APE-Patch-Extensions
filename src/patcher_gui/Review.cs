@@ -4,6 +4,9 @@
 // settings will do, not what bytes will move.  So it names no file, no address
 // and no ValN key -- a decision taken in the prototype round and kept here --
 // and it is grouped by feature, because a feature is what a checkbox owns.
+// The one exception is the crush-time patch, which names every .zon it writes:
+// its targets are discovered per install, and the player has to see which
+// classes they are (depth-pressure-stress ticket 16).
 //
 // It lives in the core rather than the form for the same reason the arithmetic
 // does: it is the part worth testing, and the WinForms layer only lays it out.
@@ -61,12 +64,64 @@ namespace ApePatcher
 
             if (plan.Touches(Manifest.HullPatchId)) r.Groups.Add(Hull(desired));
             if (plan.Touches(Manifest.DieselPatchId)) r.Groups.Add(Diesel(desired));
+            if (plan.Touches(CrushTime.PatchId)) r.Groups.Add(Crush(install, plan, desired));
             r.FeatureCount = r.Groups.Count;
 
             if (r.Groups.Count == 0)
-                r.NothingText = "Nothing. Both features are left exactly as this install "
-                    + "already has them.";
+                r.NothingText = "Nothing. Every feature is left exactly as this install "
+                    + "already has it.";
             return r;
+        }
+
+        /// <summary>Why a class the crush-time patch will not touch is left alone,
+        /// or null for one it can write. Shared with the panel's own note.</summary>
+        public static string LeftAlone(UBoatZon b)
+        {
+            if (b.State == ZonState.ChangedByOtherMod)
+                return b.FileName + " was changed by another mod after APE wrote it. APE leaves "
+                    + "it alone.";
+            if (b.State == ZonState.Unreadable)
+                return "APE cannot read " + b.FileName + " safely (" + b.Problem + "). APE "
+                    + "leaves it alone.";
+            return null;
+        }
+
+        /// <summary>The one group that names files: the player has to be able to
+        /// see which classes, and which shared AI boats, a crush time reaches
+        /// (ticket 16).</summary>
+        static ReviewGroup Crush(InstallReport install, WritePlan plan, PatchState d)
+        {
+            ReviewGroup g = new ReviewGroup();
+            g.Title = CrushTime.PatchName;
+
+            if (!d.CrushApplied)
+            {
+                g.Lines.Add(new ReviewLine("Each U-boat's own crush speed comes back, from the "
+                    + "copy APE kept beside its .zon file.", false));
+                foreach (ZonWrite w in plan.ZonWrites)
+                    g.Lines.Add(new ReviewLine("Restores " + w.Boat.RelativePath + ".", false));
+            }
+            else
+            {
+                g.Lines.Add(new ReviewLine("Below crush depth, a U-boat at full hull is crushed in "
+                    + "about " + Fmt.Int(d.CrushTime) + (d.CrushTime == 1 ? " second" : " seconds")
+                    + ", whatever its class.", false));
+                foreach (ZonWrite w in plan.ZonWrites)
+                    g.Lines.Add(new ReviewLine("Writes " + w.Boat.RelativePath + ": "
+                        + Fmt.F1(w.Boat.Record.HitPoints) + " hull ÷ " + Fmt.Int(d.CrushTime)
+                        + " s = " + Fmt.F2(w.CrashSpeed) + " hull per second.", false));
+                g.Lines.Add(new ReviewLine("AI U-boats of these classes change too, because they "
+                    + "share the file.", false));
+            }
+
+            foreach (UBoatZon b in install.UBoats)
+            {
+                string why = LeftAlone(b);
+                if (why != null) g.Lines.Add(new ReviewLine(why, true));
+            }
+            g.Lines.Add(new ReviewLine("The game reads this when a mission loads, so it takes "
+                + "effect from the next mission you start or load.", false));
+            return g;
         }
 
         /// <summary>The derived-stats block under the diesel fields. Threshold

@@ -1,6 +1,6 @@
 // The one window: prototype variant C, folded into the real tool.
 //
-// An install-verification header across the top, the two features down the left,
+// An install-verification header across the top, the features down the left,
 // a plain-English "what will change" list on the right, and one Apply that
 // commits everything at once.
 //
@@ -40,6 +40,13 @@ namespace ApePatcher.Ui
         FlowLayoutPanel statsBox;
         Panel dieselFields;
 
+        // crush time (depth-pressure-stress ticket 16)
+        CheckBox crushOn;
+        Label crushTitle, crushState, crushNote;
+        NumericUpDown crushTime;
+        Control crushFields;
+        ToolTip tips;
+
         // right column
         Label reviewHeading, reviewCount;
         Panel reviewList;
@@ -57,7 +64,7 @@ namespace ApePatcher.Ui
             Font = Look.Base;
             Icon = Look.AppIcon();
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(1010, 700);
+            ClientSize = new Size(1010, 760);
             MinimumSize = new Size(900, 640);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Look.Page;
@@ -134,7 +141,7 @@ namespace ApePatcher.Ui
             return placeholder;
         }
 
-        // -- left column: the two features -------------------------------------
+        // -- left column: the features -----------------------------------------
 
         Control BuildLeftColumn()
         {
@@ -231,6 +238,39 @@ namespace ApePatcher.Ui
             statsBox.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             statsBox.Margin = new Padding(22, 4, 0, 4);
             column.Controls.Add(statsBox);
+
+            // ---- crush time
+            crushOn = new CheckBox();
+            crushOn.AutoSize = true;
+            crushOn.Text = "";
+            crushTitle = Widgets.Label(CrushTime.PatchName, Look.Bold, SystemColors.ControlText);
+            column.Controls.Add(Row(crushOn, crushTitle));
+            crushOn.CheckedChanged += delegate { if (!binding) { desired.CrushApplied = crushOn.Checked; Sync(); } };
+
+            crushState = Widgets.Wrapped("", Look.Base, Look.Dim, inner);
+            crushState.Margin = new Padding(22, 2, 0, 4);
+            column.Controls.Add(crushState);
+
+            crushTime = Widgets.Num(desired.CrushTime, PatchState.CrushTimeMin,
+                PatchState.CrushTimeMax, 0, 1, 72);
+            crushTime.ValueChanged += delegate { if (!binding) { desired.CrushTime = (int)crushTime.Value; Sync(); } };
+            Label crushLabel = Widgets.Label("Crush time (seconds)", Look.Base, Look.Dim);
+            crushFields = Fields(new Control[] { crushLabel, crushTime });
+            column.Controls.Add(crushFields);
+
+            tips = new ToolTip();
+            string tip = "How long a U-boat at full hull lasts below crush depth, the same for "
+                + "every class." + Environment.NewLine
+                + "APE writes each class's crush speed as its hull hit points divided by this time."
+                + Environment.NewLine
+                + "The game reads it when a mission loads, so a change takes effect from the next "
+                + "mission you start or load.";
+            tips.SetToolTip(crushTime, tip);
+            tips.SetToolTip(crushLabel, tip);
+
+            crushNote = Widgets.Wrapped("", Look.Base, Look.Warn, inner);
+            crushNote.Margin = new Padding(22, 2, 0, 12);
+            column.Controls.Add(crushNote);
 
             return column;
         }
@@ -344,7 +384,8 @@ namespace ApePatcher.Ui
         void SetTabOrder()
         {
             // Top to bottom through the left column, ending on Apply.
-            Control[] order = { hullOn, hullMin, hullMax, dieselOn, rate, bandLo, bandHi, apply };
+            Control[] order = { hullOn, hullMin, hullMax, dieselOn, rate, bandLo, bandHi,
+                                crushOn, crushTime, apply };
             for (int i = 0; i < order.Length; i++)
             {
                 order[i].TabIndex = i;
@@ -449,6 +490,7 @@ namespace ApePatcher.Ui
                     RenderStats();
                 }
 
+                RenderCrush(install, supported);
                 RenderReview();
                 RenderApplyButton();
             }
@@ -456,6 +498,48 @@ namespace ApePatcher.Ui
             {
                 binding = false;
             }
+        }
+
+        void RenderCrush(InstallReport install, bool supported)
+        {
+            bool available = supported && install.Available(CrushTime.PatchId);
+            bool applied = supported && install.Applied(CrushTime.PatchId);
+            bool usable = available || applied;
+
+            crushOn.Enabled = usable;
+            crushOn.Checked = desired.CrushApplied && usable;
+            crushTitle.ForeColor = usable ? SystemColors.ControlText : Look.Dim;
+            crushTime.Enabled = usable && desired.CrushApplied;
+            crushTime.Value = Clamp(desired.CrushTime, crushTime);
+            crushFields.Visible = usable;
+
+            int classes = 0;
+            List<string> leftAlone = new List<string>();
+            foreach (UBoatZon b in install.UBoats)
+            {
+                string why = Review.LeftAlone(b);
+                if (why == null) classes++;
+                else leftAlone.Add(why);
+            }
+
+            string state =
+                !supported ? "Unavailable — APE does not recognise this install."
+                : !usable ? "Unavailable — APE found no playable U-boat .zon file under "
+                            + "data/Submarine that it can write."
+                : desired.CrushApplied && applied
+                    ? "APE is applied to " + Fmt.Int(classes) + " U-boat classes. Unchecking it "
+                      + "and applying puts each class's own crush speed back."
+                : desired.CrushApplied
+                    ? "Sets the crush speed of " + Fmt.Int(classes) + " playable U-boat classes."
+                : "Not applied — each U-boat keeps its own crush speed.";
+            Widgets.SetWrappedText(crushState, state, crushState.Width);
+
+            string problem = !desired.CrushTimeValid
+                ? "The crush time must be from " + Fmt.Int(PatchState.CrushTimeMin) + " to "
+                  + Fmt.Int(PatchState.CrushTimeMax) + " seconds."
+                : string.Join(" ", leftAlone.ToArray());
+            Widgets.SetWrappedText(crushNote, problem, crushNote.Width);
+            crushNote.Visible = problem.Length > 0;
         }
 
         static decimal Clamp(decimal v, NumericUpDown n)
@@ -545,7 +629,8 @@ namespace ApePatcher.Ui
         void RenderApplyButton()
         {
             bool valid = (!desired.HullApplied || desired.HullValid)
-                      && (!desired.DieselApplied || desired.DieselValid);
+                      && (!desired.DieselApplied || desired.DieselValid)
+                      && (!desired.CrushApplied || desired.CrushTimeValid);
             bool anything = !session.Plan(desired).Empty;
 
             apply.Enabled = session.Install.Supported && valid && anything;

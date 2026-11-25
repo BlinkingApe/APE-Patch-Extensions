@@ -63,6 +63,20 @@ namespace ApePatcher
         public double BandLo = 0.15;   // fraction of one engine, per event
         public double BandHi = 0.55;
 
+        // Crush time (depth-pressure-stress ticket 16): whole seconds a U-boat at
+        // full hull survives below crush depth. One value for every class.
+        public const int CrushTimeMin = 1;
+        public const int CrushTimeMax = 3600;
+        public const int CrushTimeDefault = 5;
+
+        public bool CrushApplied;
+        public int CrushTime = CrushTimeDefault;
+
+        public bool CrushTimeValid
+        {
+            get { return CrushTime >= CrushTimeMin && CrushTime <= CrushTimeMax; }
+        }
+
         public PatchState Clone()
         {
             return (PatchState)MemberwiseClone();

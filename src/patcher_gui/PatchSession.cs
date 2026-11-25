@@ -31,6 +31,10 @@ namespace ApePatcher
         /// reads this table and never writes it (ticket 05, decision A-2).</summary>
         public bool DieselFlagOn;
 
+        /// <summary>Every playable U-boat class found under data/Submarine, for
+        /// the crush-time patch (ticket 16). Empty when there are none.</summary>
+        public List<UBoatZon> UBoats = new List<UBoatZon>();
+
         readonly Dictionary<string, bool> available = new Dictionary<string, bool>(StringComparer.Ordinal);
         readonly Dictionary<string, bool> applied = new Dictionary<string, bool>(StringComparer.Ordinal);
 
@@ -80,12 +84,24 @@ namespace ApePatcher
         public Site Site;
     }
 
+    /// <summary>One .zon file the crush-time patch will write: APE's crush
+    /// speed, or the pristine copy back when Restore is set.</summary>
+    public class ZonWrite
+    {
+        public UBoatZon Boat;
+        public bool Restore;
+        public byte[] NewBytes;
+        public float CrashSpeed;      // what NewBytes holds
+    }
+
     public class WritePlan
     {
         public List<PlannedWrite> Writes = new List<PlannedWrite>();
+        public List<ZonWrite> ZonWrites = new List<ZonWrite>();
 
         public bool Touches(string patchId)
         {
+            if (patchId == CrushTime.PatchId) return ZonWrites.Count > 0;
             foreach (PlannedWrite w in Writes)
                 if (w.Patch.Id == patchId) return true;
             return false;
@@ -98,11 +114,11 @@ namespace ApePatcher
                 List<string> seen = new List<string>();
                 foreach (PlannedWrite w in Writes)
                     if (!seen.Contains(w.Patch.Id)) seen.Add(w.Patch.Id);
-                return seen.Count;
+                return seen.Count + (ZonWrites.Count > 0 ? 1 : 0);
             }
         }
 
-        public bool Empty { get { return Writes.Count == 0; } }
+        public bool Empty { get { return Writes.Count == 0 && ZonWrites.Count == 0; } }
     }
 
     public class PatchSession
@@ -122,6 +138,8 @@ namespace ApePatcher
         /// read-only disk (ticket 01 story 14). Defaults to the real thing.</summary>
         internal Action<string, byte[]> WriteExeBytes = File.WriteAllBytes;
         internal Action<IniFile, string> SaveIni = delegate(IniFile f, string p) { f.Save(p); };
+        internal Action<string, byte[]> WriteZonBytes = File.WriteAllBytes;
+        internal Action<string> DeleteFile = File.Delete;
 
         public InstallReport Install { get; private set; }
 
@@ -217,6 +235,20 @@ namespace ApePatcher
                 Install.SetApplied(p.Id, IsApplied(p));
             }
 
+            // The crush-time patch's targets are found, not authored (ticket 16).
+            // A Submarine folder APE cannot list leaves the feature unavailable
+            // rather than refusing the whole install.
+            try { Install.UBoats = CrushTime.Discover(dir); }
+            catch (Exception) { Install.UBoats = new List<UBoatZon>(); }
+            bool anyWritable = false, anyApplied = false;
+            foreach (UBoatZon b in Install.UBoats)
+            {
+                if (b.State == ZonState.Stock || b.State == ZonState.Applied) anyWritable = true;
+                if (b.State == ZonState.Applied) anyApplied = true;
+            }
+            Install.SetAvailable(CrushTime.PatchId, anyWritable);
+            Install.SetApplied(CrushTime.PatchId, anyApplied);
+
             ReadBack();
         }
 
@@ -304,6 +336,13 @@ namespace ApePatcher
 
         void ReadBack()
         {
+            Current.CrushApplied = Install.Applied(CrushTime.PatchId);
+            foreach (UBoatZon b in Install.UBoats)
+            {
+                int t = b.AppliedCrushTime;
+                if (t > 0) { Current.CrushTime = t; break; }
+            }
+
             Current.HullApplied = Install.Applied(Manifest.HullPatchId);
             Current.DieselApplied = Install.Applied(Manifest.DieselPatchId)
                                     && Install.Available(Manifest.DieselPatchId);
@@ -412,7 +451,36 @@ namespace ApePatcher
                     }
                 }
             }
+            PlanZons(plan, desired);
             return plan;
+        }
+
+        /// <summary>The crush-time patch's writes. A class another mod has changed,
+        /// or one APE cannot read, is never written in either direction. A stock
+        /// class is always written when the patch is wanted, even if its value
+        /// already matches, because that write is what keeps its pristine copy.</summary>
+        void PlanZons(WritePlan plan, PatchState desired)
+        {
+            foreach (UBoatZon b in Install.UBoats)
+            {
+                if (b.State != ZonState.Stock && b.State != ZonState.Applied) continue;
+                ZonWrite w = new ZonWrite();
+                w.Boat = b;
+                if (desired.CrushApplied)
+                {
+                    w.CrashSpeed = Zon.CrashSpeedFor(b.Record.HitPoints, desired.CrushTime);
+                    w.NewBytes = Zon.WithCrashSpeed(b.Pristine, b.Record, w.CrashSpeed);
+                    if (b.State == ZonState.Applied && Same(b.Bytes, w.NewBytes)) continue;
+                }
+                else
+                {
+                    if (b.State != ZonState.Applied) continue;
+                    w.Restore = true;
+                    w.CrashSpeed = b.Record.CrashSpeed;
+                    w.NewBytes = b.Original;
+                }
+                plan.ZonWrites.Add(w);
+            }
         }
 
         static void Add(WritePlan plan, Patch p, Site s)
@@ -544,6 +612,13 @@ namespace ApePatcher
                     + "and below the high end, which must itself be below 1.";
                 return report;
             }
+            if (desired.CrushApplied && !desired.CrushTimeValid)
+            {
+                report.Message = "APE refused to write: the crush time must be from "
+                    + Fmt.Int(PatchState.CrushTimeMin) + " to " + Fmt.Int(PatchState.CrushTimeMax)
+                    + " seconds.";
+                return report;
+            }
             if (desired.HullApplied && !desired.HullValid)
             {
                 report.Message = "APE refused to write: the hull repair minimum must not be above "
@@ -568,6 +643,13 @@ namespace ApePatcher
             {
                 report.Ok = true;
                 report.Message = "Nothing to apply.";
+                return report;
+            }
+
+            string zonChanged = VerifyZons(plan);
+            if (zonChanged != null)
+            {
+                report.Message = zonChanged;
                 return report;
             }
 
@@ -596,9 +678,12 @@ namespace ApePatcher
                 }
                 report.SitesWritten.Add(w.Site.Describe());
             }
+            foreach (ZonWrite z in plan.ZonWrites)
+                report.SitesWritten.Add(z.Boat.RelativePath + " CrashSpeed");
 
             byte[] exeBackup = exe;
             IniFile iniBackup = ini;
+            IniFile menuBackup = menuText;
             try
             {
                 if (exeChanged) WriteExeBytes(ExePath, newExe);
@@ -663,6 +748,19 @@ namespace ApePatcher
                     return report;
                 }
                 report.Message = CannotWrite(MenuTextName, menuFailure);
+                return report;
+            }
+
+            // The .zon files, last (ticket 16). A failure part-way puts back every
+            // file this attempt has already written, the earlier stores included.
+            string zonFailure = WriteZons(plan,
+                exeChanged ? exeBackup : null,
+                iniChanged ? iniBackup : null,
+                menuChanged ? menuBackup : null);
+            if (zonFailure != null)
+            {
+                report.SitesWritten.Clear();
+                report.Message = zonFailure;
                 return report;
             }
 
@@ -740,6 +838,9 @@ namespace ApePatcher
             foreach (string name in order)
                 parts.Add(name + " (" + Fmt.Int(byPatch[name])
                     + (byPatch[name] == 1 ? " site)" : " sites)"));
+            if (plan.ZonWrites.Count > 0)
+                parts.Add(CrushTime.PatchName + " (" + Fmt.Int(plan.ZonWrites.Count)
+                    + (plan.ZonWrites.Count == 1 ? " U-boat file)" : " U-boat files)"));
             return "Written: " + string.Join(", ", parts.ToArray()) + ".";
         }
 
@@ -808,6 +909,113 @@ namespace ApePatcher
                             + "is, or apply again to proceed and let APE write its own value over it.";
                     }
                 }
+            }
+            return null;
+        }
+
+        /// <summary>Every .zon about to be written must still be exactly what this
+        /// session read, its pristine copy included: APE judged each file when it
+        /// opened, and a file that has changed since is no longer the one it
+        /// judged.</summary>
+        string VerifyZons(WritePlan plan)
+        {
+            foreach (ZonWrite w in plan.ZonWrites)
+            {
+                UBoatZon b = w.Boat;
+                bool same;
+                try
+                {
+                    same = File.Exists(b.ZonPath) && Same(File.ReadAllBytes(b.ZonPath), b.Bytes)
+                        && (b.Original == null
+                            ? !File.Exists(b.OrigPath)
+                            : File.Exists(b.OrigPath) && Same(File.ReadAllBytes(b.OrigPath), b.Original));
+                }
+                catch (Exception)
+                {
+                    same = false;
+                }
+                if (!same)
+                    return "APE refused to write. " + b.RelativePath + " changed after APE opened "
+                        + "this install." + Environment.NewLine
+                        + "Nothing was written, in any file. Reopen APE and try again.";
+            }
+            return null;
+        }
+
+        /// <summary>Writes each planned .zon (its pristine copy first, on APE's
+        /// first write), then deletes the pristine copy of each one reverted. On a
+        /// failure it puts back everything this attempt wrote, in every store, and
+        /// returns the message; null on success. A pristine copy is deleted only
+        /// once every write has succeeded, so a rollback never needs one back.</summary>
+        string WriteZons(WritePlan plan, byte[] exeBackup, IniFile iniBackup, IniFile menuBackup)
+        {
+            List<UBoatZon> written = new List<UBoatZon>();
+            List<string> copiesMade = new List<string>();
+            try
+            {
+                foreach (ZonWrite w in plan.ZonWrites)
+                {
+                    if (!w.Restore && w.Boat.Original == null)
+                    {
+                        WriteZonBytes(w.Boat.OrigPath, w.Boat.Bytes);
+                        copiesMade.Add(w.Boat.OrigPath);
+                    }
+                    WriteZonBytes(w.Boat.ZonPath, w.NewBytes);
+                    written.Add(w.Boat);
+                }
+            }
+            catch (Exception zonFailure)
+            {
+                Exception rollbackFailure = null;
+                foreach (UBoatZon b in written)
+                {
+                    try { WriteZonBytes(b.ZonPath, b.Bytes); }
+                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+                }
+                foreach (string copy in copiesMade)
+                {
+                    try { DeleteFile(copy); }
+                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+                }
+                if (menuBackup != null)
+                {
+                    try { SaveIni(menuBackup, MenuTextPath); }
+                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+                }
+                if (iniBackup != null)
+                {
+                    try { SaveIni(iniBackup, IniPath); }
+                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+                }
+                if (exeBackup != null)
+                {
+                    try { WriteExeBytes(ExePath, exeBackup); }
+                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+                }
+
+                if (rollbackFailure == null)
+                    return CannotWrite("a U-boat .zon file", zonFailure);
+                return "APE could not write a U-boat .zon file (" + zonFailure.Message + "), and then "
+                    + "could not put back everything it had already written for this change ("
+                    + rollbackFailure.Message + ")."
+                    + Environment.NewLine + Environment.NewLine
+                    + "Your install may now be inconsistent: " + Sh3ExeName + ", " + HsieIniName + ", "
+                    + MenuTextName + " or a data/Submarine .zon file may still hold the change APE "
+                    + "just made."
+                    + Environment.NewLine + Environment.NewLine
+                    + "To recover: close APE, make sure the game folder is writable (not read-only, "
+                    + "not synced by a cloud backup tool), then run APE again and apply the same "
+                    + "change, so every file agrees.";
+            }
+
+            foreach (ZonWrite w in plan.ZonWrites)
+            {
+                if (!w.Restore) continue;
+                // The file already holds its original bytes. A copy that will not
+                // delete only leaves this class reading as applied at its original
+                // crush speed, and the next revert tidies it up.
+                try { DeleteFile(w.Boat.OrigPath); }
+                catch (Exception) { }
             }
             return null;
         }

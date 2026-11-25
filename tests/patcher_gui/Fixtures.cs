@@ -146,6 +146,72 @@ namespace ApePatcher.Tests
             return install;
         }
 
+        // -- U-boat .zon files (depth-pressure-stress ticket 16) --------------
+
+        /// <summary>Adds data/Submarine/folder/folder.cfg and .zon to an install.
+        /// humanPlayable null leaves the key out of [Unit], as KC's AI classes do.</summary>
+        public static string AddUBoat(Install install, string folder, string humanPlayable,
+                                      float hitPoints, float crashSpeed)
+        {
+            return AddUBoat(install, folder, folder + ".cfg", humanPlayable, hitPoints, crashSpeed);
+        }
+
+        public static string AddUBoat(Install install, string folder, string cfgName,
+                                      string humanPlayable, float hitPoints, float crashSpeed)
+        {
+            string dir = Path.Combine(Path.Combine(Path.Combine(install.Dir, "data"), "Submarine"), folder);
+            Directory.CreateDirectory(dir);
+            string cfg = "[Unit]\r\nClassName=SSType" + folder + "\r\n"
+                + (humanPlayable == null ? "" : "HumanPlayable=" + humanPlayable + "\r\n")
+                + "UnitType=200\r\n\r\n[Properties]\r\nCrashDepth=80;meters\r\n";
+            File.WriteAllText(Path.Combine(dir, cfgName), cfg);
+            string zon = Path.Combine(dir, folder + ".zon");
+            File.WriteAllBytes(zon, Zon(hitPoints, crashSpeed));
+            return zon;
+        }
+
+        /// <summary>A synthetic .zon in the layout ticket 18 found in all 42 real
+        /// files: the controller name, then its data block, whose records are
+        /// u32 length, key, NUL, float32. ArmorLevel repeats, as it does in the
+        /// real files, which is why APE must not anchor on it.</summary>
+        public static byte[] Zon(float hitPoints, float crashSpeed)
+        {
+            MemoryStream m = new MemoryStream();
+            Raw(m, new byte[] { 0x5A, 0x4F, 0x4E, 0x01, 0x00, 0x00, 0x00, 0x07 });
+            Text(m, "ColisionableObject\0");
+            Raw(m, new byte[] { 0x10, 0x00, 0x00, 0x00, 0xAB, 0xCD });
+            Text(m, "ColisionableObject\0");
+            Record(m, "ArmorLevel", 2f);
+            Record(m, "Hit_Points", hitPoints);
+            Record(m, "CrashDepth", 331f);
+            Record(m, "CrashSpeed", crashSpeed);
+            Record(m, "Rebound", 0.5f);
+            Raw(m, new byte[] { 0x00, 0x11, 0x22, 0x33 });
+            Record(m, "ArmorLevel", 3f);
+            Record(m, "ArmorLevel", 4f);
+            return m.ToArray();
+        }
+
+        static void Record(MemoryStream m, string key, float value)
+        {
+            Raw(m, BitConverter.GetBytes((uint)(key.Length + 1 + 4)));
+            Text(m, key + "\0");
+            Raw(m, BitConverter.GetBytes(value));
+        }
+
+        static void Text(MemoryStream m, string s) { Raw(m, System.Text.Encoding.ASCII.GetBytes(s)); }
+        static void Raw(MemoryStream m, byte[] b) { m.Write(b, 0, b.Length); }
+
+        /// <summary>The CrashSpeed a .zon currently holds, found the same way APE
+        /// finds it.</summary>
+        public static float CrashSpeedIn(string zonPath)
+        {
+            string problem;
+            ZonRecord r = ApePatcher.Zon.Parse(File.ReadAllBytes(zonPath), out problem);
+            if (r == null) throw new Exception(zonPath + ": " + problem);
+            return r.CrashSpeed;
+        }
+
         static byte[] BuildStockExe(Manifest m, bool dieselFlagOn, string hsieVersionStamp)
         {
             byte[] exe = new byte[Sh3ExeLength];

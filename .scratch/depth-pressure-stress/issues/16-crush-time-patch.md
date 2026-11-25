@@ -1,7 +1,7 @@
 # Crush-time patch: write each U-boat's CrashSpeed from one player-chosen crush time
 
 Type: task
-Status: open
+Status: claimed
 Blocked by: 18
 
 ## Parent
@@ -55,10 +55,58 @@ mod: VIIC, 500 HP, 0.8 → ~625 s).
 
 ## Acceptance criteria
 
-- [ ] Field present with the range, default and label above.
-- [ ] Each discovered U-boat `.zon` gets `Hit_Points ÷ crush time`, verified by reading it back.
-- [ ] Unchecking restores every `.zon` byte-for-byte from its `.ape-orig` copy.
-- [ ] A `.zon` replaced by another mod shows as such and isn't overwritten.
-- [ ] Tests in `tests/patcher_gui/` for the `.zon` read, write, revert and drift paths.
+- [x] Field present with the range, default and label above.
+- [x] Each discovered U-boat `.zon` gets `Hit_Points ÷ crush time`, verified by reading it back.
+- [x] Unchecking restores every `.zon` byte-for-byte from its `.ape-orig` copy.
+- [x] A `.zon` replaced by another mod shows as such and isn't overwritten.
+- [x] Tests in `tests/patcher_gui/` for the `.zon` read, write, revert and drift paths.
 - [ ] In play: with crush time set to a short value, a VIIC and a IIA (or IID) at full hull below
       crush depth both die in about that time.
+
+## Answer (built 2026-11-25; the in-play criterion is still open)
+
+Built in the GUI patcher, uncommitted:
+
+- `src/patcher_gui/ZonFile.cs` (new). It discovers classes by ticket 18's rule
+  (`[Unit] HumanPlayable=YES`, case-insensitive file names, comments ignored). It parses
+  `Hit_Points` and `CrashSpeed` by key: each must occur exactly once, after the second
+  `ColisionableObject\0`, with a u32 length prefix of key + 5. It never anchors on
+  `ArmorLevel` and never reads the unit `.cfg`'s `CrashDepth`. Each class gets one of
+  four states: **Stock** (no `.ape-orig`), **Applied**, **ChangedByOtherMod** and
+  **Unreadable**.
+- **How drift is judged (a choice made here).** A file counts as APE's only if it
+  matches its `.ape-orig` byte-for-byte outside `CrashSpeed`'s 4 bytes, *and* its
+  `CrashSpeed` is exactly `float32(Hit_Points ÷ t)` for a whole-second `t` from 1 to
+  3600 (or equals the original). Anything else is "changed by another mod" and is never
+  written or reverted. The crush time is therefore a whole number of seconds, which is
+  also what lets it be read back exactly.
+- `PatchSession`: `.zon` writes come after the three existing stores. On APE's first
+  write to a class, its `.ape-orig` is written before the `.zon`. Each `.zon` and
+  `.ape-orig` is re-checked just before writing: if one changed after APE opened the
+  install, the whole apply is refused. A write failure puts back every file this attempt
+  wrote, in every store. Copies are deleted only after every write succeeds. The
+  feature is unavailable when no class can be written; existing installs and fixtures
+  without `data/Submarine` behave as before.
+- `PatchState`: `CrushApplied`, `CrushTime` (int, 1–3600, default 5).
+- `Review`: a "Crush time" group. It names every `.zon` it will write or restore, gives
+  each class's `HP ÷ t = CS` line, calls out that AI boats sharing a file change too,
+  warns about each file it leaves alone, and says it takes effect from the next mission
+  load. The cache-at-load fact is from re-note 01 §3.
+- `ui/MainForm.cs`: a third section with the "Crush time (seconds)" field and a tooltip
+  saying it takes effect at the next mission load. The window is 60 px taller.
+- `tests/patcher_gui/CrushTimeTests.cs`: 17 cases covering discovery, write, read-back,
+  the pristine copy, revert, drift (whole file and CrashSpeed-only), unreadable files,
+  change-after-open, range, rollback on write failure, round-trip arithmetic and the
+  review text. The suite has 178 cases, all passing in both cultures.
+- Read-only check against both real installs: the same 8 classes as re-note 07, all
+  Stock, with HP and current CS matching its tables (OAE 0.8, KC 2). At 5 s that gives
+  VIIC 100, IIA/IID 80, IXB/IXD2 110, XXI 120, and IXC 110 in OAE, 120 in KC.
+
+Not done here:
+- **In play (owner):** with crush time set short, take a VIIC and a IIA or IID below
+  crush depth at full hull. Both should die in about that time. Remove the JSGME test mod
+  first, so APE's `.ape-orig` holds OAE's own files.
+- `tests/patcher_gui/run.cmd` and `build.cmd` currently fail their manifest guard on
+  this checkout. The cause is not this ticket: `core.autocrlf=true` checks
+  `ape-manifest.json` out with CRLF, while the generator emits LF. The content is
+  identical. Fixed by a new `.gitattributes` rule, `data/manifest/*.json text eol=lf`.
