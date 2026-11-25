@@ -107,7 +107,11 @@ StepResult step(const Constants& c, StepState& st, const Sample* sample,
   if (tier != Tier::None && s.has_seep && k.seep_per_s > 0.0f && dt > 0 &&
       s.seep_flood < kSeepCeiling) {
     float next = s.seep_flood + k.seep_per_s * static_cast<float>(dt);
-    if (next < kSeepFloor) next = kSeepFloor;  // ticket 28: keep the report quiet
+    // Ticket 28: keep the level above what the crew pumps away before the next
+    // poll (this poll's dt estimates the next one's), so it never reads 0.
+    float floor_level = kSeepFloor + kSeepFloorPerS * static_cast<float>(dt);
+    if (floor_level > kSeepFloorMax) floor_level = kSeepFloorMax;
+    if (next < floor_level) next = floor_level;
     if (next > kSeepCeiling) next = kSeepCeiling;
     if (next > s.seep_flood)
       r.writes.push_back({Write::Target::Flood, s.seep_flood, next});

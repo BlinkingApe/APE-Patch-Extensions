@@ -630,11 +630,33 @@ TEST_CASE("seep: a level the crew pumped dry is floored, not left at 0") {
   ds::step(c, st, &a);
   const ds::StepResult r = ds::step(c, st, &b);
   REQUIRE(r.writes.size() == 1);
-  CHECK(r.writes[0].value == doctest::Approx(ds::kSeepFloor));
-  const ds::Sample at_floor = flooded(at(120.0f, 500.0f, 12), ds::kSeepFloor);
+  CHECK(r.writes[0].value == doctest::Approx(0.016));  // 0.01 + 0.006 * 1 s
+  const ds::Sample at_floor = flooded(at(120.0f, 500.0f, 12), 0.016f);
   const ds::StepResult r2 = ds::step(c, st, &at_floor);
   REQUIRE(r2.writes.size() == 1);
-  CHECK(r2.writes[0].value > ds::kSeepFloor);  // still only ever raised
+  CHECK(r2.writes[0].value > 0.016f);  // still only ever raised
+}
+
+TEST_CASE("seep: the floor grows with dt under time compression, and is capped") {
+  const ds::Constants c = seep_only(0.0005f);
+  {
+    ds::StepState st{};
+    const ds::Sample a = flooded(at(120.0f, 500.0f, 10), 0.0f);
+    const ds::Sample b = flooded(at(120.0f, 500.0f, 17), 0.0f);  // dt 7
+    ds::step(c, st, &a);
+    const ds::StepResult r = ds::step(c, st, &b);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0].value == doctest::Approx(0.052));
+  }
+  {
+    ds::StepState st{};
+    const ds::Sample a = flooded(at(120.0f, 500.0f, 10), 0.0f);
+    const ds::Sample b = flooded(at(120.0f, 500.0f, 510), 0.0f);  // dt 500
+    ds::step(c, st, &a);
+    const ds::StepResult r = ds::step(c, st, &b);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0].value == doctest::Approx(ds::kSeepFloorMax));
+  }
 }
 
 TEST_CASE("seep: clamps at 0.8, then writes nothing, and never lowers") {

@@ -99,3 +99,11 @@ shouldn't reach exactly 0 between polls. Unit test added; suite passes.
 **Still to check in play (needs the rebuilt `ape.act`):** dive below 100 m, let the crew pump
 level with seepage, and confirm "We have flooding, sir!" is said once and not repeated. If it
 still repeats, the poll interval is too slow for the pump: raise the floor or poll faster.
+
+## First in-play result and fix (2026-11-25)
+
+The flat 0.01 floor did not stop the repeat. `ape_act.log` showed why: under time
+compression each poll spans 2–7 game-seconds, and the crew pumps about 0.0033 per
+game-second, so the level went 0.0067 → 0.0033 → 0.0000 between polls and re-armed the
+report. The floor is now `0.01 + 0.006 × dt`, capped at 0.3 (below the 0.35 band), using
+this poll's dt as the estimate for the next. Rebuilt; **still to confirm in play.**
