@@ -1,7 +1,7 @@
 # 28: Quiet the "We have flooding, sir!" spam
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: none
 
 ## Parent
@@ -107,3 +107,5 @@ compression each poll spans 2–7 game-seconds, and the crew pumps about 0.0033 
 game-second, so the level went 0.0067 → 0.0033 → 0.0000 between polls and re-armed the
 report. The floor is now `0.01 + 0.006 × dt`, capped at 0.3 (below the 0.35 band), using
 this poll's dt as the estimate for the next. Rebuilt; **still to confirm in play.**
+
+**Confirmed in play (owner, 2026-11-25): the dt-scaled floor stops the repeat.** Custom tier 1/2 wording was not built (needs a hook, ADR-0001; or a global en_menu.txt edit).
