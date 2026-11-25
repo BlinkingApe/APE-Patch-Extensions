@@ -78,6 +78,10 @@ namespace ApePatcher
         // [ElectricEngine1] Father 24 -> 30. No values, only on or off.
         public bool MotorZoneFixApplied;
 
+        // Depth stress clock fix (depth-pressure-stress ticket 36): h.sie's clock-
+        // mirror cave, written into an sh3.exe that lacks it. Only on or off.
+        public bool ClockCaveApplied;
+
         public bool CrushTimeValid
         {
             get { return CrushTime >= CrushTimeMin && CrushTime <= CrushTimeMax; }

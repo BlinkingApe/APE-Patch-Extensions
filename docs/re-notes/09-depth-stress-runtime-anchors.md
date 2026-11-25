@@ -54,8 +54,17 @@ the expected root, in all four binaries on hand:
 |---|---|---|---|---|
 | OAE 1.5.2 (target) | `20360fe8` | 1 → `0x554A88` | 1 → `0x6307BC` | 1 → `0x63FF80` |
 | OAE 2.0 (TEST_2) | `0f1176b6` | 1, same | 1, same | 1, same |
-| GWC-KC 2.5 | `dc8bd5dc` | 1, same | 1, same | 1, same |
+| ~~GWC-KC 2.5~~ | ~~`dc8bd5dc`~~ | ~~1, same~~ | ~~1, same~~ | ~~1, same~~ |
+| GWX-KC 2.5 (owner's install, corrected 2026-11-25) | `e2b190e1` | 1, same | 1, same | **0**; 1 → `0x63FF80` after APE's clock fix |
 | `data/exe_with_hsie_patches/sh3_vanilla.exe` | `ba59e4c8` | 1, same | 1, same | 1, same |
+
+**Correction (ticket 36, 2026-11-25).** The `dc8bd5dc` row does not describe the KC exe
+the owner plays. GWX-KC 2.5's `sh3.exe` (`e2b190e1`) has stock's `mov [esi+0x150],eax` at
+`0x004C2115` and zero slack at `0x0051CFC7`: no h.sie clock cave, so the clock anchor fails
+and depth stress is inert there. Either that row came from a different KC exe, or it was
+wrong. The patcher's **Depth stress clock fix** (`src/patcher_gui/ClockCave.cs`) writes
+OAE's exact cave bytes into such an exe. Afterwards, all ten `ape.act` signatures resolve
+once over a patched copy of `e2b190e1` (static check, ticket 36).
 
 The KC and OAE 2.0 rows only show the scan resolves. Nothing has been proven live
 there (PRD, Out of Scope).
