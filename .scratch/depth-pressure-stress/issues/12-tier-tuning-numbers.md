@@ -143,3 +143,19 @@ crush damage and multiplies only the rest.
   tier 1 straight to tier 3. The field's tooltip says so.
 - **Terms:** "seepage" in the glossary, "Leakage" in the GUI; "electric-engine wear";
   "hull multiplier"; "crush time".
+
+## Pointer (2026-11-25): OAE inputs from tickets 10 and 11
+
+Tickets 10 and 11 are resolved on OAE (`docs/re-notes/08-oae-port-of-depth-leads.md`).
+Two inputs to this ticket changed:
+
+- **Repair is 60× slower on OAE** (h.sie's Realistic Repair Times): ~5.4e-5
+  damage/game-s at crew strength 1.0, not the lead's 0.00234. The lead's
+  "watch crew repairing" tail (peak 0.44, ceiling in 0.24 % of 4-hour patrols) assumed
+  the vanilla rate. On OAE repair barely races wear, so the lead's unrepaired figures
+  apply instead: ~99 % of 4-hour tier-2 patrols reach 0.9. From the ceiling, repair
+  takes ~4.6 game-hours. Repairability still holds (below 1.0). Whether that
+  accumulation is acceptable is this ticket's call.
+- **Pump rate: 0.00326 flood/game-s at crew strength 1.0**, the same formula as vanilla.
+  The lead's 0.00243 is the same pump at a crew strength of ~0.73. Seep defaults should
+  be judged against the crew strength expected in the stern room.

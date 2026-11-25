@@ -110,3 +110,11 @@ Not done here:
   this checkout. The cause is not this ticket: `core.autocrlf=true` checks
   `ape-manifest.json` out with CRLF, while the generator emits LF. The content is
   identical. Fixed by a new `.gitattributes` rule, `data/manifest/*.json text eol=lf`.
+
+## Pointer (2026-11-25): crush rate measured on OAE
+
+The crush rate measured live on OAE wasn't flat. It grew from 0.40 to 1.77
+HP/game-s as hull fell, at one depth ([ticket 17](17-live-crush-depth-and-speed.md)'s
+answer). That conflicts with this ticket's "`CrashSpeed` is hull HP per second".
+The owner has asked that the flat rate be assumed. The question is
+[ticket 20](20-crush-rate-ramp-vs-adr-0010.md)'s; nothing here changes.

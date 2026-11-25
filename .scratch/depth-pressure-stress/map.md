@@ -183,6 +183,24 @@ write target is unlocated is not specified.
   `CrashSpeed` is HP per second, which supersedes the external RE's
   `excess × CrashSpeed × dt` reading. Tier-2 depth defaults to 150 m. Crush time defaults to 5 s for every U-boat (set after ticket `18`).
 
+- **OAE port session 2026-11-25 (tickets `10`, `11`, `17` together, at the owner's
+  request)** (`docs/re-notes/08-oae-port-of-depth-leads.md`). The live install's
+  `sh3.exe` has drifted again, to `20360fe8…`. Statically, every vanilla anchor lands
+  at the same VA in OAE except two h.sie caves:
+  - **Realistic Repair Times** divides every repair step by 60.
+  - **The clock mirror `0x0063FF80`** is written beside the stock clock from the same
+    register. That settles the save-load guard question above: the mirror reads 0
+    whenever the stock clock does.
+
+  Live, the sh3-crush-pressure harness was ported to OAE (`SH3_LAB=oae`, branch
+  `oae-port`, against a robocopy of the install, never the install itself) and driven
+  step by step. Findings:
+  - **Every OAE single mission spawned a Type IIA**, stock Barham's VIIC included.
+    Cause not found; class-dependent answers fall back on data.
+  - **Crush loss measured as a ramp that grows as hull falls, not a flat rate.** That
+    conflicts with the owner's in-game experience and ADR-0010's basis. The owner has
+    asked that the flat rate be assumed. Held in ticket `20`, not re-decided.
+
 ## Decisions so far
 
 <!-- charted 2026-08-16; the model above was settled in the charting session's
@@ -193,6 +211,9 @@ write target is unlocated is not specified.
 - [Live-value session A: current depth + mission clock](issues/08-live-values-depth-and-clock.md) — both resolved: mission clock is static VA `0x0063FF80`, no chain; current depth is `[[["sh3.exe"+002307BC]+4]+4]+0x54`, a 3-level static chain confirmed stable across two relaunches.
 - [Live-value session B: boat pointer chain for the hull-HP write](issues/09-live-values-hull-hp-write.md) — resolved: `[0x00554A88]→+0xC4→+0x2240→+0x24→+0x4C]+0xB8` confirmed live (write holds); found the engine's own universal hull-HP writer (`02C930D7`, per-frame, single `fsub` per collision, cause-agnostic) as a bonus, safe for poll-and-amplify by construction. Delta observed: `450 → 448.2609`.
 - [Which `.zon` files are playable U-boats? A discovery rule that works for OAE and KC](issues/18-playable-uboat-zon-discovery.md) — `[Unit] HumanPlayable=YES` in `data/Submarine/<X>/<X>.cfg`; the same 8 classes in both installs (2A, 2D, 7b, 7c, 9b, 9c, 9d2, 21), XIV and other AI U-boats excluded; `.zon` key/float layout confirmed for all 42 files. It also showed that live OAE crush speeds come from the owner's JSGME test mod (stock VIIC ≈ 6250 s, KC 250 s). The owner then set the crush-time default to 5 s for every U-boat. APE replaces the test mod, so there's no JSGME conflict.
+- [SH3's flooding model: how does APE provoke an astern leak?](issues/10-sh3-flooding-model.md) — direct write to the zone state's flood `+0x1C` via list `0x005547D4`, holds and pumps on OAE; VII/IX seep into compartment 8 (by data); pump 0.00326/game-s at crew strength 1.0. II/XXI compartment → ticket `19`.
+- [Locate the electric-engine damage float; confirm write and repairability](issues/11-electric-engine-damage-float.md) — `[[[[0x5543DC]+4]+0x37C]+0/4]` points at each engine's float; holds and shows on OAE; repairable strictly below 1.0 (0.99999994 repaired); ceiling 0.9; OAE repairs 60× slower (h.sie), ~5.4e-5/game-s.
+- [Live values: crush depth and crush speed from the boat object](issues/17-live-crush-depth-and-speed.md) — `+0xC0` = `.zon` CrashDepth ÷ 10, `+0xC4` = `.zon` CrashSpeed after load; stock's onset is `0.7·E` (hull-scaled) at a reference point off the gauge; live loss rose with falling hull, conflict → ticket `20`.
 
 ## Not yet specified
 

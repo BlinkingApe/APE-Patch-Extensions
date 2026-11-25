@@ -50,3 +50,14 @@ Revert from backups when done.
 - [ ] Repair from the ceiling confirmed at sea.
 - [ ] Both boundary behaviours confirmed.
 - [ ] The install reverted to a clean baseline, and said so explicitly in the answer.
+
+## Pointer (2026-11-25): an OAE lab exists, with two traps
+
+The sh3-crush-pressure harness can now run against a disposable copy of the OAE
+install (`SH3_LAB=oae`, branch `oae-port`; `docs/re-notes/08-oae-port-of-depth-leads.md`
+§7). Two traps for this ticket:
+
+- **Every OAE single mission spawned a Type IIA** (stock Barham's VIIC too). Cause not
+  found. A proof meant for a VIIC must check the class first.
+- **Attach Frida at the main menu**: once a mission loads, the 32-bit game has no room
+  left for it.
