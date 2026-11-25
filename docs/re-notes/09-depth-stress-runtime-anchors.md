@@ -105,3 +105,31 @@ address of that engine's damage float (0 healthy, 1 destroyed). A sample needs b
 floats in [0, 1]; the offset must be in (0, 0x1000]. Any failure skips the poll with
 "engine chain unresolved". The writer stores the step's value at the address read in the
 same poll.
+
+## Seep-compartment anchors (ticket 25, 2026-11-25)
+
+Static only; the in-play check is ticket 27's test 2. Both operands are read from the
+crew-report routine's list loop (`0x0043601D` to `0x00436056`), the code that
+[ticket 10](../../.scratch/depth-pressure-stress/issues/10-sh3-flooding-model.md)
+anchored. Each pattern matched exactly once across all executable sections, raw-file
+search, in OAE 1.5.2 (`20360fe8`) and `sh3_vanilla.exe`, recovering the same operand.
+
+| Root | Signature | Value at +2 | Instruction (VA on `20360fe8`) |
+|---|---|---|---|
+| Zone-list head | `8B 3D ?? ?? ?? ?? 85 FF C7 44 24 40 00 00 00 00` | `0x005547D4` | `mov edi,[0x5547D4]` @`0x0043601D` |
+| Zone→compartment table | `8A 8D ?? ?? ?? ?? 80 F9 FF 89 6C 24 2C` | `0x00566898` | `mov cl,[ebp+0x566898]; cmp cl,0xFF` @`0x00436049` |
+
+The head's pattern is ticket 10's, with the operand wildcarded. The table is a run of
+signed bytes indexed by zone index; `0xFF` means "no compartment", and the routine only
+looks a zone up below index 200 (`cmp ebp,0xC8` @`0x436073`).
+
+Walk: `node = [head]`, then `node = [node+0x4]`. Zone state = `[node+0x14]`; zone index =
+`[[state+0x10]+0x8]`; compartment = `byte [table + zone]`; flood = float `state+0x1C`.
+The reader takes the first zone (list order) that maps to compartment 8, else the first
+that maps to 4. It never asks the boat's class. The walk is bounded at 512 nodes.
+
+**No match is not a skip.** If no zone maps to 8 or 4, or the list is unreadable, the
+sample stands without seepage (`has_seep` false) and `ape_act.log` says
+`no seepage: <why>` when the reason changes. The hull multiplier and wear carry on. A
+flood read outside [0, 1] fails the plausibility gate like every other value, so it
+skips the poll.

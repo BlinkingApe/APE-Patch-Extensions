@@ -13,6 +13,8 @@ const char* implausible(const Sample& s) {
   if (s.clock_s < 0) return "clock below 0";
   if (!(s.engine_port >= 0.0f && s.engine_port <= 1.0f)) return "port engine damage outside [0, 1]";
   if (!(s.engine_stbd >= 0.0f && s.engine_stbd <= 1.0f)) return "starboard engine damage outside [0, 1]";
+  if (s.has_seep && !(s.seep_flood >= 0.0f && s.seep_flood <= 1.0f))
+    return "seep compartment flood outside [0, 1]";
   return nullptr;
 }
 
@@ -97,6 +99,16 @@ StepResult step(const Constants& c, StepState& st, const Sample* sample,
         r.writes.push_back({Write::Target::Hull, s.hull, new_hull});
       }
     }
+  }
+
+  // 6. Seepage: flood + rate*dt, clamped to the ceiling. At or above it there
+  //    is no write, so a bigger leak from elsewhere is never lowered.
+  if (tier != Tier::None && s.has_seep && k.seep_per_s > 0.0f && dt > 0 &&
+      s.seep_flood < kSeepCeiling) {
+    float next = s.seep_flood + k.seep_per_s * static_cast<float>(dt);
+    if (next > kSeepCeiling) next = kSeepCeiling;
+    if (next > s.seep_flood)
+      r.writes.push_back({Write::Target::Flood, s.seep_flood, next});
   }
 
   // 7. Electric-engine wear: dt Bernoulli trials at q, one per game-second.

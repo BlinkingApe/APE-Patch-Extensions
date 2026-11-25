@@ -28,6 +28,11 @@ struct Sample {
   float crush_speed;    // CS, boat +0xC4
   float engine_port;    // port electric engine damage, 0 healthy -> 1 destroyed
   float engine_stbd;    // starboard electric engine damage
+  // The seep compartment's flood, 0 dry -> 1 full. `has_seep` is false when
+  // the reader found no zone for it (then there is no seepage, and the
+  // sample is otherwise good).
+  float seep_flood;
+  bool has_seep;
 };
 
 // The step's source of randomness: uniform doubles in [0, 1). Taken as an

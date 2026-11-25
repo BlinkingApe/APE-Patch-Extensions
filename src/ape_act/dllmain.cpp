@@ -103,6 +103,13 @@ class SkipLog {
 void log_writes(ape::Logger& log, const ds::Sample& s, const ds::StepResult& r,
                 bool ok) {
   for (const ds::Write& w : r.writes) {
+    if (w.target == ds::Write::Target::Flood) {
+      log.logf("[depth-stress] seep%s: D %.2f m, tier %d, dt %ld s, flood "
+               "%.4f -> %.4f",
+               ok ? "" : " FAILED", s.depth_m, static_cast<int>(r.diag.tier),
+               static_cast<long>(r.diag.dt_s), w.old_value, w.value);
+      continue;
+    }
     if (w.target == ds::Write::Target::PortEngine ||
         w.target == ds::Write::Target::StarboardEngine) {
       log.logf("[depth-stress] wear%s: D %.2f m, tier %d, dt %ld s, %s engine "
@@ -147,12 +154,15 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
              anchors.failed, anchors.why);
   else
     log.logf("[depth-stress] anchors: boat root 0x%08lX, depth root 0x%08lX, "
-             "clock 0x%08lX, engine root 0x%08lX (+0x%lX)",
+             "clock 0x%08lX, engine root 0x%08lX (+0x%lX), zone head 0x%08lX, "
+             "zone table 0x%08lX",
              static_cast<unsigned long>(anchors.boat_root),
              static_cast<unsigned long>(anchors.depth_root),
              static_cast<unsigned long>(anchors.clock),
              static_cast<unsigned long>(anchors.engine_root),
-             static_cast<unsigned long>(anchors.engine_block_off));
+             static_cast<unsigned long>(anchors.engine_block_off),
+             static_cast<unsigned long>(anchors.zone_head),
+             static_cast<unsigned long>(anchors.zone_table));
 
   SkipLog skips(log);
   // Seeded once, from the OS entropy source, for the life of the loop.
@@ -160,6 +170,7 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
   ds::Mt19937Random rng(entropy());
   ds::StepState state{};
   std::uint32_t last_boat = 0;
+  const char* last_seep_why = nullptr;
   while (!g_stop.load()) {
     ds::Sample sample{};
     ape::game::Targets targets;
@@ -180,7 +191,8 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
         case ds::Write::Target::StarboardEngine:
           ok = ape::game::write_engine(targets.engine_stbd, w.value) && ok;
           break;
-        case ds::Write::Target::Flood:  // ticket 25
+        case ds::Write::Target::Flood:
+          ok = ape::game::write_flood(targets.seep_flood, w.value) && ok;
           break;
       }
     }
@@ -197,6 +209,18 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
                sample.max_hull, static_cast<long>(sample.clock_s),
                sample.crush_field, sample.crush_speed);
       last_boat = sample.boat;
+    }
+
+    // No seep compartment is logged when the reason changes, not every poll.
+    if (have) {
+      const char* seep_why = ape::game::seep_unavailable();
+      if (seep_why != last_seep_why) {
+        if (seep_why)
+          log.logf("[depth-stress] no seepage: %s", seep_why);
+        else
+          log.logf("[depth-stress] seep compartment found");
+        last_seep_why = seep_why;
+      }
     }
 
     if (!have)

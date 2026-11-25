@@ -47,6 +47,14 @@ constexpr aob::Signature kEngineRoot = {
 constexpr aob::Signature kEngineBlockOff = {
     "engine block offset", "8B 80 ?? ?? ?? ?? 8D 77 FC", 2};
 
+// The zone-state list (docs/re-notes/10): head variable, and the table that
+// maps a zone index to a compartment id (a signed byte, -1 for none). Both are
+// operands of the crew-report routine's loop at 0x0043601D...0x00436049.
+constexpr aob::Signature kZoneHead = {
+    "zone list head", "8B 3D ?? ?? ?? ?? 85 FF C7 44 24 40 00 00 00 00", 2};
+constexpr aob::Signature kZoneTable = {
+    "zone compartment table", "8A 8D ?? ?? ?? ?? 80 F9 FF 89 6C 24 2C", 2};
+
 bool read_u32(std::uint32_t addr, std::uint32_t& out) {
   if (addr < 0x10000) return false;  // null, or a null plus an offset
   SIZE_T n = 0;
@@ -107,11 +115,13 @@ const char* resolve(const aob::Signature& sig, std::uint32_t& out) {
 
 Anchors resolve_anchors() {
   Anchors a;
-  const aob::Signature* sigs[] = {&kBoatRoot, &kDepthRoot, &kClock,
-                                  &kEngineRoot, &kEngineBlockOff};
-  std::uint32_t* outs[] = {&a.boat_root, &a.depth_root, &a.clock,
-                           &a.engine_root, &a.engine_block_off};
-  for (int i = 0; i < 5; ++i) {
+  const aob::Signature* sigs[] = {&kBoatRoot,  &kDepthRoot,      &kClock,
+                                  &kEngineRoot, &kEngineBlockOff, &kZoneHead,
+                                  &kZoneTable};
+  std::uint32_t* outs[] = {&a.boat_root,   &a.depth_root,       &a.clock,
+                           &a.engine_root, &a.engine_block_off, &a.zone_head,
+                           &a.zone_table};
+  for (int i = 0; i < 7; ++i) {
     if (const char* why = resolve(*sigs[i], *outs[i])) {
       a.failed = sigs[i]->name;
       a.why = why;
@@ -120,6 +130,48 @@ Anchors resolve_anchors() {
   }
   return a;
 }
+
+namespace {
+
+const char* g_seep_why = nullptr;
+
+bool read_u8(std::uint32_t addr, std::uint8_t& out) {
+  if (addr < 0x10000) return false;
+  SIZE_T n = 0;
+  return ReadProcessMemory(GetCurrentProcess(),
+                           reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(addr)),
+                           &out, 1, &n) &&
+         n == 1;
+}
+
+// Walks the zone list and picks the seep compartment from the live table:
+// the zone that maps to compartment 8 if there is one, else the one that maps
+// to 4 (ticket 19). Never by class. Sets `flood_addr`, or returns why not.
+const char* find_seep_flood(const Anchors& a, std::uint32_t& flood_addr) {
+  std::uint32_t node;
+  if (!read_u32(a.zone_head, node)) return "zone list head unreadable";
+  std::uint32_t eight = 0, four = 0;
+  // A bounded walk: a real list is under a hundred zones.
+  for (int i = 0; i < 512 && node; ++i) {
+    std::uint32_t state, next, desc, zone;
+    if (!read_u32(node + 0x14, state) || !read_u32(state + 0x10, desc) ||
+        !read_u32(desc + 0x8, zone) || !read_u32(node + 0x4, next))
+      return "zone list unreadable";
+    // The crew-report loop's own bound: zones from 200 up are never looked up.
+    std::uint8_t comp;
+    if (zone < 200 && read_u8(a.zone_table + zone, comp)) {
+      if (comp == 8 && !eight) eight = state + 0x1C;
+      if (comp == 4 && !four) four = state + 0x1C;
+    }
+    node = next;
+  }
+  flood_addr = eight ? eight : four;
+  return flood_addr ? nullptr : "no zone maps to compartment 8 or 4";
+}
+
+}  // namespace
+
+const char* seep_unavailable() { return g_seep_why; }
 
 bool read_sample(const Anchors& a, depth_stress::Sample& out, Targets& targets,
                  const char** why) {
@@ -175,6 +227,17 @@ bool read_sample(const Anchors& a, depth_stress::Sample& out, Targets& targets,
     *why = "engine chain unresolved";
     return false;
   }
+
+  // The seep compartment is optional: without one there is no seepage, and
+  // the rest of the sample stands.
+  out.has_seep = false;
+  g_seep_why = find_seep_flood(a, targets.seep_flood);
+  if (!g_seep_why) {
+    if (read_f32(targets.seep_flood, out.seep_flood))
+      out.has_seep = true;
+    else
+      g_seep_why = "seep flood unreadable";
+  }
   return true;
 }
 
@@ -193,6 +256,10 @@ bool write_engine(std::uint32_t address, float value) {
                             reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(address)),
                             &value, sizeof value, &n) &&
          n == sizeof value;
+}
+
+bool write_flood(std::uint32_t address, float value) {
+  return write_engine(address, value);  // the same one-float store
 }
 
 }  // namespace game

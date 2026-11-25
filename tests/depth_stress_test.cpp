@@ -586,3 +586,135 @@ TEST_CASE("wear: with no generator there is no wear") {
   ds::step(c, st, &a);
   CHECK(ds::step(c, st, &b).writes.empty());
 }
+
+// -- seepage (ticket 25) ------------------------------------------------------
+
+namespace {
+
+ds::Constants seep_only(float rate) {
+  ds::Constants c = ds::kDefaultConstants;
+  for (auto& k : c.tier) {
+    k.hull_mult = 1.0f;
+    k.wear_amount = 0.0f;
+    k.seep_per_s = rate;
+  }
+  return c;
+}
+
+ds::Sample flooded(ds::Sample s, float flood) {
+  s.seep_flood = flood;
+  s.has_seep = true;
+  return s;
+}
+
+}  // namespace
+
+TEST_CASE("seep: steps by rate*dt") {
+  const ds::Constants c = seep_only(0.002f);
+  ds::StepState st{};
+  const ds::Sample a = flooded(at(120.0f, 500.0f, 10), 0.1f);
+  const ds::Sample b = flooded(at(120.0f, 500.0f, 15), 0.1f);
+  ds::step(c, st, &a);
+  const ds::StepResult r = ds::step(c, st, &b);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].target == ds::Write::Target::Flood);
+  CHECK(r.writes[0].old_value == doctest::Approx(0.1));
+  CHECK(r.writes[0].value == doctest::Approx(0.11));
+}
+
+TEST_CASE("seep: clamps at 0.8, then writes nothing, and never lowers") {
+  const ds::Constants c = seep_only(0.05f);
+  ds::StepState st{};
+  const ds::Sample a = flooded(at(120.0f, 500.0f, 0), 0.78f);
+  ds::step(c, st, &a);
+  const ds::Sample b = flooded(at(120.0f, 500.0f, 10), 0.78f);
+  const ds::StepResult r = ds::step(c, st, &b);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].value == ds::kSeepCeiling);
+
+  const ds::Sample at_cap = flooded(at(120.0f, 500.0f, 20), ds::kSeepCeiling);
+  CHECK(ds::step(c, st, &at_cap).writes.empty());
+  const ds::Sample above = flooded(at(120.0f, 500.0f, 30), 0.95f);
+  CHECK(ds::step(c, st, &above).writes.empty());  // a bigger leak elsewhere stays
+}
+
+TEST_CASE("seep: none above 100 m, when paused, or when the clock goes back") {
+  const ds::Constants c = seep_only(0.01f);
+  {
+    ds::StepState st{};
+    const ds::Sample a = flooded(at(60.0f, 500.0f, 1), 0.0f);
+    const ds::Sample b = flooded(at(60.0f, 500.0f, 9), 0.0f);
+    ds::step(c, st, &a);
+    CHECK(ds::step(c, st, &b).writes.empty());
+  }
+  {
+    ds::StepState st{};
+    const ds::Sample a = flooded(at(120.0f, 500.0f, 5), 0.0f);
+    ds::step(c, st, &a);
+    CHECK(ds::step(c, st, &a).writes.empty());  // dt 0
+    const ds::Sample back = flooded(at(120.0f, 500.0f, 3), 0.0f);
+    CHECK(ds::step(c, st, &back).writes.empty());  // dt < 0
+  }
+}
+
+TEST_CASE("seep: leakage 0 turns it off without touching the other effects") {
+  ds::Constants c = seep_only(0.0f);
+  for (auto& k : c.tier) k.hull_mult = 2.0f;
+  ds::StepState st{};
+  const ds::Sample a = flooded(at(120.0f, 500.0f, 1), 0.0f);
+  ds::step(c, st, &a);
+  const ds::Sample b = flooded(at(120.0f, 480.0f, 2), 0.0f);  // 20 HP drop
+  const ds::StepResult r = ds::step(c, st, &b);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].target == ds::Write::Target::Hull);
+}
+
+TEST_CASE("seep: continues at tier-2 values, below crush depth too") {
+  ds::Constants c = seep_only(0.002f);
+  c.tier[1].seep_per_s = 0.0025f;
+  for (float depth : {152.0f, 200.0f}) {  // tier 2; tier 3 (onset 154.8 at 480)
+    ds::StepState st{};
+    const ds::Sample a = flooded(at(depth, 480.0f, 10), 0.2f);
+    const ds::Sample b = flooded(at(depth, 480.0f, 20), 0.2f);
+    ds::step(c, st, &a);
+    const ds::StepResult r = ds::step(c, st, &b);
+    CAPTURE(depth);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0].value == doctest::Approx(0.225));
+  }
+}
+
+TEST_CASE("seep: a sample with no seep compartment makes no seep write") {
+  const ds::Constants c = seep_only(0.01f);
+  ds::StepState st{};
+  ds::Sample a = at(120.0f, 500.0f, 1);
+  ds::Sample b = at(120.0f, 500.0f, 9);
+  a.seep_flood = b.seep_flood = 0.1f;  // a stale value, has_seep false
+  ds::step(c, st, &a);
+  CHECK(ds::step(c, st, &b).writes.empty());
+}
+
+TEST_CASE("seep: a flood outside [0, 1] fails the plausibility gate") {
+  ds::Sample s = flooded(at(120.0f, 500.0f, 1), 0.5f);
+  CHECK(ds::implausible(s) == nullptr);
+  s.seep_flood = 1.2f;
+  CHECK(ds::implausible(s) != nullptr);
+  s.seep_flood = -0.1f;
+  CHECK(ds::implausible(s) != nullptr);
+}
+
+TEST_CASE("seep: a seep write and a wear write can share a poll") {
+  ds::Constants c = seep_only(0.01f);
+  for (auto& k : c.tier) {
+    k.wear_amount = 0.05f;
+    k.wear_chance_per_s = 1.0f;
+  }
+  Always rng(0.0);
+  ds::StepState st{};
+  const ds::Sample a = flooded(at(120.0f, 500.0f, 1), 0.0f);
+  const ds::Sample b = flooded(at(120.0f, 500.0f, 2), 0.0f);
+  ds::step(c, st, &a, &rng);
+  const ds::StepResult r = ds::step(c, st, &b, &rng);
+  CHECK(write_to(r, ds::Write::Target::Flood) != nullptr);
+  CHECK(write_to(r, ds::Write::Target::PortEngine) != nullptr);
+}

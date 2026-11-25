@@ -24,7 +24,9 @@ struct Anchors {
   std::uint32_t clock = 0;       // 0x0063FF80, h.sie's mirror
   std::uint32_t engine_root = 0;       // 0x005543DC, the engine singleton
   std::uint32_t engine_block_off = 0;  // 0x37C, the electric block's pair
-  // Null when all three resolved; else which signature didn't, and why.
+  std::uint32_t zone_head = 0;   // 0x005547D4, head of the zone-state list
+  std::uint32_t zone_table = 0;  // 0x00566898, zone -> compartment (signed bytes)
+  // Null when all of them resolved; else which signature didn't, and why.
   const char* failed = nullptr;
   const char* why = nullptr;
 };
@@ -38,6 +40,7 @@ struct Targets {
   std::uint32_t boat = 0;
   std::uint32_t engine_port = 0;  // address of the port engine's damage float
   std::uint32_t engine_stbd = 0;
+  std::uint32_t seep_flood = 0;  // address of the seep compartment's flood float
 };
 
 // One poll's sample. False, with `why`, when there is none this poll.
@@ -49,6 +52,13 @@ bool write_hull(std::uint32_t boat, float value);
 
 // Applies the step's electric-engine wear write to an engine's damage float.
 bool write_engine(std::uint32_t address, float value);
+
+// Applies the step's seepage write to the seep compartment's flood float.
+bool write_flood(std::uint32_t address, float value);
+
+// Why the last read_sample found no seep compartment (null when it found one).
+// Read from the same thread that polled; the text is static.
+const char* seep_unavailable();
 
 }  // namespace game
 }  // namespace ape
