@@ -48,10 +48,9 @@ namespace ApePatcher
             + "applying." + "\n" + LaunchNote;
 
         public const string LeakageTip =
-            "Water rising in the sternmost compartment (the stern torpedo room, or the "
-            + "electric engine room on a Type II or XXI), as a percentage of the compartment "
+            "Water rising in the electric engine room, as a percentage of the compartment "
             + "per game-minute. 0 turns leakage off." + "\n"
-            + "The stern compartment must be crewed for its leakage to be pumped. An "
+            + "The electric engine room must be crewed for its leakage to be pumped. An "
             + "uncrewed one keeps filling, to 80% at most." + "\n" + LaunchNote;
 
         public const string WearAmountTip =

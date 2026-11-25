@@ -259,7 +259,9 @@ namespace ApePatcher.Tests
             Check.Contains("200.0 game-minutes", text, "tier 1 wear rate");
             Check.Contains("tier 3", text, "crush depth carries on at tier 2");
             Check.Contains("next game launch", text, "when it takes effect");
-            Check.Contains("crewed", text, "the stern compartment must be crewed");
+            Check.Contains("crewed", text, "the electric engine room must be crewed");
+            Check.Contains("electric engine room", text, "leakage goes into the electric engine room");
+            Check.DoesNotContain("stern", text, "not the stern compartment (ADR-0012)");
         }
 
         public static void Test_DepthStressSaysAnEffectAtItsNeutralValueIsOff()
@@ -321,7 +323,9 @@ namespace ApePatcher.Tests
             Check.Contains("tier 3", DepthStress.Tier2DepthTip, "skip straight to tier 3");
             Check.Contains("IIB", DepthStress.Tier2DepthTip, "names the IIB");
             Check.Contains("XXIII", DepthStress.Tier2DepthTip, "and the XXIII");
-            Check.Contains("crewed", DepthStress.LeakageTip, "leakage: stern compartment crewed");
+            Check.Contains("crewed", DepthStress.LeakageTip, "leakage: electric engine room crewed");
+            Check.Contains("electric engine room", DepthStress.LeakageTip, "names the electric engine room");
+            Check.DoesNotContain("stern", DepthStress.LeakageTip, "not the stern compartment (ADR-0012)");
             Check.Contains("next game launch", DepthStress.Tier2DepthTip, "next-launch timing");
             Check.Contains("next game launch", DepthStress.LeakageTip, "on the leakage tooltip too");
         }

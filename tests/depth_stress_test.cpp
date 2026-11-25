@@ -14,13 +14,14 @@
 
 namespace ds = ape::depth_stress;
 
-TEST_CASE("the shipped constants carry ticket 12's defaults in runtime units") {
+TEST_CASE("the shipped constants carry the current defaults in runtime units") {
   const ds::Constants c = ds::kDefaultConstants;
   // Patcher conversions (PRD Fields): leakage p %/min -> p/6000 per game-s,
   // wear rate m min -> 1/(60*m) per game-s, wear amount a % -> a/100.
   CHECK(c.tier2_depth_m == doctest::Approx(150.0));
-  CHECK(c.tier[0].seep_per_s == doctest::Approx(4.0 / 6000.0));
-  CHECK(c.tier[1].seep_per_s == doctest::Approx(15.0 / 6000.0));
+  // Leakage halved to 2 / 7.5 %/min (ticket 30, ADR-0012).
+  CHECK(c.tier[0].seep_per_s == doctest::Approx(2.0 / 6000.0));
+  CHECK(c.tier[1].seep_per_s == doctest::Approx(7.5 / 6000.0));
   CHECK(c.tier[0].wear_amount == doctest::Approx(0.075));
   CHECK(c.tier[1].wear_amount == doctest::Approx(0.225));
   CHECK(c.tier[0].wear_chance_per_s == doctest::Approx(1.0 / 12000.0));
@@ -585,6 +586,32 @@ TEST_CASE("wear: with no generator there is no wear") {
   const ds::Sample b = engines(at(120.0f, 500.0f, 2), 0.0f, 0.0f);
   ds::step(c, st, &a);
   CHECK(ds::step(c, st, &b).writes.empty());
+}
+
+// -- the seep zone (ticket 30, ADR-0012) -------------------------------------
+// The reader hands over each zone's compartment id from the zone->compartment
+// table, in list order (-1 for none); the seep zone is the first that maps to
+// compartment 4, the electric engine room, whatever the class.
+
+TEST_CASE("seep zone: a VII/IX list with compartments 8 and 4 picks 4, not 8") {
+  const std::int8_t comps[] = {1, 2, 3, 8, 7, 4, 5, 6};
+  CHECK(ds::pick_seep_zone(comps, 8) == 5);
+}
+
+TEST_CASE("seep zone: a II/XXI list without compartment 8 picks 4") {
+  const std::int8_t comps[] = {-1, 1, 2, 4, 3};
+  CHECK(ds::pick_seep_zone(comps, 5) == 3);
+}
+
+TEST_CASE("seep zone: the first zone in list order wins") {
+  const std::int8_t comps[] = {2, 4, 4};
+  CHECK(ds::pick_seep_zone(comps, 3) == 1);
+}
+
+TEST_CASE("seep zone: no zone maps to compartment 4, so there is none") {
+  const std::int8_t comps[] = {1, 8, -1};
+  CHECK(ds::pick_seep_zone(comps, 3) == -1);
+  CHECK(ds::pick_seep_zone(comps, 0) == -1);
 }
 
 // -- seepage (ticket 25) ------------------------------------------------------

@@ -128,13 +128,20 @@ namespace ApePatcher.Tests
             Check.Equal(2.0, session.Current.HullMult2, "the template's tier-2 multiplier");
         }
 
-        public static void Test_TheShippedTemplateHoldsTicket12sDefaults()
+        public static void Test_AFreshStateHoldsTheHalvedLeakageDefaults()
+        {
+            PatchState d = new PatchState();
+            Check.Equal(2.0, d.Leakage1, "2 %/min (ticket 30)");
+            Check.Equal(7.5, d.Leakage2, "7.5 %/min (ticket 30)");
+        }
+
+        public static void Test_TheShippedTemplateHoldsTheCurrentDefaults()
         {
             PatchSession session = Fixtures.Stock(true).Session();
             PatchState d = session.Current;
             Check.Equal(150.0, d.Tier2Depth, "150 m");
-            Check.Equal(4.0, d.Leakage1, "4 %/min");
-            Check.Equal(15.0, d.Leakage2, "15 %/min");
+            Check.Equal(2.0, d.Leakage1, "2 %/min (halved, ticket 30)");
+            Check.Equal(7.5, d.Leakage2, "7.5 %/min (halved, ticket 30)");
             Check.Equal(7.5, d.WearAmount1, "7.5 %");
             Check.Equal(22.5, d.WearAmount2, "22.5 %");
             Check.Equal(200.0, d.WearRate1, "200 min");

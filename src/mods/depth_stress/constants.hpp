@@ -69,16 +69,16 @@ static_assert(offsetof(TierConstants, wear_amount) == 4, "patcher contract");
 static_assert(offsetof(TierConstants, wear_chance_per_s) == 8, "patcher contract");
 static_assert(offsetof(TierConstants, hull_mult) == 12, "patcher contract");
 
-// Ticket 12's defaults, after the patcher's conversions: leakage p %/min is
-// p/6000 per game-second, wear rate m min is 1/(60*m) per game-second, wear
-// amount a % is a/100.
+// Ticket 12's defaults, leakage halved by ticket 30 (ADR-0012), after the
+// patcher's conversions: leakage p %/min is p/6000 per game-second, wear rate
+// m min is 1/(60*m) per game-second, wear amount a % is a/100.
 constexpr Constants kDefaultConstants = {
     {'A', 'P', 'E', 'D', 'P', 'T', 'H', '1'},
     kVersion,
     150.0f,
     {
-        {4.0f / 6000.0f, 0.075f, 1.0f / (60.0f * 200.0f), 1.25f},
-        {15.0f / 6000.0f, 0.225f, 1.0f / (60.0f * 130.0f), 1.5f},
+        {2.0f / 6000.0f, 0.075f, 1.0f / (60.0f * 200.0f), 1.25f},
+        {7.5f / 6000.0f, 0.225f, 1.0f / (60.0f * 130.0f), 1.5f},
     },
 };
 

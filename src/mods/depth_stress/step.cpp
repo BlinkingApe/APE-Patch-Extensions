@@ -3,6 +3,12 @@
 namespace ape {
 namespace depth_stress {
 
+int pick_seep_zone(const std::int8_t* comps, int n) {
+  for (int i = 0; i < n; ++i)
+    if (comps[i] == kSeepCompartment) return i;
+  return -1;
+}
+
 const char* implausible(const Sample& s) {
   // Written so a NaN fails every gate it reaches.
   if (!(s.max_hull > 0.0f)) return "max hull not > 0";

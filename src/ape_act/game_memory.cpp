@@ -144,29 +144,38 @@ bool read_u8(std::uint32_t addr, std::uint8_t& out) {
          n == 1;
 }
 
-// Walks the zone list and picks the seep compartment from the live table:
-// the zone that maps to compartment 8 if there is one, else the one that maps
-// to 4 (ticket 19). Never by class. Sets `flood_addr`, or returns why not.
+// Walks the zone list and picks the seep zone from the live table: the first
+// zone in list order that maps to compartment 4, the electric engine room, on
+// every class (ADR-0012, ticket 30). Never by class. Sets `flood_addr`, or
+// returns why not.
 const char* find_seep_flood(const Anchors& a, std::uint32_t& flood_addr) {
+  flood_addr = 0;
   std::uint32_t node;
   if (!read_u32(a.zone_head, node)) return "zone list head unreadable";
-  std::uint32_t eight = 0, four = 0;
-  // A bounded walk: a real list is under a hundred zones.
-  for (int i = 0; i < 512 && node; ++i) {
+  // A bounded walk: a real list is under a hundred zones. The compartment ids
+  // are collected first so the pick itself is the pure, tested
+  // depth_stress::pick_seep_zone; table bytes are signed (0xFF = none = -1).
+  constexpr int kMaxZones = 512;
+  std::int8_t comps[kMaxZones];
+  std::uint32_t states[kMaxZones];
+  int n = 0;
+  for (; n < kMaxZones && node; ++n) {
     std::uint32_t state, next, desc, zone;
     if (!read_u32(node + 0x14, state) || !read_u32(state + 0x10, desc) ||
         !read_u32(desc + 0x8, zone) || !read_u32(node + 0x4, next))
       return "zone list unreadable";
     // The crew-report loop's own bound: zones from 200 up are never looked up.
     std::uint8_t comp;
-    if (zone < 200 && read_u8(a.zone_table + zone, comp)) {
-      if (comp == 8 && !eight) eight = state + 0x1C;
-      if (comp == 4 && !four) four = state + 0x1C;
-    }
+    comps[n] = (zone < 200 && read_u8(a.zone_table + zone, comp))
+                   ? static_cast<std::int8_t>(comp)
+                   : std::int8_t{-1};
+    states[n] = state;
     node = next;
   }
-  flood_addr = eight ? eight : four;
-  return flood_addr ? nullptr : "no zone maps to compartment 8 or 4";
+  const int i = depth_stress::pick_seep_zone(comps, n);
+  if (i < 0) return "no zone maps to compartment 4 (electric engine room)";
+  flood_addr = states[i] + 0x1C;
+  return nullptr;
 }
 
 }  // namespace

@@ -125,10 +125,14 @@ looks a zone up below index 200 (`cmp ebp,0xC8` @`0x436073`).
 
 Walk: `node = [head]`, then `node = [node+0x4]`. Zone state = `[node+0x14]`; zone index =
 `[[state+0x10]+0x8]`; compartment = `byte [table + zone]`; flood = float `state+0x1C`.
-The reader takes the first zone (list order) that maps to compartment 8, else the first
-that maps to 4. It never asks the boat's class. The walk is bounded at 512 nodes.
+The reader takes the first zone (list order) that maps to compartment 4, the electric
+engine room, on every class ([ADR-0012](../adr/0012-motor-damage-follows-the-water-in-the-motor-room.md),
+ticket 30). This supersedes ticket 19's "compartment 8, else 4": the motors sit in
+compartment 4 on every class, so seepage and the motors share one room, and that flood is
+what motor flooding damage reads (ticket 31). It never asks the boat's class; the pick is
+`depth_stress::pick_seep_zone`, tested at seam 1. The walk is bounded at 512 nodes.
 
-**No match is not a skip.** If no zone maps to 8 or 4, or the list is unreadable, the
+**No match is not a skip.** If no zone maps to 4, or the list is unreadable, the
 sample stands without seepage (`has_seep` false) and `ape_act.log` says
 `no seepage: <why>` when the reason changes. The hull multiplier and wear carry on. A
 flood read outside [0, 1] fails the plausibility gate like every other value, so it

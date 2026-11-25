@@ -59,6 +59,16 @@ class Mt19937Random : public Random {
 // why not. A sample that fails one is treated as no sample.
 const char* implausible(const Sample& s);
 
+// The seep compartment: the electric engine room, compartment 4 on every class
+// (ADR-0012). Its water is also what motor flooding damage reads (ticket 31).
+constexpr std::int8_t kSeepCompartment = 4;
+
+// Which zone seepage goes into. `comps` holds each zone's compartment id from
+// the zone->compartment table, in zone-list order (-1 for none). Returns the
+// index of the first zone that maps to kSeepCompartment, or -1 if none does.
+// Picked from the live table, never by class.
+int pick_seep_zone(const std::int8_t* comps, int n);
+
 // What the step carries from one poll to the next. Opaque to callers: start
 // from a value-initialised one and hand it back each poll.
 struct StepState {

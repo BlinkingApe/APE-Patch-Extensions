@@ -1,6 +1,6 @@
 // The depth-stress constants struct itself (ADR-0006).
 //
-// Initialised with ticket 12's defaults, so the built ape.act is the
+// Initialised with the shipped defaults (kDefaultConstants), so the built ape.act is the
 // patcher's template: the patcher copies it, finds this struct at the offset
 // the manifest records, and overwrites the fields.
 //

@@ -94,7 +94,7 @@ namespace ApePatcher
 
         public bool DepthApplied;
         public double Tier2Depth = 150;
-        public double Leakage1 = 4, Leakage2 = 15;
+        public double Leakage1 = 2, Leakage2 = 7.5;
         public double WearAmount1 = 7.5, WearAmount2 = 22.5;
         public double WearRate1 = 200, WearRate2 = 130;
         public double HullMult1 = 1.25, HullMult2 = 1.5;

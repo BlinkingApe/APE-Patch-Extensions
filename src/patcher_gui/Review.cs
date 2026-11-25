@@ -160,9 +160,9 @@ namespace ApePatcher
                 + "the crew pumps it.", false));
 
             if (d.Leakage1 > 0 || d.Leakage2 > 0)
-                g.Lines.Add(new ReviewLine("Leakage fills the stern torpedo room, or the electric "
-                    + "engine room on a Type II or XXI, and never past 80% full. The compartment "
-                    + "must be crewed for its water to be pumped.", false));
+                g.Lines.Add(new ReviewLine("Leakage fills the electric engine room, and never past "
+                    + "80% full. The electric engine room must be crewed for its water to be "
+                    + "pumped.", false));
             if (d.WearAmount1 > 0 || d.WearAmount2 > 0)
                 g.Lines.Add(new ReviewLine("Wear never takes an engine past 90% damage, so the crew "
                     + "can always repair it.", false));
@@ -185,7 +185,7 @@ namespace ApePatcher
                 ? "hull damage is multiplied by " + Fmt.F2(mult)
                 : "hull multiplier off (1.0)";
             string seep = leak > 0
-                ? "water seeps in at " + Fmt.F1(leak) + "% of the stern compartment per game-minute"
+                ? "water seeps in at " + Fmt.F1(leak) + "% of the electric engine room per game-minute"
                 : "leakage off (0)";
             string wear = amount > 0
                 ? "an electric engine takes " + Fmt.F1(amount) + "% wear about every "
