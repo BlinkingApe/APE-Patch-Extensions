@@ -1,5 +1,10 @@
 # APE hands crush-depth damage back to stock; depth effects apply above it as poll-and-amplify stress
 
+> **Amended by ADR-0010 (2026-11-25):** APE now sets each U-boat's `CrashSpeed` (from a
+> player-chosen crush time) and reads crush depth live as tier 2's floor. Tier 3 is still
+> stock's mechanism. The "never reads CDT / never touches `CrashSpeed`" lines below are
+> superseded.
+
 The original crush-depth-damage spec had APE own the entire model below crush depth:
 three fraction-of-crush-depth bands of flat HP-per-second bleed, with stock's own
 `CrashSpeed` neutralized (`=0` in shipped per-unit data) so APE was the sole author of

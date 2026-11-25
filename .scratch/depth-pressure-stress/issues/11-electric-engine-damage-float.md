@@ -135,3 +135,58 @@ lead left standing from any pass, static or live.
 If the electric engines are a sibling field of the diesel pair on `0x5543DC`, this
 ticket also cheaply advances the umbrella map's standing fog entry on identifying
 that singleton — worth recording either way.
+
+## Lead from sh3-crush-pressure (2026-11-25): damage value, range, repair threshold and consequences
+
+**vanilla Steam 1.4b; portability: owner.** Measured on the unwrapped vanilla Steam
+SH3 1.4b exe, sha256 `1f14568235f903e7e50b73d3caa937b6946aadf7013e3dc39dfd1cc7975986f2`,
+VIIC, realistic repair time on. Not OAE: every address below is for that build,
+and porting it to OAE (and re-hashing) is the owner's call. This ticket is **not**
+resolved by this section.
+
+- **The value: two floats, one per engine**, the diesels' shape. Each electric
+  engine is a zone state (same class as a compartment's), a child of compartment
+  4's zone state; damage at **`+0x14`**, float32. Starboard = equipment 11 (zone 22
+  `ElectricEngine1`); port = equipment 12 (zone 56 `ElectricEngine2`). Verdict
+  **authoritative**, both engines, three runs.
+- **Chain: the sibling of your diesel pair.** The unit `[[0x5543DC]+4]` has a
+  diesel engine block at `+0x300` (its `+0xC` is your `+0x30C` pair) and an
+  electric block at `+0x370`, whose `+0xC` is **`+0x37C`**:
+  port `[[[[0x5543DC]+0x4]+0x37C]+0x0]`, starboard `…+0x4]`. Each is a pointer to
+  the field itself. Array order is [port, starboard]. AOBs (all unique): root
+  `89 35 DC 43 55 00 57 8D 7E 10` at `0x004A28B6`; offset
+  `8B 80 7C 03 00 00 8D 77 FC` at `0x004C14D1`; zone → equipment byte table
+  `0x00566960` via `0F BE B8 60 69 56 00 83 FF FF` at `0x004360EF`.
+- **`+0x358`/`+0x360` ruled out:** float64s of the diesel block, constant all run
+  and unmoved by electric damage; reading: diesel fuel (capacity, remaining). The
+  electric block's matching `+0x398/+0x3A0` is the battery.
+- **A mirror to avoid:** the exe keeps a float[44] by equipment index at
+  `0x005FD860` (stb electric = `0x005FD88C`), copied from the field once a
+  game-second by the crew report (`0x0043620C`); a write to it reverts within a
+  second and does nothing. (Your 2026-08-18 pair at `0x240C73E0` was a heap
+  address, so it isn't this array; what it was wasn't checked here.)
+- **Range: 0.0 healthy → 1.0 destroyed.**
+- **Repair threshold: strictly under 1.0.** 0.99999994 (the largest float32 under
+  1.0) was repaired 8 of 8 times, both engines; 1.0 held 8 of 8, and for 600+
+  game-s under a write watch. Static: the repair gate `0x0042A2D0` runs only for
+  `0 < d < 1.0`, with crew strength and at least 2 crew in the room;
+  `Destructible` isn't read. Base refit not tested.
+- **Repair rate:** 0.00234 damage/game-s (`factor × strength × 0.2/60`, the pump's
+  formula), the same at every level: ~427 game-s per 1.0 of damage.
+- **Consequences: speed, not battery or noise.** Both engines, ahead flank:
+  0 → 3.91 m/s, 0.25 → 2.87, 0.5 → 1.82, 0.75 → 0.81, 0.9 → 0.25, 1.0 coasts.
+  Power is scaled by `1 − max(d, clamp(2·(room flood − 0.2), 0, 1))`. Battery drain
+  *falls* with damage. The noise property is a class constant.
+- **Messages and F7:** "… damaged, sir!" for 0 < d < 0.99, "… destroyed, sir!"
+  from 0.99 (still repaired below 1.0). F7's cutaway is orange 0.25–0.9, red by
+  0.98. **Ceiling advice: under 0.99, at or under 0.9 to keep F7 out of red**
+  (ticket 12's proposal: 0.9).
+- **Walkable equipment table: yes, but not a flat damage array** — the zone-state
+  tree (compartment list `0x005547D4` → child array `+0x8`, count `+0xC`) with the
+  zone → equipment table `0x00566960`. Bears on the map's fog about extending wear
+  past the electric engines.
+
+Full write-ups, in the sh3-crush-pressure repo (`d:\code\sh3-crush-pressure`, branch
+`automated-depth-re` until merged): `docs/re-notes/electric-engines.md` (§§1–10 the
+value, §§11–16 threshold and consequences); finding records
+`docs/findings/electric-engine.json` and `docs/findings/repair-threshold.json`.

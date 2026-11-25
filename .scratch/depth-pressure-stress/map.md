@@ -34,7 +34,9 @@ write target is unlocated is not specified.
   ~100m) tier 1 applies; below a second configured depth, tier 2 — same effects,
   more so. Each tier carries a flat hull-damage **multiplier**, a flat **astern
   seep rate**, and a flat **electric-engine wear chance**. Tier 3 is stock's own
-  crush-depth damage, untouched. **Crush depth is never read**: APE's effects simply
+  crush-depth damage, untouched. *(Revised 2026-11-25, ADR-0010: tier 2 now ends at
+  crush depth, read live; APE sets stock's crush speed; see the grilling note below.)*
+  **Crush depth is never read**: APE's effects simply
   continue below it rather than switching off.
 - **The historian's premise** (via the user, 2026-08-16): "All but the late war
   variants of the boats, and even the type II, were designed for an operating depth
@@ -135,6 +137,52 @@ write target is unlocated is not specified.
   offset, confirming it's real rather than incidental. Resolved and live-tracking
   confirmed against the depth gauge; stable across two independent relaunches.
 
+- **External RE pass 2026-11-25, sh3-crush-pressure (vanilla Steam 1.4b;
+  portability: owner).** A separate repo (`d:\code\sh3-crush-pressure`, branch
+  `automated-depth-re` until merged) ran tickets `10`, `11` and `12`'s questions
+  unattended under Frida on the unwrapped **vanilla Steam SH3 1.4b** exe (sha256
+  `1f14568235f903e7e50b73d3caa937b6946aadf7013e3dc39dfd1cc7975986f2`), not OAE.
+  Each of those tickets carries a lead section summarising it; **none is
+  resolved** — porting to OAE and resolving are the owner's call. Also two things
+  for this map:
+  - **Hull-HP writer inventory** (`docs/re-notes/hull-writer-inventory.md`,
+    `docs/findings/hull-hp-writers.json`; 15 runs over crush, ramming, grounding,
+    depth charges, mission start and save-load, hardware watchpoints on hull and
+    max hull). Damage writers are **two**, not one: `SH3Collisions+0x30D7` (crush,
+    every frame, cause 4 — ticket `09`'s `02C930D7`) and `+0x36D7` (ramming and
+    depth charges cause 1, grounding cause 3, single steps). Load/init:
+    `+0x4E3C`/`+0x4E48` (copy constructor), `+0x2919` (hull := max). **No repair
+    writer: hull never rose at sea.** The `0x566A28` mirror (fog entry below) is
+    the HUD's copy, refreshed every ~10 s by `0x004E1C9F`: no use for the read half.
+  - **One hazard for poll-and-amplify: the save-load restore.** A byte-wise copy
+    (`SH3Collisions+0x2376…+0x2383`, via `MessageNet.dll` from `Multiplayer.act`)
+    lowers hull from max to the saved value ~0.8 s after the new object appears,
+    with no damage cause. Unguarded, every load of a damaged boat would cost a
+    further `(mult − 1) × (max − saved)` HP. **Safety argument:** poll-and-amplify
+    amplifies only damage, and never fights a repair, with two guards — (1)
+    re-baseline when the chain reaches a different object; (2) don't amplify a drop
+    if the mission clock read 0 at the *previous* poll (the restore lands at clock
+    0; the clock jumps to the saved time ~0.1 s later). Guard 2 rests on one
+    clock-polled load, and on the stock clock `[["sh3.exe"+0x154A88]+0x7F0]+0x150`;
+    **whether h.sie's `0x0063FF80` mirror also reads 0 through the restore is for
+    the owner to check on OAE.** Fallback: hold the baseline ~2 s after an object
+    change. Depth-charge damage mostly bypasses hull (one boat sank "destroyed by
+    flooding" at full hull), so the multiplier can't scale it — a design point for
+    ticket `12`, not a safety one.
+
+- **Grilling 2026-11-25: player fields, tier 3, and a crush-time patch** (ADR-0010,
+  `CONTEXT.md`, the field table in ticket `12`). Tier 1: 100 m (fixed) to a player-set
+  tier-2 depth. Tier 2: to crush depth, which APE now reads live (ticket `17`). Tier 3:
+  stock's crush damage at a speed APE sets. Seepage, wear and the multiplier continue
+  below crush depth at tier-2 values, except that crush damage is never multiplied
+  (`crush speed × dt` of each drop is exempt). Per tier the player sets leakage, wear
+  amount, wear rate and hull multiplier. The ceilings (0.8 seep, 0.9 wear) stay fixed.
+  A separate **crush-time patch** (ticket `16`, blocked by `18`'s U-boat discovery rule)
+  writes `CrashSpeed = Hit_Points ÷ crush time` into each playable U-boat's `.zon`. It is
+  static and can ship before `ape.act`. Basis: the owner's in-game testing that
+  `CrashSpeed` is HP per second, which supersedes the external RE's
+  `excess × CrashSpeed × dt` reading. Tier-2 depth defaults to 150 m.
+
 ## Decisions so far
 
 <!-- charted 2026-08-16; the model above was settled in the charting session's
@@ -177,7 +225,7 @@ write target is unlocated is not specified.
 
 ## Out of scope
 
-- **Owning the crush-depth threshold or the damage past it.** The superseded model
+- **Owning the crush-depth threshold or the damage past it.** *(Narrowed by ADR-0010: APE now sets stock's crush speed via `.zon`, but stock still owns the mechanism.)* The superseded model
   had APE own 100% of below-crush damage with stock's `CrashSpeed` zeroed. The new
   model hands tier 3 back to stock entirely and never reads CDT. Re-opening this
   would be redrawing the destination, not advancing toward it.
@@ -185,7 +233,7 @@ write target is unlocated is not specified.
   flooding caused by depth charges stay at stock magnitude. APE's own seep and wear
   effects cover that ground instead. Scaling everything a hit produces would mean
   mapping every damage float the engine writes — open-ended RE with no known anchor.
-- **JSGME packaging and per-unit data edits.** Ruled out by the umbrella map
+- **JSGME packaging and per-unit data edits.** *(Per-unit edits revived by ADR-0010 for `CrashSpeed` only, through the patcher, not JSGME; ticket `16`.)* Ruled out by the umbrella map
   (`.scratch/umbrella-roadmap/map.md`, ticket 05) and now doubly dead: with
   `CrashSpeed` untouched there is no data edit left to ship. Old issue `07` is
   deleted by ticket 13, not resolved.

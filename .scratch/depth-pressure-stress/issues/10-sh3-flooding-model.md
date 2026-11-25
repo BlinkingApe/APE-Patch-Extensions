@@ -76,3 +76,54 @@ No anchor and no offset exist for this today. The only precedent for an
 equipment/compartment damage value anywhere in this repo is the diesel float at
 `[0x5543DC+4]+0x30C`, found by accident of h.sie's cave rather than by walking the
 table — so expect this to be genuine discovery, not confirmation.
+
+## Lead from sh3-crush-pressure (2026-11-25): mechanism, stern value, compartment and pump rate
+
+**vanilla Steam 1.4b; portability: owner.** Measured on the unwrapped vanilla Steam
+SH3 1.4b exe, sha256 `1f14568235f903e7e50b73d3caa937b6946aadf7013e3dc39dfd1cc7975986f2`,
+VIIC, realistic repair time on. Not OAE: every address below is for that build,
+and porting it to OAE (and re-hashing) is the owner's call. This ticket is **not**
+resolved by this section.
+
+- **Mechanism: direct water write.** Each compartment has one zone state (an
+  SH3Collisions object, vtable `SH3Collisions+0x1A520`): damage `+0x14`, breach
+  `+0x20`, **flood level `+0x1C`**, float32, 0 dry to 1 full. A write to `+0x1C`
+  holds, the crew pumps it like its own water, and the game reacts to it (depth
+  rate, CE reports, F7 water). Verdict **authoritative** in three runs.
+  - Damage-the-compartment was tested and rejected: the engine's flood integrator
+    (`SH3Collisions+0x77B9`, `flood += breach / FloodingTime × dt`) only runs once
+    the boat's damage controller is running, which needs a collision hit (a crush
+    hit doesn't start it). Then it floods at a rate fixed by data (0.5 / 120 ≈
+    0.0042/game-s).
+- **Your static lead is confirmed, with one correction.** `0x00436BE4`
+  `fld [ecx+0x1C]; fcomp [0.35]` reads this flood level; 0.35 is the "heavy
+  flooding" report mark. The list's `next` is at `+0x4`, not `+0x2C`.
+- **Chain.** List head `sh3.exe+0x1547D4` (VA `0x005547D4`): walk
+  `node = [node+0x4]` until the zone state `[node+0x14]` has zone index
+  `[[state+0x10]+0x8]` = 37 (or compartment byte `[0x00566898+zone]` = 8); the value
+  is `[node+0x14]+0x1C`. Match by zone index, not list position. AOB
+  `8B 3D D4 47 55 00 85 FF C7 44 24 40 00 00 00 00` at `0x0043601D` (unique; the
+  dword at `+2` is the list head).
+- **Compartment: VIIC compartment 8, stern torpedo room** (zone 37
+  `TorpedoRoomStern`): the sternmost tile, the one owning propellers, rudders and
+  stern planes; F7 draws its water in the sternmost section. **`InteriorAft` is
+  ruled out as evidence:** vanilla labels it COMMAND ROOM; the diesel label is
+  OAE's. By data, the astern compartment per class is II → 7, VII/IX → 8,
+  XXI → 4 (only VIIC was run).
+- **Pump rate: 0.0024314 flood per game-second** (one step a game-second) for the
+  VIIC stern room's fresh crew; six measurements 0.00231–0.00243. Formula, matched
+  to 7 digits: `factor × (crew strength + team strength) × 0.2/60` per step, only
+  while 0 < flood < 0.99; factor 2 with realistic repair time off. Depth and
+  damage don't change it; fatigue does (~0.0017 at strength 0.5). Crew strength:
+  `[[[0x5449B0]+0xD8]+0x83C]+0x74+4×compartment`.
+- **In play.** Seepage under the pump rate is a running cost (level 0–0.0024,
+  occasional "We have flooding, sir!"); over it the race is lost at `rate − pump`.
+  With way on a VIIC holds an ordered 150 m up to 0.8 stern water, at 6 → 5 → 4 kn.
+  At 0.99 the room's men go down and nothing pumps it; the boat was lost ~70
+  game-minutes later (cause not found). Stopped, any stern water sinks the boat.
+  **Clamp APE's seepage well under 0.99** (ticket 12's proposal: 0.8).
+
+Full write-ups, in the sh3-crush-pressure repo (`d:\code\sh3-crush-pressure`, branch
+`automated-depth-re` until merged): `docs/re-notes/flooding.md` (§§1–6 the value,
+§§12–15 the pump and play); finding records `docs/findings/stern-water.json` and
+`docs/findings/pump-rate.json`.

@@ -13,12 +13,29 @@ A plain PE32 DLL, loaded by OAE sh3.exe's own custom module loader (a hand-patch
 _Avoid_: "plugin", "act file" (ambiguous with the palette data files)
 
 **crush depth**:
-An existing, engine-tracked value representing the depth at which stock SH3 begins taking hull damage from pressure. **APE's depth-pressure-stress feature never reads this value** — it is superseded terminology from an earlier (abandoned) model. Stock's own crush-depth damage is left untouched below it.
-_Avoid_: "CDT" as something APE resolves or owns (only the abandoned model did).
+An engine-tracked, per-boat-class value: the depth at which stock SH3 begins taking hull damage from pressure. It is the floor of tier 2; below it is tier 3.
+_Avoid_: "CDT" as something APE owns (only the abandoned model did).
+
+**crush speed**:
+Stock's per-boat-class rate of hull damage below crush depth, in HP per second (the `CrashSpeed` value in each boat's `.zon` data). A boat at full hull below crush depth survives `Hit_Points ÷ crush speed` seconds.
+
+**crush time**:
+The player's chosen number of seconds a boat survives below crush depth from full hull. APE turns it into each U-boat class's crush speed (`Hit_Points ÷ crush time`), so every class dies in the same time. Not affected by the hull multiplier.
 
 **depth tier**:
-One of a small number of configured **absolute** depth thresholds (default ~100m for tier 1, deeper for tier 2) below which APE's own effects apply: a hull-damage **multiplier** (poll-and-amplify — APE notices hull HP fell by N since last tick and subtracts a further `(mult−1)·N`, never attributing the cause), a flat astern **seep rate**, and a flat electric-engine **wear chance**. Crossing a tier boundary is a step change. Tier 3 is stock's own crush-depth damage, untouched — there is no tier APE owns entirely. See `.scratch/depth-pressure-stress/map.md`.
+One of APE's absolute-depth bands of depth stress. Tier 1 runs from 100 m to the tier-2 depth; tier 2 from the player's tier-2 depth to crush depth. Each carries its own **hull multiplier**, **seepage** rate, and **electric-engine wear** (amount and rate). Crossing a boundary is a step change. Tier 3 (below crush depth) adds stock's crush damage, at the crush speed APE sets; seepage, wear and the hull multiplier carry on at tier-2 values, except that crush damage itself is never multiplied. See `.scratch/depth-pressure-stress/map.md`.
 _Avoid_: "damage window", "band" (terminology from the abandoned three-band, fraction-of-crush-depth model)
+
+**hull multiplier**:
+A depth tier's amplification of hull damage: APE notices hull HP fell by N since its last look and takes a further `(mult−1)·N`, whatever the cause — except crush damage below crush depth, which is never multiplied.
+
+**seepage**:
+Water APE adds to the sternmost compartment while the boat is in a depth tier, which the crew must pump out. Shown to players as "Leakage".
+_Avoid_: "leak rate", "flooding" (flooding is stock's own, from hull breaches)
+
+**electric-engine wear**:
+Damage APE adds to an electric engine while the boat is in a depth tier: a fixed amount per hit, at a tier's rate, never pushed past the point where the crew can still repair it.
+_Avoid_: "electrical engine damage" (damage is stock's, from hits)
 
 **AOB pattern scan** (array-of-bytes scan):
 Resolving an address at runtime by searching loaded process memory for a byte signature (with wildcards for bytes expected to vary), rather than trusting a fixed offset found once and hardcoded. `ape.act` uses it to anchor the pointer chains it follows to the live values it reads/writes (player boat, depth, hull HP, mission clock, and per-feature values like the diesel/electric-engine damage floats). Since stock sh3.exe never moves, the payoff is self-verification: a patch that shifts an anchor makes the scan miss, and APE fails inert rather than misreading.
