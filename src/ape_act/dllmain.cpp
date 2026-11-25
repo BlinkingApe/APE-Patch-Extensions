@@ -21,6 +21,7 @@
 #include "core/log.hpp"
 #include "mods/depth_stress/constants.hpp"
 #include "mods/depth_stress/step.hpp"
+#include "mods/depth_stress/warning.hpp"
 
 namespace ds = ape::depth_stress;
 
@@ -129,6 +130,91 @@ void log_writes(ape::Logger& log, const ds::Constants& c, const ds::Sample& s,
   }
 }
 
+// The motor-room flooding warning (ticket 35): runs the pure decision each poll
+// and does what it says to game memory. Everything it writes is put back: the
+// string pointer is restored when the game has spoken, at the timeout, and
+// when the loop ends.
+class FloodingWarning {
+ public:
+  FloodingWarning(ape::Logger& log, const ape::game::Anchors& anchors,
+                  const ds::Constants& c)
+      : log_(log), anchors_(anchors), c_(c) {}
+
+  // `sample` is the poll's sample when it passed every gate, else null.
+  void poll(const ds::Sample* sample) {
+    ape::game::WarningTargets t;
+    const char* why = nullptr;
+    const bool ready = ape::game::read_warning_targets(anchors_, t, &why);
+
+    ds::WarningInput in;
+    in.now_ms = GetTickCount();
+    in.sample = ready ? sample : nullptr;
+    if (st_.swapped && ready) {
+      bool set = false;
+      in.latch_set = ape::game::read_latch(
+                         ape::game::warning_latch_address(t, st_.band), set) &&
+                     set;
+    }
+
+    const ds::WarningDecision d = ds::decide_warning(c_, st_, in);
+    switch (d.action) {
+      case ds::WarningAction::None:
+        break;
+      case ds::WarningAction::Swap: {
+        const std::uint32_t slot = ape::game::warning_string_slot(t, d.band);
+        const std::uint32_t latch = ape::game::warning_latch_address(t, d.band);
+        if (!slot || !latch ||
+            !ape::game::swap_in_warning(slot, latch, text_address(), saved_)) {
+          st_.swapped = false;  // nothing was left behind; the crossing is spent
+          log_.logf("[flooding-warning] swap FAILED for band %d: nothing changed",
+                    d.band);
+          break;
+        }
+        slot_ = slot;
+        log_.logf("[flooding-warning] swapped band %d: flood %.4f, telegraph %.4f",
+                  d.band, in.sample ? in.sample->seep_flood : 0.0f,
+                  in.sample ? in.sample->telegraph : 0.0f);
+        break;
+      }
+      case ds::WarningAction::Restore:
+        restore("spoken", in.now_ms - st_.swapped_at_ms);
+        break;
+      case ds::WarningAction::GiveUp:
+        restore("TIMED OUT, crossing spent", in.now_ms - st_.swapped_at_ms);
+        break;
+    }
+  }
+
+  // The loop is ending: never leave APE's pointer in the game's table.
+  void shutdown() {
+    if (!st_.swapped) return;
+    st_.swapped = false;
+    restore("loop ended", GetTickCount() - st_.swapped_at_ms);
+  }
+
+ private:
+  static std::uint32_t text_address() {
+    return static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(ds::kWarningText));
+  }
+
+  void restore(const char* how, DWORD waited_ms) {
+    bool restored = false;
+    const bool ok =
+        ape::game::restore_warning(slot_, text_address(), saved_, restored);
+    log_.logf("[flooding-warning] %s after %lu ms, string %s", how,
+              static_cast<unsigned long>(waited_ms),
+              !ok ? "RESTORE FAILED" : restored ? "restored" : "already changed, left");
+  }
+
+  ape::Logger& log_;
+  const ape::game::Anchors& anchors_;
+  const ds::Constants& c_;
+  ds::WarningState st_{};
+  std::uint32_t slot_ = 0;
+  std::uint32_t saved_ = 0;
+};
+
 DWORD WINAPI depth_stress_thread(LPVOID module) {
   // Hold ape.act in memory for the life of the process, so the code this
   // thread runs can never be unmapped under it (DllMain doesn't wait for it).
@@ -170,7 +256,13 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
              "damage, the other effects run",
              anchors.telegraph_why);
 
+  if (!anchors.failed && anchors.warning_why)
+    log.logf("[depth-stress] anchors for the flooding warning unresolved (%s): "
+             "no warning, the other effects run",
+             anchors.warning_why);
+
   SkipLog skips(log);
+  FloodingWarning warning(log, anchors, g_loaded);
   ds::StepState state{};
   std::uint32_t last_boat = 0;
   const char* last_seep_why = nullptr;
@@ -236,6 +328,10 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
       }
     }
 
+    // The warning acts on a sample that passed every gate, and runs even with
+    // none so that a swap in flight is always restored.
+    warning.poll(have && !ds::implausible(sample) ? &sample : nullptr);
+
     if (!have)
       skips.skipped(why);
     else if (r.skipped)
@@ -244,6 +340,7 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
       skips.ran();
     Sleep(kPollMs);
   }
+  warning.shutdown();
   return 0;
 }
 

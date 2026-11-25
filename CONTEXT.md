@@ -40,6 +40,10 @@ _Avoid_: "leak rate", "flooding" (flooding is stock's own, from hull breaches)
 Damage APE adds to both electric engines, at a steady rate per game-second, while the water in their room is at or above the player's flooding threshold and the machine telegraph is not at stop, at any depth and whatever flooded the room. Never pushed past the point where the crew can still repair it. Ordering stop, or pumping the room below the threshold, ends it. Shown to players as "Motor damage".
 _Avoid_: "electrical engine damage" (damage is stock's, from hits); "electric-engine wear" (the superseded random-hit model)
 
+**flooding warning**:
+The chief engineer's message "Water in the motor room, sir! Pump it out or stop the motors!", spoken once when the electric engine room's water reaches 5 points below the player's flooding threshold (15 % by default) while the machine telegraph is not at stop. APE borrows stock's own flooding report for it and puts the original text back. Off when motor damage is 0. See ticket 35.
+_Avoid_: "alarm" (stock's "We have flooding, sir!" is the report it borrows)
+
 **AOB pattern scan** (array-of-bytes scan):
 Resolving an address at runtime by searching loaded process memory for a byte signature (with wildcards for bytes expected to vary), rather than trusting a fixed offset found once and hardcoded. `ape.act` uses it to anchor the pointer chains it follows to the live values it reads/writes (player boat, depth, hull HP, mission clock, and per-feature values like the diesel/electric-engine damage floats). Since stock sh3.exe never moves, the payoff is self-verification: a patch that shifts an anchor makes the scan miss, and APE fails inert rather than misreading.
 _Avoid_: "hardcoded offset" for `ape.act`'s runtime anchors — the alternative it deliberately avoids. Not a project-wide rule: the GUI patcher's static file edits legitimately use fixed offsets, verified per-site by context bytes at write time rather than a whole-file identity check (ADR-0007, narrowed by ADR-0009).

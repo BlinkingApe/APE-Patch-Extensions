@@ -33,6 +33,12 @@ struct Anchors {
   // why). That costs motor damage only, never the sample.
   std::uint32_t telegraph = 0;   // 0x0063E1D4, h.sie's ordered-telegraph copy
   const char* telegraph_why = nullptr;
+  // Optional, for the motor-room flooding warning (ticket 35): 0 when either
+  // didn't resolve (then `warning_why` says which). That costs the warning
+  // only, never the sample.
+  std::uint32_t report_root = 0;   // 0x005449B0, the root that caches the report page
+  std::uint32_t strings_obj = 0;   // 0x00566058, the language string table object
+  const char* warning_why = nullptr;
 };
 
 // Scans sh3.exe's executable sections; each signature must match exactly once.
@@ -59,6 +65,44 @@ bool write_engine(std::uint32_t address, float value);
 
 // Applies the step's seepage write to the seep compartment's flood float.
 bool write_flood(std::uint32_t address, float value);
+
+// -- The motor-room flooding warning (ticket 35) ---------------------------------
+//
+// APE borrows stock's own flooding report: it swaps the report string's
+// pointer in the language table for its own text, clears the motor room's
+// latch so the game's report routine speaks, and puts the pointer back. Only
+// memory reads and writes from APE's thread; no stock code is called (ADR-0001).
+
+// Where one poll finds the report's pieces. Zero fields mean "not found".
+struct WarningTargets {
+  std::uint32_t report = 0;       // the report page object
+  std::uint32_t strings = 0;      // base of the string pointer array
+  std::uint32_t string_count = 0;
+};
+
+// Reads the report object and the string array. False, with `why`, when
+// either isn't there this poll.
+bool read_warning_targets(const Anchors& a, WarningTargets& out, const char** why);
+
+// For a band 1..3: the motor room's latch byte, and the report string's slot
+// in the table (the char* stock formats). Zero when the band or table can't
+// give one.
+std::uint32_t warning_latch_address(const WarningTargets& t, int band);
+std::uint32_t warning_string_slot(const WarningTargets& t, int band);
+
+// True when the latch byte at `address` was read; `set` is its value.
+bool read_latch(std::uint32_t address, bool& set);
+
+// Swaps `text` into `slot`, saving what was there, then clears the latch. If
+// the latch write fails the string is put back at once and this is false.
+bool swap_in_warning(std::uint32_t slot, std::uint32_t latch,
+                     std::uint32_t text, std::uint32_t& saved);
+
+// Puts `saved` back in `slot`, but only while the slot still holds `text`:
+// another change is never overwritten. `restored` is false when the slot
+// didn't hold `text`. False when the slot couldn't be read or written.
+bool restore_warning(std::uint32_t slot, std::uint32_t text,
+                     std::uint32_t saved, bool& restored);
 
 // Why the last read_sample found no seep compartment (null when it found one).
 // Read from the same thread that polled; the text is static.

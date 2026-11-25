@@ -61,6 +61,28 @@ constexpr aob::Signature kZoneTable = {
 constexpr aob::Signature kTelegraph = {
     "telegraph", "8B 80 20 03 00 00 8B 00 89 05 ?? ?? ?? ??", 10};
 
+// The flooding report's pieces (ticket 35; docs/re-notes/11). The report object
+// is the "Page barracks" menu page, which the root singleton caches at +0x100
+// (`mov [0x5449B0],esi` is the root's constructor @0x00408DA6). The string table
+// object is the `mov ecx,0x566058` that stock loads before it asks for string
+// 0x250 (592, "We have flooding, sir!") @0x00436C25.
+constexpr aob::Signature kReportRoot = {
+    "report root",
+    "89 35 ?? ?? ?? ?? 89 1D ?? ?? ?? ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? B9 ?? "
+    "?? ?? ?? 89 9E D0 00 00 00",
+    2};
+constexpr aob::Signature kStringsObj = {
+    "string table", "68 50 02 00 00 B9 ?? ?? ?? ?? E8", 6};
+constexpr std::uint32_t kReportCache = 0x100;   // root +0x100: the report page
+constexpr std::uint32_t kStringsArray = 0x130;  // string table +0x130: char*[]
+constexpr std::uint32_t kStringsCount = 0x138;  // string table +0x138: count
+constexpr std::uint32_t kFirstReportString = 592;  // band 1; 593, 594 follow
+// Latch bytes: three arrays of one byte per compartment, 12 bytes apart,
+// band 1 first. The slot is the compartment id, the value the zone table maps
+// the motor room's zone to.
+constexpr std::uint32_t kLatchBase = 0x32B4;
+constexpr std::uint32_t kLatchStride = 12;
+
 bool read_u32(std::uint32_t addr, std::uint32_t& out) {
   if (addr < 0x10000) return false;  // null, or a null plus an offset
   SIZE_T n = 0;
@@ -141,6 +163,15 @@ Anchors resolve_anchors() {
   if (const char* why = resolve(kTelegraph, a.telegraph)) {
     a.telegraph = 0;
     a.telegraph_why = why;
+  }
+  // The flooding warning's two roots are optional the same way.
+  if (const char* why = resolve(kReportRoot, a.report_root)) {
+    a.report_root = 0;
+    a.warning_why = why;
+  } else if (const char* why2 = resolve(kStringsObj, a.strings_obj)) {
+    a.strings_obj = 0;
+    a.report_root = 0;
+    a.warning_why = why2;
   }
   return a;
 }
@@ -296,6 +327,94 @@ bool write_engine(std::uint32_t address, float value) {
                             reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(address)),
                             &value, sizeof value, &n) &&
          n == sizeof value;
+}
+
+bool read_warning_targets(const Anchors& a, WarningTargets& out, const char** why) {
+  out = WarningTargets{};
+  if (!a.report_root || !a.strings_obj) {
+    *why = "report anchors unresolved";
+    return false;
+  }
+  std::uint32_t report, array, count;
+  if (!read_u32(a.report_root, report) || report < 0x10000 ||
+      !read_u32(report + kReportCache, report) || report < 0x10000) {
+    *why = "report page not there";
+    return false;
+  }
+  if (!read_u32(a.strings_obj + kStringsArray, array) || array < 0x10000 ||
+      !read_u32(a.strings_obj + kStringsCount, count) || count > 0x100000) {
+    *why = "string table not there";
+    return false;
+  }
+  out.report = report;
+  out.strings = array;
+  out.string_count = count;
+  return true;
+}
+
+std::uint32_t warning_latch_address(const WarningTargets& t, int band) {
+  if (!t.report || band < 1 || band > 3) return 0;
+  return t.report + kLatchBase + kLatchStride * static_cast<std::uint32_t>(band - 1) +
+         static_cast<std::uint32_t>(depth_stress::kSeepCompartment);
+}
+
+std::uint32_t warning_string_slot(const WarningTargets& t, int band) {
+  if (!t.strings || band < 1 || band > 3) return 0;
+  const std::uint32_t id = kFirstReportString + static_cast<std::uint32_t>(band - 1);
+  if (id >= t.string_count) return 0;
+  return t.strings + id * 4;
+}
+
+bool read_latch(std::uint32_t address, bool& set) {
+  if (address < 0x10000) return false;
+  std::uint8_t b = 0;
+  SIZE_T n = 0;
+  if (!ReadProcessMemory(GetCurrentProcess(),
+                         reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(address)),
+                         &b, sizeof b, &n) ||
+      n != sizeof b)
+    return false;
+  set = b != 0;
+  return true;
+}
+
+namespace {
+
+bool write_bytes(std::uint32_t address, const void* p, std::size_t len) {
+  if (address < 0x10000) return false;
+  SIZE_T n = 0;
+  return WriteProcessMemory(GetCurrentProcess(),
+                            reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(address)),
+                            p, len, &n) &&
+         n == len;
+}
+
+}  // namespace
+
+bool swap_in_warning(std::uint32_t slot, std::uint32_t latch,
+                     std::uint32_t text, std::uint32_t& saved) {
+  std::uint32_t original;
+  if (!read_u32(slot, original) || original < 0x10000) return false;
+  // The text first, so it is there when the latch lets the report speak.
+  if (!write_bytes(slot, &text, sizeof text)) return false;
+  const std::uint8_t clear = 0;
+  if (!write_bytes(latch, &clear, sizeof clear)) {
+    write_bytes(slot, &original, sizeof original);
+    return false;
+  }
+  saved = original;
+  return true;
+}
+
+bool restore_warning(std::uint32_t slot, std::uint32_t text,
+                     std::uint32_t saved, bool& restored) {
+  restored = false;
+  std::uint32_t now;
+  if (!read_u32(slot, now)) return false;
+  if (now != text) return true;  // another change: leave it
+  if (!write_bytes(slot, &saved, sizeof saved)) return false;
+  restored = true;
+  return true;
 }
 
 bool write_flood(std::uint32_t address, float value) {

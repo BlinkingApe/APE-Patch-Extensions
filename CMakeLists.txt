@@ -32,6 +32,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(depth_stress_core STATIC
   src/mods/depth_stress/constants.cpp
   src/mods/depth_stress/step.cpp
+  src/mods/depth_stress/warning.cpp
 )
 target_include_directories(depth_stress_core PUBLIC src)
 
@@ -80,6 +81,7 @@ add_executable(patcher
 enable_testing()
 add_executable(ape_tests
   tests/depth_stress_test.cpp
+  tests/flooding_warning_test.cpp
 )
 target_link_libraries(ape_tests PRIVATE depth_stress_core)
 target_include_directories(ape_tests PRIVATE third_party/doctest)
