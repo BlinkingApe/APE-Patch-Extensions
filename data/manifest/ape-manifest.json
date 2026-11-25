@@ -367,5 +367,74 @@
         }
       ]
     }
-  ]
+  ],
+  "apeAct": {
+    "store": "ape.act",
+    "template": "build/x86-release/ape.act",
+    "structs": [
+      {
+        "id": "depth-stress",
+        "offset": 24584,
+        "size": 48,
+        "magic": "4150454450544831",
+        "version": 1,
+        "fields": [
+          {
+            "id": "tier2_depth_m",
+            "at": 12,
+            "type": "f32",
+            "note": "metres"
+          },
+          {
+            "id": "t1_seep_per_s",
+            "at": 16,
+            "type": "f32",
+            "note": "leakage %/min / 6000"
+          },
+          {
+            "id": "t1_wear_amount",
+            "at": 20,
+            "type": "f32",
+            "note": "wear amount % / 100"
+          },
+          {
+            "id": "t1_wear_chance_per_s",
+            "at": 24,
+            "type": "f32",
+            "note": "1 / (60 * wear rate min)"
+          },
+          {
+            "id": "t1_hull_mult",
+            "at": 28,
+            "type": "f32",
+            "note": "multiplier"
+          },
+          {
+            "id": "t2_seep_per_s",
+            "at": 32,
+            "type": "f32",
+            "note": "leakage %/min / 6000"
+          },
+          {
+            "id": "t2_wear_amount",
+            "at": 36,
+            "type": "f32",
+            "note": "wear amount % / 100"
+          },
+          {
+            "id": "t2_wear_chance_per_s",
+            "at": 40,
+            "type": "f32",
+            "note": "1 / (60 * wear rate min)"
+          },
+          {
+            "id": "t2_hull_mult",
+            "at": 44,
+            "type": "f32",
+            "note": "multiplier"
+          }
+        ]
+      }
+    ]
+  }
 }

@@ -25,15 +25,43 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # .scratch/umbrella-roadmap/). Header-only for now (src/core/log.hpp), so no
 # library target — every target below gets `src` on its include path instead.
 
+# --- depth_stress_core: the pure depth-stress code -------------------------
+# The constants struct's layout and verdict, and the step function (PRD seam
+# 1). No I/O, no Windows headers, no game memory: both ape.act and the test
+# binary link it.
+add_library(depth_stress_core STATIC
+  src/mods/depth_stress/constants.cpp
+  src/mods/depth_stress/step.cpp
+)
+target_include_directories(depth_stress_core PUBLIC src)
+
 # --- ape.act: the injected module (PE32 DLL, `.act` extension) -----------
-# DllMain confirms it loaded; no mods are wired in yet. The three-band
-# crush-depth damage loop that used to live here was retired by ticket 15
-# (ADR-0008 reversed the model it implemented) — a future mod wires its own
-# loop in from dllmain.cpp once the tier-model RE/PRD work lands.
+# DllMain verifies the depth-stress constants struct (ADR-0006) and starts one
+# background thread; nothing is hooked (ADR-0001).
 add_library(ape_act SHARED
   src/ape_act/dllmain.cpp
+  src/ape_act/depth_stress_constants.cpp
 )
 target_include_directories(ape_act PRIVATE src)
+target_link_libraries(ape_act PRIVATE depth_stress_core)
+
+# The Release ape.act is the patcher's template (ADR-0006), so a Release build
+# records its constants struct's file offset in the manifest. A Debug build
+# lays the file out differently and leaves the manifest alone.
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  find_package(Python3 COMPONENTS Interpreter)
+  if(Python3_FOUND)
+    add_custom_command(TARGET ape_act POST_BUILD
+      COMMAND Python3::Interpreter
+              "${CMAKE_SOURCE_DIR}/tools/re-static/gen_manifest.py"
+              --ape-act "$<TARGET_FILE:ape_act>"
+      COMMENT "Recording ape.act's constants struct offset in the manifest"
+      VERBATIM)
+  else()
+    message(WARNING "No Python 3: the manifest's ape.act offsets won't be "
+                    "updated by this build; run tools/re-static/gen_manifest.py")
+  endif()
+endif()
 set_target_properties(ape_act PROPERTIES
   PREFIX ""            # no "lib" prefix
   OUTPUT_NAME "ape"
@@ -44,3 +72,13 @@ set_target_properties(ape_act PROPERTIES
 add_executable(patcher
   src/patcher/main.cpp
 )
+
+# --- Tests ----------------------------------------------------------------
+# Seam 1: the pure depth-stress code, under vendored doctest.
+enable_testing()
+add_executable(ape_tests
+  tests/depth_stress_test.cpp
+)
+target_link_libraries(ape_tests PRIVATE depth_stress_core)
+target_include_directories(ape_tests PRIVATE third_party/doctest)
+add_test(NAME ape_tests COMMAND ape_tests)
