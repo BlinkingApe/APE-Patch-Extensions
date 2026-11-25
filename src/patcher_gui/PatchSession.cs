@@ -94,14 +94,27 @@ namespace ApePatcher
         public float CrashSpeed;      // what NewBytes holds
     }
 
+    /// <summary>Depth stress's one file: ape.act deployed with the desired
+    /// values, or deleted (ADR-0006).</summary>
+    public class ApeActWrite
+    {
+        public bool Delete;
+        public byte[] NewBytes;       // null when deleting, or when Refusal is set
+        /// <summary>Why the template can't be written (a wrong marker or offset);
+        /// Apply refuses the whole commit rather than write anything.</summary>
+        public string Refusal;
+    }
+
     public class WritePlan
     {
         public List<PlannedWrite> Writes = new List<PlannedWrite>();
         public List<ZonWrite> ZonWrites = new List<ZonWrite>();
+        public ApeActWrite ApeAct;    // null when ape.act stays as it is
 
         public bool Touches(string patchId)
         {
             if (patchId == CrushTime.PatchId) return ZonWrites.Count > 0;
+            if (patchId == DepthStress.PatchId) return ApeAct != null;
             foreach (PlannedWrite w in Writes)
                 if (w.Patch.Id == patchId) return true;
             return false;
@@ -114,11 +127,11 @@ namespace ApePatcher
                 List<string> seen = new List<string>();
                 foreach (PlannedWrite w in Writes)
                     if (!seen.Contains(w.Patch.Id)) seen.Add(w.Patch.Id);
-                return seen.Count + (ZonWrites.Count > 0 ? 1 : 0);
+                return seen.Count + (ZonWrites.Count > 0 ? 1 : 0) + (ApeAct != null ? 1 : 0);
             }
         }
 
-        public bool Empty { get { return Writes.Count == 0 && ZonWrites.Count == 0; } }
+        public bool Empty { get { return Writes.Count == 0 && ZonWrites.Count == 0 && ApeAct == null; } }
     }
 
     public class PatchSession
@@ -132,6 +145,8 @@ namespace ApePatcher
         byte[] exe;          // null when the install could not be read
         IniFile ini;
         IniFile menuText;
+        byte[] apeActTemplate;   // null when this build has none
+        byte[] apeAct;           // the deployed ape.act; null when there is none
 
         /// <summary>The file-write boundary, seamed so tests can inject a write
         /// failure -- including a rollback's own write -- without a real
@@ -140,6 +155,7 @@ namespace ApePatcher
         internal Action<IniFile, string> SaveIni = delegate(IniFile f, string p) { f.Save(p); };
         internal Action<string, byte[]> WriteZonBytes = File.WriteAllBytes;
         internal Action<string> DeleteFile = File.Delete;
+        internal Action<string, byte[]> WriteApeActBytes = File.WriteAllBytes;
 
         public InstallReport Install { get; private set; }
 
@@ -162,7 +178,15 @@ namespace ApePatcher
 
         public static PatchSession Open(string gameDir, Manifest m)
         {
+            return Open(gameDir, m, DepthStress.EmbeddedTemplate());
+        }
+
+        /// <summary>apeActTemplate is the ape.act depth stress deploys (ADR-0006):
+        /// the one embedded in this exe, or null if it was built without one.</summary>
+        public static PatchSession Open(string gameDir, Manifest m, byte[] apeActTemplate)
+        {
             PatchSession s = new PatchSession(gameDir, m);
+            s.apeActTemplate = apeActTemplate;
             s.Read();
             return s;
         }
@@ -178,6 +202,7 @@ namespace ApePatcher
         string ExePath { get { return Path.Combine(dir, Sh3ExeName); } }
         string IniPath { get { return Path.Combine(dir, HsieIniName); } }
         string MenuTextPath { get { return Path.Combine(dir, "data", "Menu", "en_menu.txt"); } }
+        string ApeActPath { get { return Path.Combine(dir, DepthStress.FileName); } }
 
         /// <summary>Which in-memory store a non-sh3.exe site's key/line lives in.</summary>
         IniFile StoreFor(Site s) { return s.Store == SiteStore.HsieIni ? ini : menuText; }
@@ -216,6 +241,7 @@ namespace ApePatcher
                 exe = File.ReadAllBytes(ExePath);
                 ini = IniFile.Load(IniPath);
                 menuText = IniFile.Load(MenuTextPath);
+                apeAct = File.Exists(ApeActPath) ? File.ReadAllBytes(ApeActPath) : null;
             }
             catch (Exception e)
             {
@@ -248,6 +274,12 @@ namespace ApePatcher
             }
             Install.SetAvailable(CrushTime.PatchId, anyWritable);
             Install.SetApplied(CrushTime.PatchId, anyApplied);
+
+            // Depth stress is applied exactly when ape.act is in the game root:
+            // APE deploys it only for a runtime feature, and depth stress is the
+            // only one (ADR-0006).
+            Install.SetAvailable(DepthStress.PatchId, apeActTemplate != null);
+            Install.SetApplied(DepthStress.PatchId, apeAct != null);
 
             ReadBack();
         }
@@ -336,6 +368,13 @@ namespace ApePatcher
 
         void ReadBack()
         {
+            // Depth stress reads back from the deployed ape.act when there is
+            // one, else from the template's defaults (ADR-0006). A struct whose
+            // marker doesn't check out is never read.
+            Current.DepthApplied = apeAct != null;
+            if (!DepthStress.Read(apeAct, manifest.DepthStressStruct, Current))
+                DepthStress.Read(apeActTemplate, manifest.DepthStressStruct, Current);
+
             Current.CrushApplied = Install.Applied(CrushTime.PatchId);
             foreach (UBoatZon b in Install.UBoats)
             {
@@ -452,7 +491,35 @@ namespace ApePatcher
                 }
             }
             PlanZons(plan, desired);
+            PlanApeAct(plan, desired);
             return plan;
+        }
+
+        /// <summary>Depth stress's write: the template with the desired values when
+        /// wanted, unless the deployed file already holds exactly that; a delete
+        /// when not wanted and ape.act is there.</summary>
+        void PlanApeAct(WritePlan plan, PatchState desired)
+        {
+            if (!desired.DepthApplied)
+            {
+                if (apeAct == null) return;
+                plan.ApeAct = new ApeActWrite();
+                plan.ApeAct.Delete = true;
+                return;
+            }
+            string problem = Install.Available(DepthStress.PatchId)
+                ? DepthStress.Check(apeActTemplate, manifest.DepthStressStruct)
+                : "this build of APE carries no " + DepthStress.FileName;
+            if (problem != null)
+            {
+                plan.ApeAct = new ApeActWrite();
+                plan.ApeAct.Refusal = problem + ".";
+                return;
+            }
+            byte[] want = DepthStress.Write(apeActTemplate, manifest.DepthStressStruct, desired);
+            if (apeAct != null && Same(apeAct, want)) return;
+            plan.ApeAct = new ApeActWrite();
+            plan.ApeAct.NewBytes = want;
         }
 
         /// <summary>The crush-time patch's writes. A class another mod has changed,
@@ -625,6 +692,19 @@ namespace ApePatcher
                     + "the maximum.";
                 return report;
             }
+            if (desired.DepthApplied && !desired.DepthStressValid)
+            {
+                report.Message = "APE refused to write: a depth stress value is out of range. "
+                    + "Tier-2 depth " + Fmt.Int((int)PatchState.Tier2DepthMin) + "-"
+                    + Fmt.Int((int)PatchState.Tier2DepthMax) + " m, leakage "
+                    + Fmt.Int((int)PatchState.LeakageMin) + "-" + Fmt.Int((int)PatchState.LeakageMax)
+                    + " %/min, wear amount " + Fmt.Int((int)PatchState.WearAmountMin) + "-"
+                    + Fmt.Int((int)PatchState.WearAmountMax) + " %, wear rate "
+                    + Fmt.Int((int)PatchState.WearRateMin) + "-" + Fmt.Int((int)PatchState.WearRateMax)
+                    + " min, hull multiplier " + Fmt.F1(PatchState.HullMultMin) + "-"
+                    + Fmt.F1(PatchState.HullMultMax) + ".";
+                return report;
+            }
 
             // Verify every site of every feature APE is responsible for, before a
             // single byte is written. One mismatch aborts the whole commit --
@@ -650,6 +730,12 @@ namespace ApePatcher
             if (zonChanged != null)
             {
                 report.Message = zonChanged;
+                return report;
+            }
+            if (plan.ApeAct != null && plan.ApeAct.Refusal != null)
+            {
+                report.Message = "APE refused to write: " + plan.ApeAct.Refusal
+                    + Environment.NewLine + "Nothing was written, in any file.";
                 return report;
             }
 
@@ -680,6 +766,9 @@ namespace ApePatcher
             }
             foreach (ZonWrite z in plan.ZonWrites)
                 report.SitesWritten.Add(z.Boat.RelativePath + " CrashSpeed");
+            if (plan.ApeAct != null)
+                report.SitesWritten.Add(DepthStress.FileName
+                    + (plan.ApeAct.Delete ? " removed" : " depth-stress constants"));
 
             byte[] exeBackup = exe;
             IniFile iniBackup = ini;
@@ -751,18 +840,22 @@ namespace ApePatcher
                 return report;
             }
 
-            // The .zon files, last (ticket 16). A failure part-way puts back every
-            // file this attempt has already written, the earlier stores included.
-            string zonFailure = WriteZons(plan,
-                exeChanged ? exeBackup : null,
-                iniChanged ? iniBackup : null,
-                menuChanged ? menuBackup : null);
-            if (zonFailure != null)
+            // The .zon files (ticket 16), then ape.act (ticket 22), last. A
+            // failure part-way puts back every file this attempt has already
+            // written, the earlier stores included.
+            Undo undo = new Undo();
+            undo.Exe = exeChanged ? exeBackup : null;
+            undo.Ini = iniChanged ? iniBackup : null;
+            undo.Menu = menuChanged ? menuBackup : null;
+            string lateFailure = WriteZons(plan, undo);
+            if (lateFailure == null) lateFailure = WriteApeAct(plan, undo);
+            if (lateFailure != null)
             {
                 report.SitesWritten.Clear();
-                report.Message = zonFailure;
+                report.Message = lateFailure;
                 return report;
             }
+            FinishZons(plan);
 
             exe = newExe;
             ini = newIni;
@@ -841,6 +934,9 @@ namespace ApePatcher
             if (plan.ZonWrites.Count > 0)
                 parts.Add(CrushTime.PatchName + " (" + Fmt.Int(plan.ZonWrites.Count)
                     + (plan.ZonWrites.Count == 1 ? " U-boat file)" : " U-boat files)"));
+            if (plan.ApeAct != null)
+                parts.Add(DepthStress.PatchName + " (" + DepthStress.FileName
+                    + (plan.ApeAct.Delete ? " removed)" : " deployed)"));
             return "Written: " + string.Join(", ", parts.ToArray()) + ".";
         }
 
@@ -942,15 +1038,77 @@ namespace ApePatcher
             return null;
         }
 
-        /// <summary>Writes each planned .zon (its pristine copy first, on APE's
-        /// first write), then deletes the pristine copy of each one reverted. On a
-        /// failure it puts back everything this attempt wrote, in every store, and
-        /// returns the message; null on success. A pristine copy is deleted only
-        /// once every write has succeeded, so a rollback never needs one back.</summary>
-        string WriteZons(WritePlan plan, byte[] exeBackup, IniFile iniBackup, IniFile menuBackup)
+        /// <summary>What an apply has written so far, and the earlier files'
+        /// contents to put back: everything a failure in a later store must undo.
+        /// A null backup means that store wasn't written.</summary>
+        class Undo
         {
-            List<UBoatZon> written = new List<UBoatZon>();
-            List<string> copiesMade = new List<string>();
+            public byte[] Exe;
+            public IniFile Ini;
+            public IniFile Menu;
+            public List<UBoatZon> ZonsWritten = new List<UBoatZon>();
+            public List<string> CopiesMade = new List<string>();
+        }
+
+        /// <summary>Puts back every file `undo` names, newest store first. Returns
+        /// the first failure, having still tried every other file; null when all
+        /// of it went back.</summary>
+        Exception RollBack(Undo undo)
+        {
+            Exception rollbackFailure = null;
+            foreach (UBoatZon b in undo.ZonsWritten)
+            {
+                try { WriteZonBytes(b.ZonPath, b.Bytes); }
+                catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+            }
+            foreach (string copy in undo.CopiesMade)
+            {
+                try { DeleteFile(copy); }
+                catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+            }
+            if (undo.Menu != null)
+            {
+                try { SaveIni(undo.Menu, MenuTextPath); }
+                catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+            }
+            if (undo.Ini != null)
+            {
+                try { SaveIni(undo.Ini, IniPath); }
+                catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+            }
+            if (undo.Exe != null)
+            {
+                try { WriteExeBytes(ExePath, undo.Exe); }
+                catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
+            }
+            return rollbackFailure;
+        }
+
+        /// <summary>The message for a failure in a late store (a .zon or ape.act)
+        /// whose rollback also failed: which files may still hold the change.</summary>
+        static string PartlyRolledBack(string what, Exception failure, Exception rollbackFailure)
+        {
+            return "APE could not " + what + " (" + failure.Message + "), and then "
+                + "could not put back everything it had already written for this change ("
+                + rollbackFailure.Message + ")."
+                + Environment.NewLine + Environment.NewLine
+                + "Your install may now be inconsistent: " + Sh3ExeName + ", " + HsieIniName + ", "
+                + MenuTextName + ", a data/Submarine .zon file or " + DepthStress.FileName
+                + " may still hold the change APE just made."
+                + Environment.NewLine + Environment.NewLine
+                + "To recover: close APE, make sure the game folder is writable (not read-only, "
+                + "not synced by a cloud backup tool), then run APE again and apply the same "
+                + "change, so every file agrees.";
+        }
+
+        /// <summary>Writes each planned .zon (its pristine copy first, on APE's
+        /// first write), recording each in `undo`. On a failure it puts back
+        /// everything this attempt wrote, in every store, and returns the
+        /// message; null on success. Pristine copies of reverted classes are
+        /// deleted only by FinishZons, once every store has been written, so a
+        /// rollback never needs one back.</summary>
+        string WriteZons(WritePlan plan, Undo undo)
+        {
             try
             {
                 foreach (ZonWrite w in plan.ZonWrites)
@@ -958,56 +1116,26 @@ namespace ApePatcher
                     if (!w.Restore && w.Boat.Original == null)
                     {
                         WriteZonBytes(w.Boat.OrigPath, w.Boat.Bytes);
-                        copiesMade.Add(w.Boat.OrigPath);
+                        undo.CopiesMade.Add(w.Boat.OrigPath);
                     }
                     WriteZonBytes(w.Boat.ZonPath, w.NewBytes);
-                    written.Add(w.Boat);
+                    undo.ZonsWritten.Add(w.Boat);
                 }
             }
             catch (Exception zonFailure)
             {
-                Exception rollbackFailure = null;
-                foreach (UBoatZon b in written)
-                {
-                    try { WriteZonBytes(b.ZonPath, b.Bytes); }
-                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
-                }
-                foreach (string copy in copiesMade)
-                {
-                    try { DeleteFile(copy); }
-                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
-                }
-                if (menuBackup != null)
-                {
-                    try { SaveIni(menuBackup, MenuTextPath); }
-                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
-                }
-                if (iniBackup != null)
-                {
-                    try { SaveIni(iniBackup, IniPath); }
-                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
-                }
-                if (exeBackup != null)
-                {
-                    try { WriteExeBytes(ExePath, exeBackup); }
-                    catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
-                }
-
+                Exception rollbackFailure = RollBack(undo);
                 if (rollbackFailure == null)
                     return CannotWrite("a U-boat .zon file", zonFailure);
-                return "APE could not write a U-boat .zon file (" + zonFailure.Message + "), and then "
-                    + "could not put back everything it had already written for this change ("
-                    + rollbackFailure.Message + ")."
-                    + Environment.NewLine + Environment.NewLine
-                    + "Your install may now be inconsistent: " + Sh3ExeName + ", " + HsieIniName + ", "
-                    + MenuTextName + " or a data/Submarine .zon file may still hold the change APE "
-                    + "just made."
-                    + Environment.NewLine + Environment.NewLine
-                    + "To recover: close APE, make sure the game folder is writable (not read-only, "
-                    + "not synced by a cloud backup tool), then run APE again and apply the same "
-                    + "change, so every file agrees.";
+                return PartlyRolledBack("write a U-boat .zon file", zonFailure, rollbackFailure);
             }
+            return null;
+        }
 
+        /// <summary>Once every store is written: deletes the pristine copy of
+        /// each class reverted.</summary>
+        void FinishZons(WritePlan plan)
+        {
             foreach (ZonWrite w in plan.ZonWrites)
             {
                 if (!w.Restore) continue;
@@ -1016,6 +1144,46 @@ namespace ApePatcher
                 // crush speed, and the next revert tidies it up.
                 try { DeleteFile(w.Boat.OrigPath); }
                 catch (Exception) { }
+            }
+        }
+
+        /// <summary>Deploys or deletes ape.act, the last store written. On a
+        /// failure it puts ape.act back as it was, then every earlier store, and
+        /// returns the message; null on success.</summary>
+        string WriteApeAct(WritePlan plan, Undo undo)
+        {
+            ApeActWrite w = plan.ApeAct;
+            if (w == null) return null;
+            try
+            {
+                if (w.Delete) DeleteFile(ApeActPath);
+                else WriteApeActBytes(ApeActPath, w.NewBytes);
+            }
+            catch (Exception apeFailure)
+            {
+                // A failed delete leaves the file as it was. A failed write may
+                // have left part of a file: put the old one back, or remove it.
+                Exception rollbackFailure = null;
+                if (!w.Delete)
+                {
+                    try
+                    {
+                        // File.Delete is a no-op when nothing was written.
+                        if (apeAct != null) WriteApeActBytes(ApeActPath, apeAct);
+                        else DeleteFile(ApeActPath);
+                    }
+                    catch (Exception e) { rollbackFailure = e; }
+                }
+                Exception rest = RollBack(undo);
+                if (rollbackFailure == null) rollbackFailure = rest;
+
+                string what = (w.Delete ? "remove " : "write ") + DepthStress.FileName;
+                if (rollbackFailure != null)
+                    return PartlyRolledBack(what, apeFailure, rollbackFailure);
+                if (!w.Delete) return CannotWrite(DepthStress.FileName, apeFailure);
+                return "APE could not remove " + DepthStress.FileName + ": " + apeFailure.Message
+                    + Environment.NewLine + "Nothing was changed, in any file. Close SH3 and "
+                    + "anything else using " + DepthStress.FileName + ", then try again.";
             }
             return null;
         }

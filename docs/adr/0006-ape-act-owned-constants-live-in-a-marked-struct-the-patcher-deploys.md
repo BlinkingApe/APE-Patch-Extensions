@@ -6,7 +6,9 @@
 > (`src/mods/depth_stress/constants.hpp`, marker `APEDPTH1`, version 1, 48 bytes of float32
 > fields in runtime units), verifies it at startup and fails inert on a mismatch. A Release
 > build records the struct's file offset and field layout under the manifest's `apeAct` key.
-> The patcher half (embed, deploy, read-back, delete on revert) is ticket 22. The
+> The patcher half (embed, deploy, read-back, delete on revert) is implemented too (ticket 22):
+> `src/patcher_gui/ApeAct.cs` and the `ape.act` store in `PatchSession`; `build.cmd` embeds
+> `build/x86-release/ape.act` and refuses to build without it. The
 > `config.{hpp,cpp}` and `tools/config_check` code the note below mentions was deleted with
 > the band model (ticket 15).
 >

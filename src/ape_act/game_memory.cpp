@@ -1,0 +1,163 @@
+// The game-memory reader and writer. See game_memory.hpp, and
+// docs/re-notes/09-depth-stress-runtime-anchors.md for every signature and
+// chain and the OAE build they were proven on.
+
+#include "ape_act/game_memory.hpp"
+
+#include <windows.h>
+
+#include <cstddef>
+#include <cstring>
+
+#include "core/aob.hpp"
+
+namespace ape {
+namespace game {
+
+namespace {
+
+// Fields of the boat object (PRD "The sample").
+constexpr std::uint32_t kHull = 0xB8;
+constexpr std::uint32_t kMaxHull = 0xB4;
+constexpr std::uint32_t kRatedCrushField = 0xC0;
+constexpr std::uint32_t kCrushSpeed = 0xC4;
+
+// The boat root: stock's own store of the player-boat root pointer,
+// `mov [0x554A88],ecx; push 0x58; mov [esi+0x10],ebx; call [iat]` @0x004BA972.
+constexpr aob::Signature kBoatRoot = {
+    "boat root", "89 0D ?? ?? ?? ?? 6A 58 89 5E 10 FF 15", 2};
+
+// The depth root: a stock walk of the list it heads,
+// `mov edi,[0x6307BC]; test edi,edi; je; lea ebx,[ebx]; mov eax,[edi]`
+// @0x0050EF70.
+constexpr aob::Signature kDepthRoot = {
+    "depth root", "8B 3D ?? ?? ?? ?? 85 FF 74 15 8D 9B 00 00 00 00 8B 07", 2};
+
+// The mission clock: no stock instruction names h.sie's mirror, so this is
+// h.sie's cave at 0x0051CFC7, `mov [0x63FF80],eax; mov [esi+0x150],eax; jmp`,
+// which stores stock's clock and the mirror from one register.
+constexpr aob::Signature kClock = {
+    "clock", "A3 ?? ?? ?? ?? 89 86 50 01 00 00 E9", 1};
+
+bool read_u32(std::uint32_t addr, std::uint32_t& out) {
+  if (addr < 0x10000) return false;  // null, or a null plus an offset
+  SIZE_T n = 0;
+  return ReadProcessMemory(GetCurrentProcess(),
+                           reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(addr)),
+                           &out, sizeof out, &n) &&
+         n == sizeof out;
+}
+
+bool read_f32(std::uint32_t addr, float& out) {
+  std::uint32_t bits;
+  if (!read_u32(addr, bits)) return false;
+  std::memcpy(&out, &bits, sizeof out);
+  return true;
+}
+
+// Follows [[root]+o0]+o1... : each step reads a pointer, then adds the next
+// offset. Returns false on a null link or a failed read.
+bool chain(std::uint32_t root, const std::uint32_t* offsets, std::size_t n,
+           std::uint32_t& out) {
+  std::uint32_t p;
+  if (!read_u32(root, p)) return false;
+  for (std::size_t i = 0; i < n; ++i)
+    if (!read_u32(p + offsets[i], p)) return false;
+  out = p;
+  return true;
+}
+
+// Finds `sig` in every executable section of the host image; it must match
+// exactly once across all of them (OAE's sh3.exe has three).
+const char* resolve(const aob::Signature& sig, std::uint32_t& out) {
+  aob::Compiled c;
+  if (!aob::compile(sig.pattern, c)) return "malformed pattern";
+  const auto* base = reinterpret_cast<const std::uint8_t*>(GetModuleHandleW(nullptr));
+  if (!base) return "no host image";
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS32*>(base + dos->e_lfanew);
+  const IMAGE_SECTION_HEADER* sec = IMAGE_FIRST_SECTION(nt);
+  std::size_t hits = 0;
+  const std::uint8_t* match = nullptr;
+  for (WORD i = 0; i < nt->FileHeader.NumberOfSections; ++i, ++sec) {
+    if (!(sec->Characteristics & IMAGE_SCN_MEM_EXECUTE)) continue;
+    const std::uint8_t* start = base + sec->VirtualAddress;
+    std::size_t size = sec->Misc.VirtualSize;
+    if (sec->SizeOfRawData < size) size = sec->SizeOfRawData;
+    std::size_t first = 0;
+    const std::size_t n = aob::count(c, start, size, &first);
+    if (n && !match) match = start + first;
+    hits += n;
+  }
+  if (hits == 0) return "no match";
+  if (hits > 1) return "more than one match";
+  std::memcpy(&out, match + sig.operand_at, sizeof out);
+  return nullptr;
+}
+
+}  // namespace
+
+Anchors resolve_anchors() {
+  Anchors a;
+  const aob::Signature* sigs[] = {&kBoatRoot, &kDepthRoot, &kClock};
+  std::uint32_t* outs[] = {&a.boat_root, &a.depth_root, &a.clock};
+  for (int i = 0; i < 3; ++i) {
+    if (const char* why = resolve(*sigs[i], *outs[i])) {
+      a.failed = sigs[i]->name;
+      a.why = why;
+      return a;
+    }
+  }
+  return a;
+}
+
+bool read_sample(const Anchors& a, depth_stress::Sample& out, const char** why) {
+  if (a.failed) {
+    *why = "an anchor did not resolve";
+    return false;
+  }
+
+  // Gauge depth: [[[depth root]+0x4]+0x4]+0x54.
+  static const std::uint32_t kDepthLinks[] = {0x4, 0x4};
+  std::uint32_t depth_obj;
+  if (!chain(a.depth_root, kDepthLinks, 2, depth_obj) ||
+      !read_f32(depth_obj + 0x54, out.depth_m)) {
+    *why = "depth chain unresolved";
+    return false;
+  }
+
+  std::uint32_t clock;
+  if (!read_u32(a.clock, clock)) {
+    *why = "clock unreadable";
+    return false;
+  }
+  out.clock_s = static_cast<std::int32_t>(clock);
+
+  // The boat: [[[[[boat root]+0xC4]+0x2240]+0x24]+0x4C]; the pointer itself
+  // is the boat's identity.
+  static const std::uint32_t kBoatLinks[] = {0xC4, 0x2240, 0x24, 0x4C};
+  std::uint32_t boat;
+  if (!chain(a.boat_root, kBoatLinks, 4, boat) || boat < 0x10000) {
+    *why = "boat chain unresolved";
+    return false;
+  }
+  out.boat = boat;
+  if (!read_f32(boat + kHull, out.hull) || !read_f32(boat + kMaxHull, out.max_hull) ||
+      !read_f32(boat + kRatedCrushField, out.crush_field) ||
+      !read_f32(boat + kCrushSpeed, out.crush_speed)) {
+    *why = "boat fields unreadable";
+    return false;
+  }
+  return true;
+}
+
+bool write_hull(std::uint32_t boat, float value) {
+  SIZE_T n = 0;
+  return WriteProcessMemory(GetCurrentProcess(),
+                            reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(boat + kHull)),
+                            &value, sizeof value, &n) &&
+         n == sizeof value;
+}
+
+}  // namespace game
+}  // namespace ape

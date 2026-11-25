@@ -98,7 +98,20 @@ namespace ApePatcher.Tests
             public string IniText() { return Latin1(File.ReadAllBytes(HsieIni)); }
             public string MenuTextContent() { return Latin1(File.ReadAllBytes(MenuText)); }
 
-            public PatchSession Session() { return PatchSession.Open(Dir, Manifest); }
+            /// <summary>The ape.act template this install's sessions deploy. Null
+            /// means the one embedded in the test binary, which run.cmd embeds
+            /// from the same Release build the shipped exe does.</summary>
+            public byte[] Template;
+
+            public byte[] ApeActTemplate()
+            {
+                if (Template != null) return Template;
+                byte[] t = DepthStress.EmbeddedTemplate();
+                if (t == null) throw new Exception("The test binary was built without ape.act.");
+                return t;
+            }
+
+            public PatchSession Session() { return PatchSession.Open(Dir, Manifest, ApeActTemplate()); }
         }
 
         /// <summary>A game directory holding h.sie's own bytes everywhere APE

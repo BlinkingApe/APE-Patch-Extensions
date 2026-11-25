@@ -37,10 +37,12 @@ target_include_directories(depth_stress_core PUBLIC src)
 
 # --- ape.act: the injected module (PE32 DLL, `.act` extension) -----------
 # DllMain verifies the depth-stress constants struct (ADR-0006) and starts one
-# background thread; nothing is hooked (ADR-0001).
+# background thread that reads game memory, steps and writes; nothing is
+# hooked (ADR-0001).
 add_library(ape_act SHARED
   src/ape_act/dllmain.cpp
   src/ape_act/depth_stress_constants.cpp
+  src/ape_act/game_memory.cpp
 )
 target_include_directories(ape_act PRIVATE src)
 target_link_libraries(ape_act PRIVATE depth_stress_core)

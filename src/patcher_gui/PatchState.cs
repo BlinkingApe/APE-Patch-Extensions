@@ -79,6 +79,58 @@ namespace ApePatcher
             get { return CrushTime >= CrushTimeMin && CrushTime <= CrushTimeMax; }
         }
 
+        // Depth stress (depth-pressure-stress ticket 22): ape.act's runtime feature.
+        // Tier 1 runs from 100 m (fixed), tier 2 from Tier2Depth; below crush depth
+        // tier 3 takes tier 2's values. Fields are in game terms; the patcher
+        // converts them to ape.act's runtime units when it writes the struct.
+        // Each field is checked only against its own range, so a milder tier 2
+        // than tier 1 is allowed, and each effect switches off at its neutral
+        // value (leakage 0, wear amount 0, multiplier 1.0).
+        public const double Tier2DepthMin = 101, Tier2DepthMax = 300;
+        public const double LeakageMin = 0, LeakageMax = 60;          // % of the compartment per game-minute
+        public const double WearAmountMin = 0, WearAmountMax = 90;    // % of one engine per hit
+        public const double WearRateMin = 1, WearRateMax = 600;       // mean game-minutes between hits
+        public const double HullMultMin = 1.0, HullMultMax = 5.0;     // x
+
+        public bool DepthApplied;
+        public double Tier2Depth = 150;
+        public double Leakage1 = 4, Leakage2 = 15;
+        public double WearAmount1 = 7.5, WearAmount2 = 22.5;
+        public double WearRate1 = 200, WearRate2 = 130;
+        public double HullMult1 = 1.25, HullMult2 = 1.5;
+
+        static bool In(double v, double lo, double hi) { return v >= lo && v <= hi; }
+
+        public bool Tier2DepthValid { get { return In(Tier2Depth, Tier2DepthMin, Tier2DepthMax); } }
+        public static bool LeakageValid(double p) { return In(p, LeakageMin, LeakageMax); }
+        public static bool WearAmountValid(double a) { return In(a, WearAmountMin, WearAmountMax); }
+        public static bool WearRateValid(double m) { return In(m, WearRateMin, WearRateMax); }
+        public static bool HullMultValid(double x) { return In(x, HullMultMin, HullMultMax); }
+
+        public bool DepthStressValid
+        {
+            get
+            {
+                return Tier2DepthValid
+                    && LeakageValid(Leakage1) && LeakageValid(Leakage2)
+                    && WearAmountValid(WearAmount1) && WearAmountValid(WearAmount2)
+                    && WearRateValid(WearRate1) && WearRateValid(WearRate2)
+                    && HullMultValid(HullMult1) && HullMultValid(HullMult2);
+            }
+        }
+
+        // The conversions to ape.act's runtime units (PRD Fields), done here once
+        // rather than per poll: leakage p %/min is p/6000 flood per game-second,
+        // wear rate m min is a chance of 1/(60 m) per game-second, wear amount a %
+        // is a/100 damage.
+        public static double SeepPerSecond(double leakagePercentPerMinute) { return leakagePercentPerMinute / 6000.0; }
+        public static double WearChancePerSecond(double rateMinutes) { return 1.0 / (60.0 * rateMinutes); }
+        public static double WearDamage(double amountPercent) { return amountPercent / 100.0; }
+
+        public static double LeakageFromSeep(double perSecond) { return perSecond * 6000.0; }
+        public static double WearRateFromChance(double perSecond) { return 1.0 / (60.0 * perSecond); }
+        public static double WearAmountFromDamage(double damage) { return damage * 100.0; }
+
         public PatchState Clone()
         {
             return (PatchState)MemberwiseClone();

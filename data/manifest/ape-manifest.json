@@ -374,7 +374,7 @@
     "structs": [
       {
         "id": "depth-stress",
-        "offset": 24584,
+        "offset": 30216,
         "size": 48,
         "magic": "4150454450544831",
         "version": 1,

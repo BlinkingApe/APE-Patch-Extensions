@@ -25,6 +25,8 @@ from scratch.
 - `06-flooding-model-signature.md` — SH3's flooding model, static-only first pass:
   compartment naming, one unconfirmed read/compare lead, no h.sie precedent found.
   Starts from zero; still fully HITL.
+- `09-depth-stress-runtime-anchors.md` — the AOB signatures `ape.act` resolves for
+  depth stress's boat, depth and clock roots, with their chains, on OAE `20360fe8`.
 
 ## Conventions
 
