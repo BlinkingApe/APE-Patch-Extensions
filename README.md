@@ -80,6 +80,11 @@ patcher's internal shape and test conventions.
 - `.scratch/` — this project's issue tracker: PRDs and tickets as markdown,
   organized one directory per feature effort.
 
+## Special thanks
+
+**Stoss (M. Hamacher on YouTube)** shaped depth stress more than anyone
+else, generously giving his time to correcting my misconceptions. This module wouldn't have happened without his knowledge and insight, big thanks!
+
 ## Attribution
 
 APE's patch data (offsets, replacement bytes, and derived formulas) is

@@ -146,6 +146,16 @@
     margin: 12px auto;
   }
 
+  p.callout {
+    margin: 4px 0 16px 0;
+    padding: 9px 14px;
+    border-left: 4px solid #00437f;
+    background: #eef3f9;
+    font-size: 13pt;
+    font-weight: 700;
+    color: #00437f;
+  }
+
   strong.hl {
     color: #1a1a1a;
   }
@@ -210,6 +220,7 @@
 
     <h1 class="section">Depth Stress</h1>
     <p>Optional. Below 100 m (tier 1) a U-boat's electric engine room takes on water and hull damage is multiplied; below the tier-2 depth (default 150 m) both get worse. The crew pumps the water out, and a fresh crew keeps up. Every depth, rate and multiplier can be set in APE. APE installs its own <code>ape.act</code> module for this; unchecking Depth Stress removes it.</p>
+    <p class="callout">Disable &lsquo;Silent Running Fix&rsquo; from hsie/Stiebler Options!</p>
     <p><strong class="hl">Motor flooding:</strong> once the electric engine room is flooded past the threshold (default 20 %), both electric motors take damage for as long as the engine telegraph is not at stop, at any depth and whatever flooded the room. Ordering <strong class="hl">all stop</strong>, or pumping the room back below the threshold, ends it. Damage never goes past the point where the crew can still repair it. The idea is Stoss's (M. Hamacher on YouTube): water in the motor room meant the motors had to be taken out of service. Five points below the threshold (15 % by default) the chief engineer warns you once: <em>&ldquo;Water in the motor room, sir! Pump it out or stop the motors!&rdquo;</em> The warning is English only and is off when Motor damage is 0.</p>
     <p>In <strong class="hl">silent running</strong> (pumps off) a boat sitting deep will flood and slowly sink. This is intended: Stiebler's Silent-running Fix does the same, and Depth Stress replaces its depth-gauge workaround.</p>
 
@@ -221,6 +232,9 @@
     <h1 class="section">Uninstall</h1>
     <p>Simply uncheck the boxes in APE &mdash; all changes will revert back to hsie defaults.</p>
 
+    <h1 class="section">Special Thanks</h1>
+    <p><strong class="hl">Stoss (M. Hamacher on YouTube)</strong> shaped depth stress more than anyone else, generously giving his time to correcting my misconceptions. This module wouldn't have happened without his knowledge and insight, big thanks!</p>
+
     <h1 class="section">Contact</h1>
     <p>Feel free to DM me on Discord (BlinkingApe) with any questions, suggestions, or issues.</p>
 
@@ -229,7 +243,15 @@
       <li>v1.11 &mdash; now only checks for hsie compatibility</li>
       <li>v1.12 &mdash; fixed rare bug where reversing would cause repeated damage</li>
       <li>v1.13 &mdash; fixed diesel damage crash on Linux (Wine/Proton); if upgrading, click "Apply changes" once</li>
-      <li>v1.14 &mdash; new Depth Stress, Crush Time and Starboard motor zone fix (release candidate)</li>
+      <li>v1.14 &mdash; new features:
+        <ul>
+          <li><strong>Depth Stress</strong>: below 100 m (and more below tier 2) the electric engine room takes on water and hull damage is multiplied; the crew pumps, and every depth, rate and multiplier is tunable</li>
+          <li><strong>Motor flooding damage</strong>: past the flooding threshold (default 20 %) the electric motors take damage until you order all stop or pump the room out, with a chief engineer warning at 15 %</li>
+          <li><strong>Crush Time</strong>: one crush-speed setting for every playable U-boat</li>
+          <li><strong>Starboard motor zone fix</strong>: optional, for OAE and other GWX-based installs</li>
+          <li>Depth Stress replaces Stiebler's Silent-running Fix depth-gauge workaround; no separate install step, APE deploys <code>ape.act</code> for you</li>
+        </ul>
+      </li>
     </ul>
 
   </div>
