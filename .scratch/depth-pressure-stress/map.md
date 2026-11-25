@@ -217,6 +217,7 @@ write target is unlocated is not specified.
 
 - [Which compartment seeps on U-boats with no stern torpedo room (II, XXI)?](issues/19-astern-compartment-without-stern-room.md) — compartment 8 if the boat has one, else 4 (electric engine room), chosen at run time from the zone→compartment table, no class lookup; on II/XXI the water also cuts electric power, accepted.
 - [Crush damage measured as a hull-scaled ramp on OAE: does ADR-0010's crush time and exemption still hold?](issues/20-crush-rate-ramp-vs-adr-0010.md) — the ramp governs (ADR-0011): crush depth = live onset `0.7·E`, `.zon` value = rated crush depth; crush time nominal (~1.3·T to ~0.3·T), patch unchanged, tooltip reworded; exemption = ramp share at gauge depth.
+- [Tuning: what the tier boundaries, multiplier, seep rate and wear chance actually are](issues/12-tier-tuning-numbers.md) — defaults T1/T2: leakage 4 / 15 %/min, wear 7.5 / 22.5 % every 200 / 130 min, multiplier 1.25 / 1.5; tier-2 150 m, crush 5 s; neutral value = off, no cross-field checks; a fresh crew holds tier-2 leakage and wear never outpaces repair, by intent; 32-bit RNG per game-second is a PRD constraint. Owner may retune after testing.
 
 ## Not yet specified
 
@@ -227,11 +228,6 @@ write target is unlocated is not specified.
   `sh3.exe`'s `LoadLibrary` call site tolerates a missing file. Not a ticket here:
   that is the umbrella map's decision to make, not this one's, and it is unblocked by
   this map's resolutions rather than blocking them.
-- **Is pumping while still deep a losing battle by design?** Continuous seepage means
-  a crew pumping at 150m may never win until the boat ascends. That may be exactly
-  the intended drama or may be miserable in play; it cannot be judged before the seep
-  rate is a real number against real pump rates. Tuning, not mechanism — expected to
-  be absorbed by ticket 12 or by play.
 - **Whether depth wear should extend past the electric engines.** One system was
   chosen to keep the RE bill to one unmapped value, with expansion left open. The
   historian's list (cooling water, thrust bearings, motor bearings) plausibly reaches
@@ -244,9 +240,9 @@ write target is unlocated is not specified.
   someone tries it live.
 - **How the tier constants reach `ape.act`.** ADR-0006 already decides the mechanism
   (a magic-marked struct in `ape.act`'s own `.data`, written by the C# patcher at a
-  build-recorded offset), so this is not an open decision — but the specific field
-  list, ranges, and defaults for this feature's manifest sites are unwritten and
-  follow ticket 12's numbers.
+  build-recorded offset), so this is not an open decision. The field list, ranges and
+  defaults are now fixed by ticket 12's answer; only the manifest-site layout is
+  unwritten, which is implementation detail for the PRD rather than a decision.
 
 ## Out of scope
 

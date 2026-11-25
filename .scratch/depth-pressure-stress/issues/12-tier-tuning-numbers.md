@@ -1,7 +1,7 @@
 # Tuning: what the tier boundaries, multiplier, seep rate and wear chance actually are
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 10, 11
 
 ## Parent
@@ -171,3 +171,51 @@ Two inputs to this ticket changed:
   150 m at full hull, level with the 150 m tier-2 default. Damage lifts every onset. The
   exemption above becomes the ramp share, `CrashSpeed · dt · (D − 0.7E)/(0.3E)`, not
   `crush speed × elapsed`.
+
+## Answer (grilling with the owner, 2026-11-25)
+
+The shipped defaults and ranges, judged against the OAE measurements (pump 0.00326
+flood/game-s = 19.6 %/game-min at crew strength 1.0; repair 5.4e-5 damage/game-s ≈ 0.19
+per game-hour, h.sie's 60× slowdown). **The owner may adjust these after testing the
+build**; they are starting points, not tuned values.
+
+| Field | Unit shown to players | Range | Neutral (off) | Tier 1 | Tier 2 |
+|---|---|---|---|---|---|
+| Tier-2 depth | metres | 101–300 | — | (from 100 m, fixed) | **150** |
+| Leakage (seepage) rate | % of the stern compartment per game-minute | 0–60 | 0 | **4** | **15** |
+| Electric-engine wear amount | % of one engine's health per hit, engine picked at random | 0–90 | 0 | **7.5** | **22.5** |
+| Electric-engine wear rate | average game-minutes between hits | 1–600 | (amount 0) | **200** | **130** |
+| Hull multiplier | × | 1.0–5.0 | 1.0 | **1.25** | **1.5** |
+| Crush time | seconds | 1–3600 | — | (tier 3) **5** | |
+
+Fixed in `ape.act`, not exposed: **seep ceiling 0.8**, **electric-engine hard ceiling
+0.9** (rule: if `d ≥ 0.9` don't write, else write `min(d + hit, 0.9)`; APE never lowers a
+value). All values float32 in the constants struct (ADR-0006); 0.9 stores as 0.89999998,
+so the clamp cannot round past it.
+
+- **Each effect switches off at its neutral value** — leakage 0, wear amount 0 (range
+  widened from 1–90 % to 0–90 %), multiplier 1.0. No separate enable checkboxes.
+- **No cross-field validation.** Each field is checked against its own range only; tier 2
+  may be milder than tier 1.
+- **Leakage vs the pump (4 / 15 %/min against 19.6 %/min fresh, 14.6 tired).** Tier 1 is
+  about a fifth of the pump: a running cost any crew carries. Tier 2 is **held by a fresh
+  crew** and lost only by a tired one, slowly (+0.4 %/min, ~3 h to the 0.8 ceiling); the
+  damage-control team aft turns it at once. *This consciously departs from the question's
+  "tier 2 is a race they are losing"*: tier 2 now punishes a worn-out crew, not every crew.
+- **An uncrewed compartment is not pumped** (OAE finding), so it fills to the 0.8 ceiling
+  even in tier 1 — on II/XXI (compartment 4, ticket 19) that cuts electric power. Accepted:
+  crewing is the player's lever. The leakage tooltip says the compartment must be crewed.
+- **Wear vs repair: wear never outpaces a crewed engine room.** Tier 1: 7.5 % per 200 min
+  ≈ 0.011 wear/game-h per engine. Tier 2: 22.5 % per 130 min ≈ 0.052/h per engine. Both are
+  well under repair's ~0.19/h, so with the engine room crewed wear never accumulates.
+  **Per-patrol tail, unrepaired:** four tier-2 hours leave each engine at ~0.2 on average;
+  the 0.9 ceiling is practically never reached, and remains a by-construction backstop for
+  players who raise the fields. Intended by the owner: wear is a nuisance a crewed engine
+  room keeps up with. (Before this answer the defaults reached the ceiling in 2–3.5 h.)
+- **Randomness is a constraint on `ape.act`, for the PRD:** a 32-bit generator into a double
+  (e.g. `std::mt19937` + `uniform_real_distribution<double>`), never MSVC `rand()` (15 bits:
+  up to +10 % per game-second, +120 % per poll); draw once per whole game-second of
+  Δ(mission clock), never per poll; at time compression run `dt` trials or one draw of
+  `1 − (1 − q)^dt` in double; take seepage as one `rate × dt` step clamped at 0.8. Wear
+  rate `m` minutes → per-second chance `q = 1/(60·m)`; at 600 min `q ≈ 2.8e-5`,
+  representable with ample margin.
