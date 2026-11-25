@@ -5,6 +5,13 @@
 > static edits to files on disk, which identify their target by whole-file SHA-256 against a
 > version allowlist and then use fixed per-version offsets. See ADR-0007 for why the
 > reasoning below doesn't transfer to a target that isn't running.
+>
+> **Status note (2026-11-25).** Not every anchor is in stock code. The clock (ticket 24)
+> and the machine telegraph (ticket 31) are matched in h.sie's caves, the sections h.sie
+> appends to `sh3.exe` (`docs/re-notes/09-depth-stress-runtime-anchors.md`). Those bytes
+> can change with an h.sie update, where stock code cannot. The scan still fails inert on
+> a miss: an unresolved clock skips every poll, and an unresolved telegraph costs only
+> motor flooding damage.
 
 APE resolves live game values (player boat, current depth, crush depth, hull HP, mission clock) at runtime by following pointer/offset chains rooted at anchor sites in the executable. The question is how to locate those anchors.
 

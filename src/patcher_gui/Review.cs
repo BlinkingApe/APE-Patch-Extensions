@@ -148,38 +148,48 @@ namespace ApePatcher
             string t2 = Fmt.Int((int)Math.Round(d.Tier2Depth)) + " m";
             g.Lines.Add(new ReviewLine("Above 100 m nothing changes. Tier 1 runs from 100 m to "
                 + t2 + ", and tier 2 from " + t2 + " down.", false));
-            g.Lines.Add(new ReviewLine("Tier 1: " + Tier(d.HullMult1, d.Leakage1, d.WearAmount1,
-                d.WearRate1), false));
-            g.Lines.Add(new ReviewLine("Tier 2: " + Tier(d.HullMult2, d.Leakage2, d.WearAmount2,
-                d.WearRate2), false));
+            g.Lines.Add(new ReviewLine("Tier 1: " + Tier(d.HullMult1, d.Leakage1), false));
+            g.Lines.Add(new ReviewLine("Tier 2: " + Tier(d.HullMult2, d.Leakage2), false));
             g.Lines.Add(new ReviewLine("Below crush depth (tier 3) all of it carries on at tier 2's "
                 + "values. A class whose crush depth is shallower than " + t2 + " goes straight "
                 + "from tier 1 to tier 3.", false));
             g.Lines.Add(new ReviewLine("Crush damage itself is never multiplied. Coming up above "
-                + "100 m stops the leakage and the wear; water already in the boat stays until "
-                + "the crew pumps it.", false));
+                + "100 m stops the leakage; water already in the boat stays until the crew "
+                + "pumps it.", false));
 
             if (d.Leakage1 > 0 || d.Leakage2 > 0)
                 g.Lines.Add(new ReviewLine("Leakage fills the electric engine room, and never past "
                     + "80% full. The electric engine room must be crewed for its water to be "
                     + "pumped.", false));
-            if (d.WearAmount1 > 0 || d.WearAmount2 > 0)
-                g.Lines.Add(new ReviewLine("Wear never takes an engine past 90% damage, so the crew "
-                    + "can always repair it.", false));
-            if (NeutralTier(d.HullMult1, d.Leakage1, d.WearAmount1)
-                && NeutralTier(d.HullMult2, d.Leakage2, d.WearAmount2))
+            g.Lines.Add(new ReviewLine(Motor(d), false));
+            if (d.MotorDamage > 0)
+                g.Lines.Add(new ReviewLine("Ordering stop protects the motors. Motor damage never "
+                    + "takes a motor past 90%, so the crew can always repair it.", false));
+            if (NeutralTier(d.HullMult1, d.Leakage1) && NeutralTier(d.HullMult2, d.Leakage2)
+                && d.MotorDamage <= 0)
                 g.Lines.Add(new ReviewLine("Every effect is at its neutral value, so depth stress "
                     + "will do nothing.", true));
             g.Lines.Add(new ReviewLine(DepthStress.LaunchNote, false));
             return g;
         }
 
-        static bool NeutralTier(double mult, double leak, double amount)
+        static bool NeutralTier(double mult, double leak)
         {
-            return mult <= 1.0 && leak <= 0 && amount <= 0;
+            return mult <= 1.0 && leak <= 0;
         }
 
-        static string Tier(double mult, double leak, double amount, double rateMin)
+        /// <summary>Motor flooding damage (ticket 31, ADR-0012): one threshold
+        /// and one amount, at any depth, not per tier.</summary>
+        static string Motor(PatchState d)
+        {
+            if (d.MotorDamage <= 0) return "Motor damage off (0).";
+            return "Motor damage, at any depth: while the electric engine room is at least "
+                + Fmt.F1(d.FloodThreshold) + "% flooded and the motors are ordered to run "
+                + "(ahead or astern), each electric motor loses " + Fmt.F1(d.MotorDamage)
+                + "% of its health per game-second.";
+        }
+
+        static string Tier(double mult, double leak)
         {
             string hull = mult > 1.0
                 ? "hull damage is multiplied by " + Fmt.F2(mult)
@@ -187,11 +197,7 @@ namespace ApePatcher
             string seep = leak > 0
                 ? "water seeps in at " + Fmt.F1(leak) + "% of the electric engine room per game-minute"
                 : "leakage off (0)";
-            string wear = amount > 0
-                ? "an electric engine takes " + Fmt.F1(amount) + "% wear about every "
-                  + Fmt.F1(rateMin) + " game-minutes"
-                : "engine wear off (0)";
-            return hull + "; " + seep + "; " + wear + ".";
+            return hull + "; " + seep + ".";
         }
 
         /// <summary>The derived-stats block under the diesel fields. Threshold

@@ -236,15 +236,14 @@ namespace ApePatcher.Tests
             return r;
         }
 
-        public static void Test_DepthStressGroupDescribesTiersLeakageWearAndMultiplier()
+        public static void Test_DepthStressGroupDescribesTiersLeakageMotorsAndMultiplier()
         {
             string text;
             Review r = DepthReview(delegate(PatchState d)
             {
                 d.Tier2Depth = 180;
                 d.Leakage1 = 4.5; d.Leakage2 = 15;
-                d.WearAmount1 = 7.5; d.WearAmount2 = 22.5;
-                d.WearRate1 = 200; d.WearRate2 = 130;
+                d.FloodThreshold = 35; d.MotorDamage = 12.5;
                 d.HullMult1 = 1.25; d.HullMult2 = 1.5;
             }, out text);
 
@@ -255,13 +254,19 @@ namespace ApePatcher.Tests
             Check.Contains("1.25", text, "tier 1 multiplier");
             Check.Contains("1.50", text, "tier 2 multiplier");
             Check.Contains("4.5%", text, "tier 1 leakage, per game-minute");
-            Check.Contains("22.5%", text, "tier 2 wear amount");
-            Check.Contains("200.0 game-minutes", text, "tier 1 wear rate");
+            Check.Contains("35.0% flooded", text, "the flooding threshold");
+            Check.Contains("12.5% of its health per game-second", text, "the motor damage amount");
+            Check.Contains("any depth", text, "motor damage is not per tier");
+            Check.Contains("astern", text, "astern counts as running");
+            Check.Contains("Ordering stop protects the motors", text, "the player's lever");
+            Check.Contains("past 90%", text, "the motor ceiling");
+            Check.DoesNotContain("wear", text, "random wear is gone (ADR-0012)");
             Check.Contains("tier 3", text, "crush depth carries on at tier 2");
             Check.Contains("next game launch", text, "when it takes effect");
             Check.Contains("crewed", text, "the electric engine room must be crewed");
             Check.Contains("electric engine room", text, "leakage goes into the electric engine room");
-            Check.DoesNotContain("stern", text, "not the stern compartment (ADR-0012)");
+            // " stern", not "stern": "astern" is now in the motor line, rightly.
+            Check.DoesNotContain(" stern", text, "not the stern compartment (ADR-0012)");
         }
 
         public static void Test_DepthStressSaysAnEffectAtItsNeutralValueIsOff()
@@ -269,10 +274,11 @@ namespace ApePatcher.Tests
             string text;
             DepthReview(delegate(PatchState d)
             {
-                d.Leakage1 = 0; d.WearAmount1 = 0; d.HullMult1 = 1.0;
+                d.Leakage1 = 0; d.MotorDamage = 0; d.HullMult1 = 1.0;
             }, out text);
             Check.Contains("leakage off", text, "leakage 0 is off");
-            Check.Contains("engine wear off", text, "wear amount 0 is off");
+            Check.Contains("Motor damage off", text, "motor damage 0 is off");
+            Check.DoesNotContain("Ordering stop", text, "no lever to describe when it is off");
             Check.Contains("hull multiplier off", text, "multiplier 1.0 is off");
             Check.DoesNotContain("do nothing", text, "tier 2 still acts, so it is not all off");
         }
@@ -283,7 +289,7 @@ namespace ApePatcher.Tests
             Review r = DepthReview(delegate(PatchState d)
             {
                 d.Leakage1 = d.Leakage2 = 0;
-                d.WearAmount1 = d.WearAmount2 = 0;
+                d.MotorDamage = 0;
                 d.HullMult1 = d.HullMult2 = 1.0;
             }, out text);
             Check.Contains("will do nothing", text, "stated outright");
@@ -328,6 +334,16 @@ namespace ApePatcher.Tests
             Check.DoesNotContain("stern", DepthStress.LeakageTip, "not the stern compartment (ADR-0012)");
             Check.Contains("next game launch", DepthStress.Tier2DepthTip, "next-launch timing");
             Check.Contains("next game launch", DepthStress.LeakageTip, "on the leakage tooltip too");
+            Check.Contains("ordering stop protects the motors", DepthStress.FloodThresholdTip.ToLowerInvariant(),
+                "flooding threshold: stop protects the motors");
+            Check.Contains("any depth", DepthStress.FloodThresholdTip, "flooding threshold: at any depth");
+            Check.Contains("ordering stop protects the motors", DepthStress.MotorDamageTip.ToLowerInvariant(),
+                "motor damage: stop protects the motors");
+            Check.Contains("astern", DepthStress.MotorDamageTip, "motor damage: astern counts as running");
+            Check.Contains("90%", DepthStress.MotorDamageTip, "motor damage: the ceiling");
+            Check.Contains("0 turns motor damage off", DepthStress.MotorDamageTip, "motor damage: 0 is off");
+            Check.Contains("next game launch", DepthStress.FloodThresholdTip, "next-launch timing");
+            Check.Contains("next game launch", DepthStress.MotorDamageTip, "next-launch timing");
         }
 
         public static void Test_TheDepthStressSectionIsGatedByOneSwitchAndExplainsWhy()

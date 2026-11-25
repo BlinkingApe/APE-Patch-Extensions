@@ -23,11 +23,13 @@ namespace depth_stress {
 // The marker: 8 bytes, then a version. gen_manifest.py searches the built
 // ape.act for this exact run and requires it to occur exactly once.
 constexpr char kMagic[8] = {'A', 'P', 'E', 'D', 'P', 'T', 'H', '1'};
-constexpr std::uint32_t kVersion = 1;
+// Version 2 (ticket 31, ADR-0012): per-tier wear gave way to one flooding
+// threshold and one motor damage amount.
+constexpr std::uint32_t kVersion = 2;
 
 // Hard ceilings, fixed here and never part of the struct (PRD user story 47):
-// seepage alone never drowns the room's crew, and wear never leaves an engine
-// the crew can't repair.
+// seepage alone never drowns the room's crew, and motor flooding damage never
+// leaves a motor the crew can't repair.
 constexpr float kSeepCeiling = 0.8f;
 // While seeping, the level never rests below a floor. The crew pumps a
 // compartment to exactly 0 (about 0.0033 per game-second, measured in play), and
@@ -38,47 +40,51 @@ constexpr float kSeepCeiling = 0.8f;
 constexpr float kSeepFloor = 0.01f;
 constexpr float kSeepFloorPerS = 0.006f;  // about twice the measured pump rate
 constexpr float kSeepFloorMax = 0.3f;
-constexpr float kWearCeiling = 0.9f;
+constexpr float kMotorCeiling = 0.9f;
 
 // Tier 1 starts at this depth whatever the class; it is not a field.
 constexpr float kTier1DepthM = 100.0f;
 
 struct TierConstants {
-  float seep_per_s;         // flood fraction added per game-second (0 = off)
-  float wear_amount;        // engine damage added per hit (0 = off)
-  float wear_chance_per_s;  // chance of a hit per game-second
-  float hull_mult;          // hull damage multiplier (1.0 = off)
+  float seep_per_s;  // flood fraction added per game-second (0 = off)
+  float hull_mult;   // hull damage multiplier (1.0 = off)
 };
 
 struct Constants {
   char magic[8];
   std::uint32_t version;
   float tier2_depth_m;
+  // Motor flooding damage (ADR-0012): one of each, not per tier.
+  float flood_threshold;     // motor-room flood fraction at which it starts
+  float motor_damage_per_s;  // added to each motor per game-second (0 = off)
   TierConstants tier[2];  // [0] tier 1, [1] tier 2 (and tier 3)
 };
 
 // The layout gen_manifest.py records for the patcher (DEPTH_STRESS_FIELDS).
 // A field moved here without moving it there fails the build.
-static_assert(sizeof(TierConstants) == 16, "patcher contract: tier is 16 bytes");
-static_assert(sizeof(Constants) == 48, "patcher contract: struct is 48 bytes");
+static_assert(sizeof(TierConstants) == 8, "patcher contract: tier is 8 bytes");
+static_assert(sizeof(Constants) == 40, "patcher contract: struct is 40 bytes");
 static_assert(offsetof(Constants, version) == 8, "patcher contract");
 static_assert(offsetof(Constants, tier2_depth_m) == 12, "patcher contract");
-static_assert(offsetof(Constants, tier) == 16, "patcher contract");
+static_assert(offsetof(Constants, flood_threshold) == 16, "patcher contract");
+static_assert(offsetof(Constants, motor_damage_per_s) == 20, "patcher contract");
+static_assert(offsetof(Constants, tier) == 24, "patcher contract");
 static_assert(offsetof(TierConstants, seep_per_s) == 0, "patcher contract");
-static_assert(offsetof(TierConstants, wear_amount) == 4, "patcher contract");
-static_assert(offsetof(TierConstants, wear_chance_per_s) == 8, "patcher contract");
-static_assert(offsetof(TierConstants, hull_mult) == 12, "patcher contract");
+static_assert(offsetof(TierConstants, hull_mult) == 4, "patcher contract");
 
-// Ticket 12's defaults, leakage halved by ticket 30 (ADR-0012), after the
-// patcher's conversions: leakage p %/min is p/6000 per game-second, wear rate
-// m min is 1/(60*m) per game-second, wear amount a % is a/100.
+// Ticket 12's defaults, leakage halved by ticket 30 (ADR-0012), motor flooding
+// damage's provisional ones (ticket 31), after the patcher's conversions:
+// leakage p %/min is p/6000 per game-second, the flooding threshold t % is
+// t/100, motor damage a % per game-second is a/100.
 constexpr Constants kDefaultConstants = {
     {'A', 'P', 'E', 'D', 'P', 'T', 'H', '1'},
     kVersion,
     150.0f,
+    0.30f,
+    0.10f,
     {
-        {2.0f / 6000.0f, 0.075f, 1.0f / (60.0f * 200.0f), 1.25f},
-        {7.5f / 6000.0f, 0.225f, 1.0f / (60.0f * 130.0f), 1.5f},
+        {2.0f / 6000.0f, 1.25f},
+        {7.5f / 6000.0f, 1.5f},
     },
 };
 

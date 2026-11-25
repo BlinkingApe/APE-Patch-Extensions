@@ -55,6 +55,12 @@ constexpr aob::Signature kZoneHead = {
 constexpr aob::Signature kZoneTable = {
     "zone compartment table", "8A 8D ?? ?? ?? ?? 80 F9 FF 89 6C 24 2C", 2};
 
+// The ordered machine telegraph: h.sie's diesel cave (docs/re-notes/04 s2)
+// stores it once a second, `mov eax,[eax+0x320]; mov eax,[eax];
+// mov [0x63E1D4],eax` @0x00635065, whether or not Diesel Damage is enabled.
+constexpr aob::Signature kTelegraph = {
+    "telegraph", "8B 80 20 03 00 00 8B 00 89 05 ?? ?? ?? ??", 10};
+
 bool read_u32(std::uint32_t addr, std::uint32_t& out) {
   if (addr < 0x10000) return false;  // null, or a null plus an offset
   SIZE_T n = 0;
@@ -121,12 +127,20 @@ Anchors resolve_anchors() {
   std::uint32_t* outs[] = {&a.boat_root,   &a.depth_root,       &a.clock,
                            &a.engine_root, &a.engine_block_off, &a.zone_head,
                            &a.zone_table};
-  for (int i = 0; i < 7; ++i) {
+  static_assert(sizeof(sigs) / sizeof(sigs[0]) == sizeof(outs) / sizeof(outs[0]),
+                "one root per signature");
+  for (std::size_t i = 0; i < sizeof(sigs) / sizeof(sigs[0]); ++i) {
     if (const char* why = resolve(*sigs[i], *outs[i])) {
       a.failed = sigs[i]->name;
       a.why = why;
       return a;
     }
+  }
+  // The telegraph is optional, like its value: without it there is no motor
+  // damage, and the other effects run (ticket 31).
+  if (const char* why = resolve(kTelegraph, a.telegraph)) {
+    a.telegraph = 0;
+    a.telegraph_why = why;
   }
   return a;
 }
@@ -134,6 +148,7 @@ Anchors resolve_anchors() {
 namespace {
 
 const char* g_seep_why = nullptr;
+const char* g_telegraph_why = nullptr;
 
 bool read_u8(std::uint32_t addr, std::uint8_t& out) {
   if (addr < 0x10000) return false;
@@ -181,6 +196,8 @@ const char* find_seep_flood(const Anchors& a, std::uint32_t& flood_addr) {
 }  // namespace
 
 const char* seep_unavailable() { return g_seep_why; }
+
+const char* telegraph_unavailable() { return g_telegraph_why; }
 
 bool read_sample(const Anchors& a, depth_stress::Sample& out, Targets& targets,
                  const char** why) {
@@ -246,6 +263,20 @@ bool read_sample(const Anchors& a, depth_stress::Sample& out, Targets& targets,
       out.has_seep = true;
     else
       g_seep_why = "seep flood unreadable";
+  }
+
+  // The telegraph is optional too: without a plausible value there is no
+  // motor damage this poll, and the rest of the sample stands.
+  out.has_telegraph = false;
+  if (!a.telegraph)
+    g_telegraph_why = "telegraph anchor unresolved";
+  else if (!read_f32(a.telegraph, out.telegraph))
+    g_telegraph_why = "telegraph unreadable";
+  else if (!depth_stress::telegraph_plausible(out.telegraph))
+    g_telegraph_why = "telegraph outside [-1, 1]";
+  else {
+    g_telegraph_why = nullptr;
+    out.has_telegraph = true;
   }
   return true;
 }

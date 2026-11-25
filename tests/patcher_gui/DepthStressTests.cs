@@ -48,8 +48,7 @@ namespace ApePatcher.Tests
             PatchState want = Enabled(session);
             want.Tier2Depth = 180;
             want.Leakage1 = 6;  want.Leakage2 = 30;
-            want.WearAmount1 = 10; want.WearAmount2 = 45;
-            want.WearRate1 = 300; want.WearRate2 = 60;
+            want.FloodThreshold = 45; want.MotorDamage = 12.5;
             want.HullMult1 = 2.0; want.HullMult2 = 3.5;
             WriteReport report = session.Apply(want);
             Check.True(report.Ok, report.Message);
@@ -61,10 +60,8 @@ namespace ApePatcher.Tests
             Check.Equal(180f, FieldIn(deployed, fx, "tier2_depth_m"), "tier-2 depth, metres");
             Check.Equal((float)(6.0 / 6000.0), FieldIn(deployed, fx, "t1_seep_per_s"), "6 %/min");
             Check.Equal((float)(30.0 / 6000.0), FieldIn(deployed, fx, "t2_seep_per_s"), "30 %/min");
-            Check.Equal(0.10f, FieldIn(deployed, fx, "t1_wear_amount"), "10 %");
-            Check.Equal(0.45f, FieldIn(deployed, fx, "t2_wear_amount"), "45 %");
-            Check.Equal((float)(1.0 / (60.0 * 300.0)), FieldIn(deployed, fx, "t1_wear_chance_per_s"), "300 min");
-            Check.Equal((float)(1.0 / (60.0 * 60.0)), FieldIn(deployed, fx, "t2_wear_chance_per_s"), "60 min");
+            Check.Equal(0.45f, FieldIn(deployed, fx, "flood_threshold"), "45 % flood");
+            Check.Equal(0.125f, FieldIn(deployed, fx, "motor_damage_per_s"), "12.5 %/game-s");
             Check.Equal(2.0f, FieldIn(deployed, fx, "t1_hull_mult"), "x2");
             Check.Equal(3.5f, FieldIn(deployed, fx, "t2_hull_mult"), "x3.5");
 
@@ -89,8 +86,7 @@ namespace ApePatcher.Tests
             PatchState want = Enabled(session);
             want.Tier2Depth = 220;
             want.Leakage1 = 2.5; want.Leakage2 = 0;
-            want.WearAmount1 = 0; want.WearAmount2 = 33.3;
-            want.WearRate1 = 1; want.WearRate2 = 457;
+            want.FloodThreshold = 72.5; want.MotorDamage = 33.3;
             want.HullMult1 = 1.0; want.HullMult2 = 4.75;
             Check.True(session.Apply(want).Ok, "applying");
 
@@ -101,10 +97,8 @@ namespace ApePatcher.Tests
             Check.Equal(220.0, got.Tier2Depth, "tier-2 depth");
             Check.Equal(2.5, got.Leakage1, "tier-1 leakage");
             Check.Equal(0.0, got.Leakage2, "tier-2 leakage");
-            Check.Equal(0.0, got.WearAmount1, "tier-1 wear amount");
-            Check.Equal(33.3, got.WearAmount2, "tier-2 wear amount");
-            Check.Equal(1.0, got.WearRate1, "tier-1 wear rate");
-            Check.Equal(457.0, got.WearRate2, "tier-2 wear rate");
+            Check.Equal(72.5, got.FloodThreshold, "flooding threshold");
+            Check.Equal(33.3, got.MotorDamage, "motor damage");
             Check.Equal(1.0, got.HullMult1, "tier-1 multiplier");
             Check.Equal(4.75, got.HullMult2, "tier-2 multiplier");
             Check.True(after.Plan(got.Clone()).Empty, "and applying it again changes nothing");
@@ -135,6 +129,13 @@ namespace ApePatcher.Tests
             Check.Equal(7.5, d.Leakage2, "7.5 %/min (ticket 30)");
         }
 
+        public static void Test_AFreshStateHoldsTheMotorFloodingDefaults()
+        {
+            PatchState d = new PatchState();
+            Check.Equal(30.0, d.FloodThreshold, "30 % flood (ticket 31, provisional)");
+            Check.Equal(10.0, d.MotorDamage, "10 %/game-s (ticket 31, provisional)");
+        }
+
         public static void Test_TheShippedTemplateHoldsTheCurrentDefaults()
         {
             PatchSession session = Fixtures.Stock(true).Session();
@@ -142,10 +143,8 @@ namespace ApePatcher.Tests
             Check.Equal(150.0, d.Tier2Depth, "150 m");
             Check.Equal(2.0, d.Leakage1, "2 %/min (halved, ticket 30)");
             Check.Equal(7.5, d.Leakage2, "7.5 %/min (halved, ticket 30)");
-            Check.Equal(7.5, d.WearAmount1, "7.5 %");
-            Check.Equal(22.5, d.WearAmount2, "22.5 %");
-            Check.Equal(200.0, d.WearRate1, "200 min");
-            Check.Equal(130.0, d.WearRate2, "130 min");
+            Check.Equal(30.0, d.FloodThreshold, "30 % flood (ticket 31)");
+            Check.Equal(10.0, d.MotorDamage, "10 %/game-s (ticket 31)");
             Check.Equal(1.25, d.HullMult1, "x1.25");
             Check.Equal(1.5, d.HullMult2, "x1.5");
         }
@@ -384,24 +383,22 @@ namespace ApePatcher.Tests
                 delegate(PatchState s, double v) { s.Tier2Depth = v; },
                 delegate(PatchState s, double v) { s.Leakage1 = v; },
                 delegate(PatchState s, double v) { s.Leakage2 = v; },
-                delegate(PatchState s, double v) { s.WearAmount1 = v; },
-                delegate(PatchState s, double v) { s.WearAmount2 = v; },
-                delegate(PatchState s, double v) { s.WearRate1 = v; },
-                delegate(PatchState s, double v) { s.WearRate2 = v; },
+                delegate(PatchState s, double v) { s.FloodThreshold = v; },
+                delegate(PatchState s, double v) { s.MotorDamage = v; },
                 delegate(PatchState s, double v) { s.HullMult1 = v; },
                 delegate(PatchState s, double v) { s.HullMult2 = v; },
             };
             double[][] ok =
             {
                 new double[] { 101, 300 }, new double[] { 0, 60 }, new double[] { 0, 60 },
-                new double[] { 0, 90 }, new double[] { 0, 90 }, new double[] { 1, 600 },
-                new double[] { 1, 600 }, new double[] { 1.0, 5.0 }, new double[] { 1.0, 5.0 },
+                new double[] { 5, 95 }, new double[] { 0, 100 },
+                new double[] { 1.0, 5.0 }, new double[] { 1.0, 5.0 },
             };
             double[][] bad =
             {
                 new double[] { 100, 300.5 }, new double[] { -0.1, 60.1 }, new double[] { -0.1, 60.1 },
-                new double[] { -0.1, 90.1 }, new double[] { -0.1, 90.1 }, new double[] { 0.9, 600.1 },
-                new double[] { 0.9, 600.1 }, new double[] { 0.99, 5.01 }, new double[] { 0.99, 5.01 },
+                new double[] { 4.9, 95.1 }, new double[] { -0.1, 100.1 },
+                new double[] { 0.99, 5.01 }, new double[] { 0.99, 5.01 },
             };
 
             Fixtures.Install fx = Fixtures.Stock(true);
@@ -435,8 +432,6 @@ namespace ApePatcher.Tests
             PatchSession session = fx.Session();
             PatchState want = Enabled(session);
             want.Leakage1 = 20; want.Leakage2 = 1;
-            want.WearAmount1 = 50; want.WearAmount2 = 5;
-            want.WearRate1 = 10; want.WearRate2 = 500;
             want.HullMult1 = 4.0; want.HullMult2 = 1.1;
             WriteReport report = session.Apply(want);
             Check.True(report.Ok, report.Message);
@@ -448,12 +443,12 @@ namespace ApePatcher.Tests
             PatchSession session = fx.Session();
             PatchState want = Enabled(session);
             want.Leakage1 = 0; want.Leakage2 = 0;
-            want.WearAmount1 = 0; want.WearAmount2 = 0;
+            want.MotorDamage = 0;
             want.HullMult1 = 1.0; want.HullMult2 = 1.0;
             Check.True(session.Apply(want).Ok, "applying");
 
             byte[] deployed = File.ReadAllBytes(ApeActOf(fx));
-            foreach (string f in new string[] { "t1_seep_per_s", "t2_seep_per_s", "t1_wear_amount", "t2_wear_amount" })
+            foreach (string f in new string[] { "t1_seep_per_s", "t2_seep_per_s", "motor_damage_per_s" })
                 Check.Equal(0f, FieldIn(deployed, fx, f), f + " is 0");
             Check.Equal(1f, FieldIn(deployed, fx, "t1_hull_mult"), "tier-1 multiplier 1.0");
             Check.Equal(1f, FieldIn(deployed, fx, "t2_hull_mult"), "tier-2 multiplier 1.0");

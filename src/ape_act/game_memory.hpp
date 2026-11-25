@@ -26,9 +26,13 @@ struct Anchors {
   std::uint32_t engine_block_off = 0;  // 0x37C, the electric block's pair
   std::uint32_t zone_head = 0;   // 0x005547D4, head of the zone-state list
   std::uint32_t zone_table = 0;  // 0x00566898, zone -> compartment (signed bytes)
-  // Null when all of them resolved; else which signature didn't, and why.
+  // Null when all of the above resolved; else which signature didn't, and why.
   const char* failed = nullptr;
   const char* why = nullptr;
+  // Optional: 0 when its signature didn't resolve (then `telegraph_why` says
+  // why). That costs motor damage only, never the sample.
+  std::uint32_t telegraph = 0;   // 0x0063E1D4, h.sie's ordered-telegraph copy
+  const char* telegraph_why = nullptr;
 };
 
 // Scans sh3.exe's executable sections; each signature must match exactly once.
@@ -50,7 +54,7 @@ bool read_sample(const Anchors& a, depth_stress::Sample& out, Targets& targets,
 // Applies the step's hull write to the boat the same poll's sample named.
 bool write_hull(std::uint32_t boat, float value);
 
-// Applies the step's electric-engine wear write to an engine's damage float.
+// Applies the step's motor flooding damage write to an engine's damage float.
 bool write_engine(std::uint32_t address, float value);
 
 // Applies the step's seepage write to the seep compartment's flood float.
@@ -59,6 +63,10 @@ bool write_flood(std::uint32_t address, float value);
 // Why the last read_sample found no seep compartment (null when it found one).
 // Read from the same thread that polled; the text is static.
 const char* seep_unavailable();
+
+// Why the last read_sample had no telegraph value (null when it had one).
+// Same thread and lifetime rules as seep_unavailable().
+const char* telegraph_unavailable();
 
 }  // namespace game
 }  // namespace ape

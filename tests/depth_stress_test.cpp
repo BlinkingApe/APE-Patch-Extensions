@@ -6,7 +6,7 @@
 
 #include <cmath>
 #include <cstring>
-#include <random>
+#include <limits>
 #include <vector>
 
 #include "mods/depth_stress/constants.hpp"
@@ -17,15 +17,14 @@ namespace ds = ape::depth_stress;
 TEST_CASE("the shipped constants carry the current defaults in runtime units") {
   const ds::Constants c = ds::kDefaultConstants;
   // Patcher conversions (PRD Fields): leakage p %/min -> p/6000 per game-s,
-  // wear rate m min -> 1/(60*m) per game-s, wear amount a % -> a/100.
+  // flooding threshold t % -> t/100, motor damage a %/game-s -> a/100.
   CHECK(c.tier2_depth_m == doctest::Approx(150.0));
   // Leakage halved to 2 / 7.5 %/min (ticket 30, ADR-0012).
   CHECK(c.tier[0].seep_per_s == doctest::Approx(2.0 / 6000.0));
   CHECK(c.tier[1].seep_per_s == doctest::Approx(7.5 / 6000.0));
-  CHECK(c.tier[0].wear_amount == doctest::Approx(0.075));
-  CHECK(c.tier[1].wear_amount == doctest::Approx(0.225));
-  CHECK(c.tier[0].wear_chance_per_s == doctest::Approx(1.0 / 12000.0));
-  CHECK(c.tier[1].wear_chance_per_s == doctest::Approx(1.0 / 7800.0));
+  // Motor flooding damage (ticket 31, ADR-0012): 30 %, 10 %/game-s.
+  CHECK(c.flood_threshold == doctest::Approx(0.3));
+  CHECK(c.motor_damage_per_s == doctest::Approx(0.1));
   CHECK(c.tier[0].hull_mult == doctest::Approx(1.25));
   CHECK(c.tier[1].hull_mult == doctest::Approx(1.5));
 }
@@ -46,9 +45,9 @@ TEST_CASE("a corrupted marker fails the verdict") {
 
 TEST_CASE("a different version fails the verdict") {
   ds::Constants c = ds::kDefaultConstants;
-  c.version = 2;
+  c.version = ds::kVersion + 1;
   CHECK_FALSE(ds::verify(c).ok);
-  c.version = 0;
+  c.version = ds::kVersion - 1;
   CHECK_FALSE(ds::verify(c).ok);
 }
 
@@ -328,60 +327,22 @@ TEST_CASE("a failed verdict says why") {
   CHECK(std::strlen(ds::verify(bad_version).reason) > 0);
 }
 
-// -- electric-engine wear (ticket 26) ----------------------------------------
+// -- motor flooding damage (ticket 31, ADR-0012) ------------------------------
+//
+// Both motors take amount*dt while the electric engine room's flood, as read
+// this poll, is at or above the threshold and the ordered telegraph is not at
+// stop. At any depth; capped at 0.9; never lowered.
 
 namespace {
 
-// A generator that replays a script, then repeats its last value.
-class Scripted : public ds::Random {
- public:
-  explicit Scripted(std::vector<double> v) : v_(std::move(v)) {}
-  double uniform() override {
-    ++draws;
-    const double x = i_ < v_.size() ? v_[i_] : v_.back();
-    if (i_ < v_.size()) ++i_;
-    return x;
-  }
-  int draws = 0;
-
- private:
-  std::vector<double> v_;
-  std::size_t i_ = 0;
-};
-
-// Every trial hits; the engine pick is `pick`.
-class Always : public ds::Random {
- public:
-  explicit Always(double pick) : pick_(pick) {}
-  double uniform() override {
-    flip_ = !flip_;
-    return flip_ ? 0.0 : pick_;
-  }
-
- private:
-  double pick_;
-  bool flip_ = false;
-};
-
-class Mt : public ds::Random {
- public:
-  explicit Mt(unsigned seed) : g_(seed) {}
-  double uniform() override {
-    return std::uniform_real_distribution<double>(0.0, 1.0)(g_);
-  }
-
- private:
-  std::mt19937 g_;
-};
-
-ds::Constants wear_only(float amount, float chance) {
+ds::Constants motor_only(float threshold, float amount) {
   ds::Constants c = ds::kDefaultConstants;
   for (auto& k : c.tier) {
     k.hull_mult = 1.0f;
     k.seep_per_s = 0.0f;
-    k.wear_amount = amount;
-    k.wear_chance_per_s = chance;
   }
+  c.flood_threshold = threshold;
+  c.motor_damage_per_s = amount;
   return c;
 }
 
@@ -391,185 +352,186 @@ ds::Sample engines(ds::Sample s, float port, float stbd) {
   return s;
 }
 
+// A sample with the motor room at `flood` and the telegraph at `telegraph`.
+ds::Sample motor_room(ds::Sample s, float flood, float telegraph) {
+  s.seep_flood = flood;
+  s.has_seep = true;
+  s.telegraph = telegraph;
+  s.has_telegraph = true;
+  return s;
+}
+
 const ds::Write* write_to(const ds::StepResult& r, ds::Write::Target t) {
   for (const ds::Write& w : r.writes)
     if (w.target == t) return &w;
   return nullptr;
 }
 
+// Baselines on `s` at clock 10, then polls the same sample at `clock`.
+ds::StepResult poll_twice(const ds::Constants& c, const ds::Sample& s,
+                          std::int32_t clock) {
+  ds::StepState st{};
+  ds::Sample a = s;
+  a.clock_s = 10;
+  ds::step(c, st, &a);
+  ds::Sample later = s;
+  later.clock_s = clock;
+  return ds::step(c, st, &later);
+}
+
 }  // namespace
 
-TEST_CASE("wear: a hit adds the tier's amount to the picked engine") {
-  const ds::Constants c = wear_only(0.075f, 1.0f);
-  const ds::Sample a = engines(at(120.0f, 500.0f, 10), 0.1f, 0.2f);
-  const ds::Sample b = engines(at(120.0f, 500.0f, 11), 0.1f, 0.2f);
-
-  ds::StepState st{};
-  Always port_rng(0.25);  // < 0.5: port
-  ds::step(c, st, &a, &port_rng);
-  const ds::StepResult r = ds::step(c, st, &b, &port_rng);
-  REQUIRE(r.writes.size() == 1);
-  CHECK(r.writes[0].target == ds::Write::Target::PortEngine);
-  CHECK(r.writes[0].old_value == doctest::Approx(0.1));
-  CHECK(r.writes[0].value == doctest::Approx(0.175));
-
-  ds::StepState st2{};
-  Always stbd_rng(0.75);  // >= 0.5: starboard
-  ds::step(c, st2, &a, &stbd_rng);
-  const ds::StepResult r2 = ds::step(c, st2, &b, &stbd_rng);
-  REQUIRE(r2.writes.size() == 1);
-  CHECK(r2.writes[0].target == ds::Write::Target::StarboardEngine);
-  CHECK(r2.writes[0].value == doctest::Approx(0.275));
+TEST_CASE("motor: both engines step by amount*dt") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  const ds::Sample s = motor_room(engines(at(120.0f, 500.0f, 0), 0.1f, 0.2f), 0.5f, 1.0f);
+  const ds::StepResult r = poll_twice(c, s, 15);  // dt 5
+  const ds::Write* port = write_to(r, ds::Write::Target::PortEngine);
+  const ds::Write* stbd = write_to(r, ds::Write::Target::StarboardEngine);
+  REQUIRE(port);
+  REQUIRE(stbd);
+  CHECK(port->old_value == doctest::Approx(0.1));
+  CHECK(port->value == doctest::Approx(0.15));
+  CHECK(stbd->old_value == doctest::Approx(0.2));
+  CHECK(stbd->value == doctest::Approx(0.25));
+  CHECK(r.writes.size() == 2);
 }
 
-TEST_CASE("wear: tier 2 uses tier-2 values, and so does tier 3") {
-  ds::Constants c = wear_only(0.075f, 1.0f);
-  c.tier[1].wear_amount = 0.225f;
-  for (float depth : {152.0f, 200.0f}) {  // tier 2; tier 3 (onset 154.8 at 480)
+TEST_CASE("motor: clamps at 0.9, no write at or above it, never lowers") {
+  const ds::Constants c = motor_only(0.3f, 0.1f);
+  {
+    // A big step clamps to the ceiling exactly.
+    const ds::Sample s = motor_room(engines(at(120.0f, 500.0f, 0), 0.85f, 0.0f), 0.5f, 1.0f);
+    const ds::StepResult r = poll_twice(c, s, 20);
+    const ds::Write* port = write_to(r, ds::Write::Target::PortEngine);
+    REQUIRE(port);
+    CHECK(port->value == ds::kMotorCeiling);
+  }
+  {
+    // 0.9 read back from a float32 store is 0.89999998: no write. Above it,
+    // a higher damage from elsewhere is never lowered. Each engine on its own.
+    const float stored = 0.89999998f;
+    const ds::Sample s = motor_room(engines(at(120.0f, 500.0f, 0), stored, 0.95f), 0.5f, 1.0f);
+    CHECK(poll_twice(c, s, 11).writes.empty());
+    const ds::Sample one = motor_room(engines(at(120.0f, 500.0f, 0), stored, 0.4f), 0.5f, 1.0f);
+    const ds::StepResult r = poll_twice(c, one, 11);
+    CHECK(write_to(r, ds::Write::Target::PortEngine) == nullptr);
+    REQUIRE(write_to(r, ds::Write::Target::StarboardEngine));
+    CHECK(write_to(r, ds::Write::Target::StarboardEngine)->value == doctest::Approx(0.5));
+  }
+}
+
+TEST_CASE("motor: never past 0.9 over a long flooded run") {
+  const ds::Constants c = motor_only(0.3f, 0.037f);
+  ds::StepState st{};
+  float port = 0.0f, stbd = 0.0f;
+  const ds::Sample first = motor_room(engines(at(120.0f, 500.0f, 0), 0.0f, 0.0f), 0.6f, 0.5f);
+  ds::step(c, st, &first);
+  for (int t = 1; t <= 500; ++t) {
+    const ds::Sample s = motor_room(engines(at(120.0f, 500.0f, t), port, stbd), 0.6f, 0.5f);
+    for (const ds::Write& w : ds::step(c, st, &s).writes) {
+      CHECK(w.value <= ds::kMotorCeiling);
+      CHECK(w.value > w.old_value);
+      (w.target == ds::Write::Target::PortEngine ? port : stbd) = w.value;
+    }
+  }
+  CHECK(port == ds::kMotorCeiling);
+  CHECK(stbd == ds::kMotorCeiling);
+}
+
+TEST_CASE("motor: nothing below the threshold; at it, damage") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  const ds::Sample below = motor_room(at(120.0f, 500.0f, 0), 0.29f, 1.0f);
+  CHECK(poll_twice(c, below, 11).writes.empty());
+  const ds::Sample on = motor_room(at(120.0f, 500.0f, 0), 0.3f, 1.0f);
+  CHECK(poll_twice(c, on, 11).writes.size() == 2);
+}
+
+TEST_CASE("motor: nothing at telegraph stop, or with no telegraph value") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  for (float stop : {0.0f, -0.0f}) {
+    CAPTURE(stop);
+    const ds::Sample s = motor_room(at(120.0f, 500.0f, 0), 0.6f, stop);
+    CHECK(poll_twice(c, s, 11).writes.empty());
+  }
+  ds::Sample none = motor_room(at(120.0f, 500.0f, 0), 0.6f, 1.0f);
+  none.has_telegraph = false;  // a stale 1.0 left in the field
+  CHECK(poll_twice(c, none, 11).writes.empty());
+}
+
+TEST_CASE("motor: with no telegraph value the other effects still run") {
+  ds::Constants c = motor_only(0.3f, 0.01f);
+  for (auto& k : c.tier) k.seep_per_s = 0.002f;
+  ds::Sample s = motor_room(at(120.0f, 500.0f, 0), 0.4f, 1.0f);
+  s.has_telegraph = false;
+  const ds::StepResult r = poll_twice(c, s, 15);
+  REQUIRE(r.writes.size() == 1);
+  CHECK(r.writes[0].target == ds::Write::Target::Flood);
+}
+
+TEST_CASE("motor: astern counts as running") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  const ds::Sample s = motor_room(at(120.0f, 500.0f, 0), 0.6f, -0.5f);
+  CHECK(poll_twice(c, s, 11).writes.size() == 2);
+}
+
+TEST_CASE("motor: nothing when paused, when the clock goes back, or at amount 0") {
+  {
+    const ds::Constants c = motor_only(0.3f, 0.01f);
     ds::StepState st{};
-    Always rng(0.0);
-    const ds::Sample a = engines(at(depth, 480.0f, 10), 0.0f, 0.0f);
-    const ds::Sample b = engines(at(depth, 480.0f, 11), 0.0f, 0.0f);
-    ds::step(c, st, &a, &rng);
-    const ds::StepResult r = ds::step(c, st, &b, &rng);
+    const ds::Sample a = motor_room(at(120.0f, 500.0f, 5), 0.6f, 1.0f);
+    ds::step(c, st, &a);
+    CHECK(ds::step(c, st, &a).writes.empty());  // dt 0
+    const ds::Sample back = motor_room(at(120.0f, 500.0f, 3), 0.6f, 1.0f);
+    CHECK(ds::step(c, st, &back).writes.empty());  // dt < 0
+  }
+  const ds::Constants off = motor_only(0.3f, 0.0f);
+  const ds::Sample s = motor_room(at(120.0f, 500.0f, 0), 0.6f, 1.0f);
+  CHECK(poll_twice(off, s, 20).writes.empty());
+}
+
+TEST_CASE("motor: acts above 100 m and outside any tier, surfaced too") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  for (float depth : {0.0f, 30.0f, 99.0f}) {
     CAPTURE(depth);
-    REQUIRE(r.writes.size() == 1);
-    CHECK(r.writes[0].value == doctest::Approx(0.225));
+    const ds::Sample s = motor_room(at(depth, 500.0f, 0), 0.6f, 1.0f);
+    const ds::StepResult r = poll_twice(c, s, 11);
+    CHECK(r.diag.tier == ds::Tier::None);
+    CHECK(r.writes.size() == 2);
   }
 }
 
-TEST_CASE("wear: never past 0.9 under thousands of forced hits") {
-  const ds::Constants c = wear_only(0.225f, 1.0f);
-  ds::StepState st{};
-  Always rng(0.0);  // always port
-  float port = 0.0f;
-  const ds::Sample first = engines(at(120.0f, 500.0f, 0), port, 0.0f);
-  ds::step(c, st, &first, &rng);
-  for (int t = 1; t <= 3000; ++t) {
-    const ds::Sample s = engines(at(120.0f, 500.0f, t), port, 0.0f);
-    const ds::StepResult r = ds::step(c, st, &s, &rng);
-    for (const ds::Write& w : r.writes) {
-      CHECK(w.value <= ds::kWearCeiling);
-      CHECK(w.value > w.old_value);  // never lowers, never a no-op write
-      port = w.value;
-    }
-  }
-  CHECK(port == doctest::Approx(0.9));
-}
-
-TEST_CASE("wear: many hits in one poll still stop at 0.9") {
-  const ds::Constants c = wear_only(0.225f, 1.0f);
-  ds::StepState st{};
-  Always rng(0.0);
-  const ds::Sample a = engines(at(120.0f, 500.0f, 0), 0.0f, 0.0f);
-  const ds::Sample b = engines(at(120.0f, 500.0f, 5000), 0.0f, 0.0f);
-  ds::step(c, st, &a, &rng);
-  const ds::StepResult r = ds::step(c, st, &b, &rng);
-  REQUIRE(r.writes.size() == 1);
-  CHECK(r.writes[0].value == ds::kWearCeiling);
-}
-
-TEST_CASE("wear: no write at or above 0.9, and a big hit clamps to it") {
-  const ds::Constants c = wear_only(0.5f, 1.0f);
-  ds::StepState st{};
-  Always rng(0.0);
-  const ds::Sample a = engines(at(120.0f, 500.0f, 1), ds::kWearCeiling, 0.0f);
-  const ds::Sample b = engines(at(120.0f, 500.0f, 2), ds::kWearCeiling, 0.0f);
-  ds::step(c, st, &a, &rng);
-  CHECK(ds::step(c, st, &b, &rng).writes.empty());
-  const ds::Sample hi = engines(at(120.0f, 500.0f, 3), 0.99f, 0.0f);
-  CHECK(ds::step(c, st, &hi, &rng).writes.empty());  // never lowers
-
-  const ds::Sample low = engines(at(120.0f, 500.0f, 4), 0.7f, 0.0f);
-  const ds::StepResult r = ds::step(c, st, &low, &rng);
-  REQUIRE(r.writes.size() == 1);
-  CHECK(r.writes[0].value == ds::kWearCeiling);
-}
-
-TEST_CASE("wear: hit frequency matches q, at default rates and at high dt") {
-  struct Case {
-    std::int32_t dt;
-    float q;
-    long seconds;
-  };
-  const Case cases[] = {
-      {1, 0.05f, 400000}, {8, 0.05f, 400000}, {8, 1.0f / 7800.0f, 40000000}};
-  for (const Case& k : cases) {
-    const ds::Constants c = wear_only(0.001f, k.q);
-    ds::StepState st{};
-    Mt rng(12345);
-    std::int32_t clock = 0;
-    long port_hits = 0, stbd_hits = 0;
-    const ds::Sample first = engines(at(120.0f, 500.0f, 0), 0.0f, 0.0f);
-    ds::step(c, st, &first, &rng);
-    for (long done = 0; done < k.seconds; done += k.dt) {
-      clock += k.dt;
-      // Engines are read back as 0 so the ceiling never interferes: each
-      // write's size is the number of hits it carried.
-      const ds::Sample s = engines(at(120.0f, 500.0f, clock), 0.0f, 0.0f);
-      const ds::StepResult r = ds::step(c, st, &s, &rng);
-      for (const ds::Write& w : r.writes) {
-        const long n = std::lround((w.value - w.old_value) / 0.001f);
-        (w.target == ds::Write::Target::PortEngine ? port_hits : stbd_hits) += n;
-      }
-    }
-    const double hits = static_cast<double>(port_hits + stbd_hits);
-    CAPTURE(k.dt);
-    CAPTURE(k.q);
-    CHECK(hits == doctest::Approx(static_cast<double>(k.seconds) * k.q).epsilon(0.06));
-    CHECK(port_hits > 0.4 * hits);
-    CHECK(stbd_hits > 0.4 * hits);
+TEST_CASE("motor: acts in tier 2 and below crush depth at the same amount") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  for (float depth : {152.0f, 200.0f}) {
+    CAPTURE(depth);
+    const ds::Sample s = motor_room(engines(at(depth, 480.0f, 0), 0.0f, 0.0f), 0.6f, 1.0f);
+    const ds::StepResult r = poll_twice(c, s, 12);
+    REQUIRE(write_to(r, ds::Write::Target::PortEngine));
+    CHECK(write_to(r, ds::Write::Target::PortEngine)->value == doctest::Approx(0.02));
   }
 }
 
-TEST_CASE("wear: none above 100 m, when paused, or when the clock goes back") {
-  const ds::Constants c = wear_only(0.075f, 1.0f);
-  Always rng(0.0);
-  {
-    ds::StepState st{};
-    const ds::Sample a = engines(at(60.0f, 500.0f, 1), 0.0f, 0.0f);
-    const ds::Sample b = engines(at(60.0f, 500.0f, 2), 0.0f, 0.0f);
-    ds::step(c, st, &a, &rng);
-    CHECK(ds::step(c, st, &b, &rng).writes.empty());
-  }
-  {
-    ds::StepState st{};
-    const ds::Sample a = engines(at(120.0f, 500.0f, 5), 0.0f, 0.0f);
-    ds::step(c, st, &a, &rng);
-    CHECK(ds::step(c, st, &a, &rng).writes.empty());  // dt 0
-    const ds::Sample back = engines(at(120.0f, 500.0f, 3), 0.0f, 0.0f);
-    CHECK(ds::step(c, st, &back, &rng).writes.empty());  // dt < 0
-  }
-}
-
-TEST_CASE("wear: amount 0 switches it off on its own") {
-  const ds::Constants c = wear_only(0.0f, 1.0f);
-  Scripted rng({0.0});
-  ds::StepState st{};
-  const ds::Sample a = engines(at(120.0f, 500.0f, 1), 0.0f, 0.0f);
-  const ds::Sample b = engines(at(120.0f, 500.0f, 5), 0.0f, 0.0f);
-  ds::step(c, st, &a, &rng);
-  CHECK(ds::step(c, st, &b, &rng).writes.empty());
-  CHECK(rng.draws == 0);
-}
-
-TEST_CASE("wear: one draw per game-second, and a pick draw per hit") {
-  const ds::Constants c = wear_only(0.01f, 0.5f);
-  // Trials: miss (0.9), hit (0.1) then pick 0.2 = port, miss (0.7).
-  Scripted rng({0.9, 0.1, 0.2, 0.7});
-  ds::StepState st{};
-  const ds::Sample a = engines(at(120.0f, 500.0f, 0), 0.0f, 0.0f);
-  const ds::Sample b = engines(at(120.0f, 500.0f, 3), 0.0f, 0.0f);
-  ds::step(c, st, &a, &rng);
-  const ds::StepResult r = ds::step(c, st, &b, &rng);
-  CHECK(rng.draws == 4);
-  const ds::Write* w = write_to(r, ds::Write::Target::PortEngine);
-  REQUIRE(w);
-  CHECK(w->value == doctest::Approx(0.01));
+TEST_CASE("motor: the trigger is the flood read this poll, not after APE's seep write") {
+  ds::Constants c = motor_only(0.3f, 0.01f);
+  for (auto& k : c.tier) k.seep_per_s = 0.01f;
+  // 0.29 read; seepage raises it to 0.34 this poll, but the motors are spared.
+  const ds::Sample s = motor_room(at(120.0f, 500.0f, 0), 0.29f, 1.0f);
+  const ds::StepResult r = poll_twice(c, s, 15);
+  const ds::Write* flood = write_to(r, ds::Write::Target::Flood);
+  REQUIRE(flood);
+  CHECK(flood->value > c.flood_threshold);
+  CHECK(write_to(r, ds::Write::Target::PortEngine) == nullptr);
   CHECK(write_to(r, ds::Write::Target::StarboardEngine) == nullptr);
 }
 
-TEST_CASE("wear: an engine damage outside [0, 1] fails the plausibility gate") {
+TEST_CASE("motor: no motor room (no seep compartment) means no motor damage") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  ds::Sample s = motor_room(at(120.0f, 500.0f, 0), 0.6f, 1.0f);
+  s.has_seep = false;
+  CHECK(poll_twice(c, s, 11).writes.empty());
+}
+
+TEST_CASE("motor: an engine damage outside [0, 1] fails the plausibility gate") {
   ds::Sample s = at(120.0f, 500.0f, 1);
   CHECK(ds::implausible(s) == nullptr);
   s.engine_port = 1.1f;
@@ -579,13 +541,16 @@ TEST_CASE("wear: an engine damage outside [0, 1] fails the plausibility gate") {
   CHECK(ds::implausible(s) != nullptr);
 }
 
-TEST_CASE("wear: with no generator there is no wear") {
-  const ds::Constants c = wear_only(0.075f, 1.0f);
-  ds::StepState st{};
-  const ds::Sample a = engines(at(120.0f, 500.0f, 1), 0.0f, 0.0f);
-  const ds::Sample b = engines(at(120.0f, 500.0f, 2), 0.0f, 0.0f);
-  ds::step(c, st, &a);
-  CHECK(ds::step(c, st, &b).writes.empty());
+TEST_CASE("telegraph: the reader's plausibility gate") {
+  for (float ok : {0.0f, -0.0f, 0.25f, 1.0f, -1.0f, -0.5f}) {
+    CAPTURE(ok);
+    CHECK(ds::telegraph_plausible(ok));
+  }
+  const float inf = std::numeric_limits<float>::infinity();
+  for (float bad : {1.01f, -1.01f, 3.0e7f, std::nanf(""), inf, -inf}) {
+    CAPTURE(bad);
+    CHECK_FALSE(ds::telegraph_plausible(bad));
+  }
 }
 
 // -- the seep zone (ticket 30, ADR-0012) -------------------------------------
@@ -622,9 +587,9 @@ ds::Constants seep_only(float rate) {
   ds::Constants c = ds::kDefaultConstants;
   for (auto& k : c.tier) {
     k.hull_mult = 1.0f;
-    k.wear_amount = 0.0f;
     k.seep_per_s = rate;
   }
+  c.motor_damage_per_s = 0.0f;
   return c;
 }
 
@@ -767,18 +732,16 @@ TEST_CASE("seep: a flood outside [0, 1] fails the plausibility gate") {
   CHECK(ds::implausible(s) != nullptr);
 }
 
-TEST_CASE("seep: a seep write and a wear write can share a poll") {
+TEST_CASE("seep: a seep write and motor writes can share a poll") {
   ds::Constants c = seep_only(0.01f);
-  for (auto& k : c.tier) {
-    k.wear_amount = 0.05f;
-    k.wear_chance_per_s = 1.0f;
-  }
-  Always rng(0.0);
+  c.flood_threshold = 0.3f;
+  c.motor_damage_per_s = 0.05f;
   ds::StepState st{};
-  const ds::Sample a = flooded(at(120.0f, 500.0f, 1), 0.0f);
-  const ds::Sample b = flooded(at(120.0f, 500.0f, 2), 0.0f);
-  ds::step(c, st, &a, &rng);
-  const ds::StepResult r = ds::step(c, st, &b, &rng);
+  const ds::Sample a = motor_room(at(120.0f, 500.0f, 1), 0.4f, 1.0f);
+  const ds::Sample b = motor_room(at(120.0f, 500.0f, 2), 0.4f, 1.0f);
+  ds::step(c, st, &a);
+  const ds::StepResult r = ds::step(c, st, &b);
   CHECK(write_to(r, ds::Write::Target::Flood) != nullptr);
   CHECK(write_to(r, ds::Write::Target::PortEngine) != nullptr);
+  CHECK(write_to(r, ds::Write::Target::StarboardEngine) != nullptr);
 }

@@ -42,20 +42,18 @@ APE_ACT_TEMPLATE = "build/x86-release/ape.act"
 # layout here is the contract with that header: change the two together, and
 # bump the version.
 DEPTH_STRESS_MAGIC = b"APEDPTH1"
-DEPTH_STRESS_VERSION = 1
+DEPTH_STRESS_VERSION = 2  # 2: motor flooding damage replaced wear (ticket 31)
 DEPTH_STRESS_FIELDS = [
     # (name, offset in the struct, what the patcher writes there)
     ("tier2_depth_m", 12, "metres"),
-    ("t1_seep_per_s", 16, "leakage %/min / 6000"),
-    ("t1_wear_amount", 20, "wear amount % / 100"),
-    ("t1_wear_chance_per_s", 24, "1 / (60 * wear rate min)"),
+    ("flood_threshold", 16, "flooding threshold % / 100"),
+    ("motor_damage_per_s", 20, "motor damage %/game-s / 100"),
+    ("t1_seep_per_s", 24, "leakage %/min / 6000"),
     ("t1_hull_mult", 28, "multiplier"),
     ("t2_seep_per_s", 32, "leakage %/min / 6000"),
-    ("t2_wear_amount", 36, "wear amount % / 100"),
-    ("t2_wear_chance_per_s", 40, "1 / (60 * wear rate min)"),
-    ("t2_hull_mult", 44, "multiplier"),
+    ("t2_hull_mult", 36, "multiplier"),
 ]
-DEPTH_STRESS_SIZE = 48
+DEPTH_STRESS_SIZE = 40
 
 # h.sie appends .pcode at VA 0x633000 / raw 0x145000 and .pconst at VA 0x63C000 /
 # raw 0x14E000 -- the same delta for both (docs/re-notes/03, sec.1).

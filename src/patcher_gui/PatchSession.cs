@@ -698,10 +698,10 @@ namespace ApePatcher
                     + "Tier-2 depth " + Fmt.Int((int)PatchState.Tier2DepthMin) + "-"
                     + Fmt.Int((int)PatchState.Tier2DepthMax) + " m, leakage "
                     + Fmt.Int((int)PatchState.LeakageMin) + "-" + Fmt.Int((int)PatchState.LeakageMax)
-                    + " %/min, wear amount " + Fmt.Int((int)PatchState.WearAmountMin) + "-"
-                    + Fmt.Int((int)PatchState.WearAmountMax) + " %, wear rate "
-                    + Fmt.Int((int)PatchState.WearRateMin) + "-" + Fmt.Int((int)PatchState.WearRateMax)
-                    + " min, hull multiplier " + Fmt.F1(PatchState.HullMultMin) + "-"
+                    + " %/min, flooding threshold " + Fmt.Int((int)PatchState.FloodThresholdMin) + "-"
+                    + Fmt.Int((int)PatchState.FloodThresholdMax) + " %, motor damage "
+                    + Fmt.Int((int)PatchState.MotorDamageMin) + "-" + Fmt.Int((int)PatchState.MotorDamageMax)
+                    + " %/s, hull multiplier " + Fmt.F1(PatchState.HullMultMin) + "-"
                     + Fmt.F1(PatchState.HullMultMax) + ".";
                 return report;
             }

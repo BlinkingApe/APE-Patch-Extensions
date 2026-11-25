@@ -53,14 +53,18 @@ namespace ApePatcher
             + "The electric engine room must be crewed for its leakage to be pumped. An "
             + "uncrewed one keeps filling, to 80% at most." + "\n" + LaunchNote;
 
-        public const string WearAmountTip =
-            "How much of one electric engine's health a single hit takes, in percent. 0 "
-            + "turns wear off. Wear never takes an engine past 90% damage, so the crew can "
-            + "always repair it." + "\n" + LaunchNote;
+        public const string FloodThresholdTip =
+            "How full the electric engine room may get, in percent, before running motors "
+            + "start taking damage. This applies at any depth, whatever flooded the room."
+            + "\n" + "Ordering stop protects the motors; so does pumping the room below this "
+            + "level." + "\n" + LaunchNote;
 
-        public const string WearRateTip =
-            "About how many game-minutes pass between hits, on average. The timing is "
-            + "random." + "\n" + LaunchNote;
+        public const string MotorDamageTip =
+            "How much of each electric motor's health is lost per game-second while the "
+            + "room is at or above the flooding threshold and the motors are ordered to run "
+            + "(ahead or astern). 0 turns motor damage off." + "\n"
+            + "Ordering stop protects the motors. Motor damage never takes a motor past 90%, "
+            + "so the crew can always repair it." + "\n" + LaunchNote;
 
         public const string HullMultTip =
             "Whatever hull damage the boat takes in this tier is multiplied by this. 1.0 "
@@ -110,13 +114,11 @@ namespace ApePatcher
             if (problem != null) throw new PatchException(problem);
             byte[] image = (byte[])template.Clone();
             Put(image, s, "tier2_depth_m", d.Tier2Depth);
+            Put(image, s, "flood_threshold", PatchState.FloodFraction(d.FloodThreshold));
+            Put(image, s, "motor_damage_per_s", PatchState.MotorDamagePerSecond(d.MotorDamage));
             Put(image, s, "t1_seep_per_s", PatchState.SeepPerSecond(d.Leakage1));
-            Put(image, s, "t1_wear_amount", PatchState.WearDamage(d.WearAmount1));
-            Put(image, s, "t1_wear_chance_per_s", PatchState.WearChancePerSecond(d.WearRate1));
             Put(image, s, "t1_hull_mult", d.HullMult1);
             Put(image, s, "t2_seep_per_s", PatchState.SeepPerSecond(d.Leakage2));
-            Put(image, s, "t2_wear_amount", PatchState.WearDamage(d.WearAmount2));
-            Put(image, s, "t2_wear_chance_per_s", PatchState.WearChancePerSecond(d.WearRate2));
             Put(image, s, "t2_hull_mult", d.HullMult2);
             return image;
         }
@@ -129,18 +131,11 @@ namespace ApePatcher
             into.Tier2Depth = Math.Round(Get(image, s, "tier2_depth_m"), 2);
             into.Leakage1 = Math.Round(PatchState.LeakageFromSeep(Get(image, s, "t1_seep_per_s")), 2);
             into.Leakage2 = Math.Round(PatchState.LeakageFromSeep(Get(image, s, "t2_seep_per_s")), 2);
-            into.WearAmount1 = Math.Round(PatchState.WearAmountFromDamage(Get(image, s, "t1_wear_amount")), 2);
-            into.WearAmount2 = Math.Round(PatchState.WearAmountFromDamage(Get(image, s, "t2_wear_amount")), 2);
-            into.WearRate1 = RateFrom(Get(image, s, "t1_wear_chance_per_s"), into.WearRate1);
-            into.WearRate2 = RateFrom(Get(image, s, "t2_wear_chance_per_s"), into.WearRate2);
+            into.FloodThreshold = Math.Round(PatchState.ThresholdFromFraction(Get(image, s, "flood_threshold")), 2);
+            into.MotorDamage = Math.Round(PatchState.MotorDamageFromPerSecond(Get(image, s, "motor_damage_per_s")), 2);
             into.HullMult1 = Math.Round(Get(image, s, "t1_hull_mult"), 2);
             into.HullMult2 = Math.Round(Get(image, s, "t2_hull_mult"), 2);
             return true;
-        }
-
-        static double RateFrom(double chance, double fallback)
-        {
-            return chance > 0 ? Math.Round(PatchState.WearRateFromChance(chance), 2) : fallback;
         }
 
         static void Put(byte[] image, ApeActStruct s, string field, double value)

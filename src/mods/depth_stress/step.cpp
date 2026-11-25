@@ -24,6 +24,10 @@ const char* implausible(const Sample& s) {
   return nullptr;
 }
 
+bool telegraph_plausible(float t) {
+  return t >= -1.0f && t <= 1.0f;  // false for NaN and the infinities
+}
+
 namespace {
 
 void baseline(StepState& st, const Sample& s, float hull) {
@@ -36,8 +40,7 @@ void baseline(StepState& st, const Sample& s, float hull) {
 
 }  // namespace
 
-StepResult step(const Constants& c, StepState& st, const Sample* sample,
-                Random* rng) {
+StepResult step(const Constants& c, StepState& st, const Sample* sample) {
   StepResult r;
   // 1. No sample (or one that fails a gate): nothing is written, and the
   //    next sample re-baselines.
@@ -60,7 +63,7 @@ StepResult step(const Constants& c, StepState& st, const Sample* sample,
     return r;
   }
 
-  // 3. dt in whole game-seconds; seepage and wear (25, 26) need dt > 0.
+  // 3. dt in whole game-seconds; seepage and motor damage (25, 31) need dt > 0.
   const std::int32_t dt = s.clock_s - st.clock_s;
 
   // 4. The tier, from this sample. E and the onset are stock's crush ramp
@@ -123,24 +126,23 @@ StepResult step(const Constants& c, StepState& st, const Sample* sample,
       r.writes.push_back({Write::Target::Flood, s.seep_flood, next});
   }
 
-  // 7. Electric-engine wear: dt Bernoulli trials at q, one per game-second.
-  //    Hits are tallied on local copies so a poll writes each engine once.
-  if (tier != Tier::None && rng && k.wear_amount > 0.0f && dt > 0) {
-    float damage[2] = {s.engine_port, s.engine_stbd};
-    bool hit[2] = {false, false};
-    for (std::int32_t i = 0; i < dt; ++i) {
-      if (!(rng->uniform() < static_cast<double>(k.wear_chance_per_s))) continue;
-      const int e = rng->uniform() < 0.5 ? 0 : 1;  // 0 port, 1 starboard
-      if (damage[e] >= kWearCeiling) continue;
-      const float next = damage[e] + k.wear_amount;
-      damage[e] = next < kWearCeiling ? next : kWearCeiling;
-      hit[e] = true;
-    }
+  // 7. Motor flooding damage (ADR-0012): at any depth, in a tier or not. The
+  //    trigger is the motor room's flood as read this poll (s.seep_flood),
+  //    never the value seepage just wrote above. Astern (non-zero) counts as
+  //    running; -0.0 compares equal to 0, so it is stop.
+  const bool running = s.has_telegraph && s.telegraph != 0.0f;
+  if (running && s.has_seep && s.seep_flood >= c.flood_threshold &&
+      c.motor_damage_per_s > 0.0f && dt > 0) {
+    const float step_amount = c.motor_damage_per_s * static_cast<float>(dt);
     const float old[2] = {s.engine_port, s.engine_stbd};
     const Write::Target target[2] = {Write::Target::PortEngine,
                                      Write::Target::StarboardEngine};
-    for (int e = 0; e < 2; ++e)
-      if (hit[e]) r.writes.push_back({target[e], old[e], damage[e]});
+    for (int e = 0; e < 2; ++e) {
+      if (old[e] >= kMotorCeiling) continue;  // and never lowered
+      const float next = old[e] + step_amount;
+      r.writes.push_back(
+          {target[e], old[e], next < kMotorCeiling ? next : kMotorCeiling});
+    }
   }
 
   baseline(st, s, new_hull);

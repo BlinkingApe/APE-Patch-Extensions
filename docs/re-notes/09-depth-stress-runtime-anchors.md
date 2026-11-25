@@ -134,6 +134,50 @@ what motor flooding damage reads (ticket 31). It never asks the boat's class; th
 
 **No match is not a skip.** If no zone maps to 4, or the list is unreadable, the
 sample stands without seepage (`has_seep` false) and `ape_act.log` says
-`no seepage: <why>` when the reason changes. The hull multiplier and wear carry on. A
+`no seepage: <why>` when the reason changes. The hull multiplier carries on; motor
+flooding damage needs this flood, so it stops too. A
 flood read outside [0, 1] fails the plausibility gate like every other value, so it
 skips the poll.
+
+## Telegraph anchor (ticket 31, 2026-11-25)
+
+Static only; ticket 32 proves the read live (submerged, astern, save-load). Motor flooding
+damage ([ADR-0012](../adr/0012-motor-damage-follows-the-water-in-the-motor-room.md)) needs
+the ordered machine telegraph. h.sie's diesel cave copies it to `0x0063E1D4` once a
+second, before its enable-flag test, so it is kept whether or not Diesel Damage is on
+(`04-diesel-damage-signature.md` §2 and "a free, always-maintained telegraph anchor").
+Nothing in stock code names `0x63E1D4`. The anchor is the cave's own **store** of it.
+
+**Proven on:** OAE 1.5.2, `C:\games\OneAlex Extended 1.5.2\sh3.exe`, sha256
+`20360fe8398692172c7cc36e4337f1d5936ee9c9e0eac97e4c3214b2eb132561`, hashed this session.
+Same method as above (`pefile`, all executable sections, operand wildcarded).
+
+| Root | Signature | Root at | Instruction (VA on `20360fe8`) | Stock? |
+|---|---|---|---|---|
+| Telegraph `0x0063E1D4` | `8B 80 20 03 00 00 8B 00 89 05 ?? ?? ?? ??` | +10 | `mov eax,[eax+0x320]; mov eax,[eax]; mov [0x63E1D4],eax` @`0x00635065` (`.pcode`) | **no, h.sie's cave** |
+
+The store is `89 05 <imm32>`, not the one-byte `A3` form note 04's listing shorthands as
+"`a3 ->`". The `+0x320` is the engine object's telegraph slot, so the pattern also says
+"this is the telegraph". One match across all executable sections, recovering
+`0x0063E1D4`, in every binary on hand:
+
+| Binary | sha256 (short) | Telegraph |
+|---|---|---|
+| OAE 1.5.2 (target) | `20360fe8` | 1 → `0x63E1D4` |
+| OAE 2.0 (TEST_2) | `2525d418` | 1, same |
+| OAE 2.0 (TEST_3) | `bb453f40` | 1, same |
+| GWC-KC 2.5 | `b5fbcadb` | 1, same |
+| `data/exe_with_hsie_patches/sh3_vanilla.exe` | `ba59e4c8` | 1, same |
+
+(The OAE 2.0 TEST_2 and KC hashes differ from the ones in the table further up. Why was
+not looked into; the scan resolves on these files all the same.)
+
+Read: float `[0x63E1D4]`. 0.0 is stop, 1.0 flank ahead. Astern's encoding is not yet
+confirmed (ticket 32); any non-zero value counts as running. The reader's gate is
+`depth_stress::telegraph_plausible`: a finite value in [-1, 1].
+
+**Failure is not a skip.** An unreadable or implausible value leaves the sample standing
+with `has_telegraph` false: no motor damage that poll, everything else runs, and
+`ape_act.log` says `no motor damage: <why>` when the reason changes. Unlike the other
+anchors, an unresolved telegraph signature skips nothing either: it is logged once at loop
+start, and every poll runs without motor damage ("telegraph anchor unresolved").

@@ -317,12 +317,6 @@ namespace ApePatcher.Ui
             AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
                 1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage1; },
                 delegate(double v) { desired.Leakage1 = v; });
-            AddDepth(depthStack, "Wear amount", "% per hit", PatchState.WearAmountMin, PatchState.WearAmountMax,
-                1, 0.5m, DepthStress.WearAmountTip, delegate { return desired.WearAmount1; },
-                delegate(double v) { desired.WearAmount1 = v; });
-            AddDepth(depthStack, "Wear rate", "game-minutes between hits", PatchState.WearRateMin,
-                PatchState.WearRateMax, 0, 5, DepthStress.WearRateTip, delegate { return desired.WearRate1; },
-                delegate(double v) { desired.WearRate1 = v; });
             AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
                 (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
                 delegate { return desired.HullMult1; }, delegate(double v) { desired.HullMult1 = v; });
@@ -330,15 +324,16 @@ namespace ApePatcher.Ui
             AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
                 1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage2; },
                 delegate(double v) { desired.Leakage2 = v; });
-            AddDepth(depthStack, "Wear amount", "% per hit", PatchState.WearAmountMin, PatchState.WearAmountMax,
-                1, 0.5m, DepthStress.WearAmountTip, delegate { return desired.WearAmount2; },
-                delegate(double v) { desired.WearAmount2 = v; });
-            AddDepth(depthStack, "Wear rate", "game-minutes between hits", PatchState.WearRateMin,
-                PatchState.WearRateMax, 0, 5, DepthStress.WearRateTip, delegate { return desired.WearRate2; },
-                delegate(double v) { desired.WearRate2 = v; });
             AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
                 (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
                 delegate { return desired.HullMult2; }, delegate(double v) { desired.HullMult2 = v; });
+            depthStack.Controls.Add(Widgets.Label("Motor flooding — at any depth", Look.Bold, Look.Dim));
+            AddDepth(depthStack, "Flooding threshold", "% flood", PatchState.FloodThresholdMin,
+                PatchState.FloodThresholdMax, 0, 5, DepthStress.FloodThresholdTip,
+                delegate { return desired.FloodThreshold; }, delegate(double v) { desired.FloodThreshold = v; });
+            AddDepth(depthStack, "Motor damage", "% per game-second", PatchState.MotorDamageMin,
+                PatchState.MotorDamageMax, 1, 0.5m, DepthStress.MotorDamageTip,
+                delegate { return desired.MotorDamage; }, delegate(double v) { desired.MotorDamage = v; });
 
             depthNote = Widgets.Wrapped("", Look.Base, Look.Warn, inner);
             depthNote.Margin = new Padding(22, 2, 0, 12);

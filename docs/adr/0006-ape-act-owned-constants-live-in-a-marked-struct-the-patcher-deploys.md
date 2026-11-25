@@ -3,7 +3,7 @@
 > **Status note (2026-11-25): the `ape.act` half is implemented, for depth stress**
 > (`.scratch/depth-pressure-stress/`, ticket 21). Crush-depth damage was dropped (ADR-0008);
 > depth stress is the first mod with a struct. `ape.act` carries it in `.data`
-> (`src/mods/depth_stress/constants.hpp`, marker `APEDPTH1`, version 1, 48 bytes of float32
+> (`src/mods/depth_stress/constants.hpp`, marker `APEDPTH1`, version 2 since ticket 31 (40 bytes; version 1 was 48), float32
 > fields in runtime units), verifies it at startup and fails inert on a mismatch. A Release
 > build records the struct's file offset and field layout under the manifest's `apeAct` key.
 > The patcher half (embed, deploy, read-back, delete on revert) is implemented too (ticket 22):

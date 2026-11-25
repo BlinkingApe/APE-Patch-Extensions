@@ -14,7 +14,6 @@
 #include <windows.h>
 
 #include <atomic>
-#include <random>
 #include <string>
 
 #include "ape_act/depth_stress_constants.hpp"
@@ -57,13 +56,14 @@ void log_constants(ape::Logger& log, const ds::Constants& c) {
            c.tier2_depth_m, ds::kTier1DepthM);
   for (int t = 0; t < 2; ++t) {
     const ds::TierConstants& k = c.tier[t];
-    log.logf("[depth-stress] tier %d: seep %.6g /s, wear %.6g per hit at "
-             "%.6g /s, hull x%.4g",
-             t + 1, k.seep_per_s, k.wear_amount, k.wear_chance_per_s,
-             k.hull_mult);
+    log.logf("[depth-stress] tier %d: seep %.6g /s, hull x%.4g", t + 1,
+             k.seep_per_s, k.hull_mult);
   }
-  log.logf("[depth-stress] ceilings (fixed): seep %.2f, wear %.2f",
-           ds::kSeepCeiling, ds::kWearCeiling);
+  log.logf("[depth-stress] motor flooding: threshold %.4g, damage %.6g /s "
+           "(any depth)",
+           c.flood_threshold, c.motor_damage_per_s);
+  log.logf("[depth-stress] ceilings (fixed): seep %.2f, motor %.2f",
+           ds::kSeepCeiling, ds::kMotorCeiling);
 }
 
 // Logs a skipped poll's reason: at once when it differs from the last one
@@ -100,8 +100,8 @@ class SkipLog {
   unsigned long repeats_ = 0;
 };
 
-void log_writes(ape::Logger& log, const ds::Sample& s, const ds::StepResult& r,
-                bool ok) {
+void log_writes(ape::Logger& log, const ds::Constants& c, const ds::Sample& s,
+                const ds::StepResult& r, bool ok) {
   for (const ds::Write& w : r.writes) {
     if (w.target == ds::Write::Target::Flood) {
       log.logf("[depth-stress] seep%s: D %.2f m, tier %d, dt %ld s, flood "
@@ -112,10 +112,11 @@ void log_writes(ape::Logger& log, const ds::Sample& s, const ds::StepResult& r,
     }
     if (w.target == ds::Write::Target::PortEngine ||
         w.target == ds::Write::Target::StarboardEngine) {
-      log.logf("[depth-stress] wear%s: D %.2f m, tier %d, dt %ld s, %s engine "
-               "%.4f -> %.4f",
-               ok ? "" : " FAILED", s.depth_m, static_cast<int>(r.diag.tier),
-               static_cast<long>(r.diag.dt_s),
+      // The flood logged is the one read this poll, the trigger.
+      log.logf("[depth-stress] motor%s: D %.2f m, dt %ld s, flood %.4f >= "
+               "threshold %.4f, telegraph %.4f, %s engine %.4f -> %.4f",
+               ok ? "" : " FAILED", s.depth_m, static_cast<long>(r.diag.dt_s),
+               s.seep_flood, c.flood_threshold, s.telegraph,
                w.target == ds::Write::Target::PortEngine ? "port" : "starboard",
                w.old_value, w.value);
       continue;
@@ -155,29 +156,32 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
   else
     log.logf("[depth-stress] anchors: boat root 0x%08lX, depth root 0x%08lX, "
              "clock 0x%08lX, engine root 0x%08lX (+0x%lX), zone head 0x%08lX, "
-             "zone table 0x%08lX",
+             "zone table 0x%08lX, telegraph 0x%08lX",
              static_cast<unsigned long>(anchors.boat_root),
              static_cast<unsigned long>(anchors.depth_root),
              static_cast<unsigned long>(anchors.clock),
              static_cast<unsigned long>(anchors.engine_root),
              static_cast<unsigned long>(anchors.engine_block_off),
              static_cast<unsigned long>(anchors.zone_head),
-             static_cast<unsigned long>(anchors.zone_table));
+             static_cast<unsigned long>(anchors.zone_table),
+             static_cast<unsigned long>(anchors.telegraph));
+  if (!anchors.failed && anchors.telegraph_why)
+    log.logf("[depth-stress] anchor 'telegraph' unresolved (%s): no motor "
+             "damage, the other effects run",
+             anchors.telegraph_why);
 
   SkipLog skips(log);
-  // Seeded once, from the OS entropy source, for the life of the loop.
-  std::random_device entropy;
-  ds::Mt19937Random rng(entropy());
   ds::StepState state{};
   std::uint32_t last_boat = 0;
   const char* last_seep_why = nullptr;
+  const char* last_telegraph_why = nullptr;
   while (!g_stop.load()) {
     ds::Sample sample{};
     ape::game::Targets targets;
     const char* why = nullptr;
     const bool have = ape::game::read_sample(anchors, sample, targets, &why);
     const ds::StepResult r =
-        ds::step(g_loaded, state, have ? &sample : nullptr, &rng);
+        ds::step(g_loaded, state, have ? &sample : nullptr);
 
     bool ok = true;
     for (const ds::Write& w : r.writes) {
@@ -196,7 +200,7 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
           break;
       }
     }
-    if (!r.writes.empty()) log_writes(log, sample, r, ok);
+    if (!r.writes.empty()) log_writes(log, g_loaded, sample, r, ok);
     // The step's baseline assumed its write landed; if it didn't, start over
     // rather than measure the next drop from a hull the game never held.
     if (!ok) state = ds::StepState{};
@@ -220,6 +224,15 @@ DWORD WINAPI depth_stress_thread(LPVOID module) {
         else
           log.logf("[depth-stress] seep compartment found");
         last_seep_why = seep_why;
+      }
+      // Likewise no telegraph value: no motor damage while it lasts.
+      const char* telegraph_why = ape::game::telegraph_unavailable();
+      if (telegraph_why != last_telegraph_why) {
+        if (telegraph_why)
+          log.logf("[depth-stress] no motor damage: %s", telegraph_why);
+        else
+          log.logf("[depth-stress] telegraph readable");
+        last_telegraph_why = telegraph_why;
       }
     }
 

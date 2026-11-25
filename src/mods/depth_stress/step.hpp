@@ -5,11 +5,10 @@
 //
 // It takes the constants, the previous step state and either a sample or "no
 // sample", and returns the writes. Ticket 24 gives it the hull multiplier;
-// seepage (25) and electric-engine wear (26) add their fields to the sample
-// and their writes to the result.
+// seepage (25) and motor flooding damage (31) add their fields to the sample
+// and their writes to the result. It draws no random numbers.
 
 #include <cstdint>
-#include <random>
 #include <vector>
 
 #include "mods/depth_stress/constants.hpp"
@@ -33,31 +32,21 @@ struct Sample {
   // sample is otherwise good).
   float seep_flood;
   bool has_seep;
-};
-
-// The step's source of randomness: uniform doubles in [0, 1). Taken as an
-// input so tests can force hits and seed runs (PRD "The depth-stress step").
-class Random {
- public:
-  virtual ~Random() = default;
-  virtual double uniform() = 0;
-};
-
-// The shipped generator: a 32-bit Mersenne twister, never MSVC rand()
-// (ticket 12's trap), seeded once by the caller.
-class Mt19937Random : public Random {
- public:
-  explicit Mt19937Random(std::uint32_t seed) : gen_(seed) {}
-  double uniform() override { return dist_(gen_); }
-
- private:
-  std::mt19937 gen_;
-  std::uniform_real_distribution<double> dist_{0.0, 1.0};
+  // The ordered machine telegraph, [0x0063E1D4]: 0.0 is stop, 1.0 is flank
+  // ahead, astern is not yet confirmed (ticket 32) but counts as running.
+  // `has_telegraph` is false when the reader got no plausible value (then
+  // there is no motor damage this poll; everything else runs).
+  float telegraph;
+  bool has_telegraph;
 };
 
 // Null when every plausibility gate holds (PRD "Plausibility gates"), else
 // why not. A sample that fails one is treated as no sample.
 const char* implausible(const Sample& s);
+
+// The telegraph's own gate, applied by the reader: a finite value in [-1, 1].
+// A value that fails it means "no telegraph value", not "no sample".
+bool telegraph_plausible(float t);
 
 // The seep compartment: the electric engine room, compartment 4 on every class
 // (ADR-0012). Its water is also what motor flooding damage reads (ticket 31).
@@ -108,10 +97,9 @@ struct StepResult {
   bool baselined = false;
 };
 
-// `sample` is null when the reader couldn't produce one this poll. `rng` feeds
-// electric-engine wear; with none, there is no wear.
+// `sample` is null when the reader couldn't produce one this poll.
 StepResult step(const Constants& constants, StepState& state,
-                const Sample* sample, Random* rng = nullptr);
+                const Sample* sample);
 
 }  // namespace depth_stress
 }  // namespace ape

@@ -374,10 +374,10 @@
     "structs": [
       {
         "id": "depth-stress",
-        "offset": 35336,
-        "size": 48,
+        "offset": 34824,
+        "size": 40,
         "magic": "4150454450544831",
-        "version": 1,
+        "version": 2,
         "fields": [
           {
             "id": "tier2_depth_m",
@@ -386,22 +386,22 @@
             "note": "metres"
           },
           {
-            "id": "t1_seep_per_s",
+            "id": "flood_threshold",
             "at": 16,
             "type": "f32",
-            "note": "leakage %/min / 6000"
+            "note": "flooding threshold % / 100"
           },
           {
-            "id": "t1_wear_amount",
+            "id": "motor_damage_per_s",
             "at": 20,
             "type": "f32",
-            "note": "wear amount % / 100"
+            "note": "motor damage %/game-s / 100"
           },
           {
-            "id": "t1_wear_chance_per_s",
+            "id": "t1_seep_per_s",
             "at": 24,
             "type": "f32",
-            "note": "1 / (60 * wear rate min)"
+            "note": "leakage %/min / 6000"
           },
           {
             "id": "t1_hull_mult",
@@ -416,20 +416,8 @@
             "note": "leakage %/min / 6000"
           },
           {
-            "id": "t2_wear_amount",
-            "at": 36,
-            "type": "f32",
-            "note": "wear amount % / 100"
-          },
-          {
-            "id": "t2_wear_chance_per_s",
-            "at": 40,
-            "type": "f32",
-            "note": "1 / (60 * wear rate min)"
-          },
-          {
             "id": "t2_hull_mult",
-            "at": 44,
+            "at": 36,
             "type": "f32",
             "note": "multiplier"
           }
