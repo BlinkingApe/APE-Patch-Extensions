@@ -67,7 +67,6 @@ namespace ApePatcher
             if (plan.Touches(Manifest.DieselPatchId)) r.Groups.Add(Diesel(desired));
             if (plan.Touches(CrushTime.PatchId)) r.Groups.Add(Crush(install, plan, desired));
             if (plan.Touches(MotorZoneFix.PatchId)) r.Groups.Add(MotorZone(desired));
-            if (plan.Touches(ClockCave.PatchId)) r.Groups.Add(Clock(desired));
             if (plan.Touches(DepthStress.PatchId)) r.Groups.Add(Depth(plan, desired));
             r.FeatureCount = r.Groups.Count;
 
@@ -94,29 +93,6 @@ namespace ApePatcher
                 g.Lines.Add(new ReviewLine("The starboard electric motor goes back to the bow quarters, "
                     + "as this install shipped: its damage shows there, and only a repair team sent "
                     + "there repairs it.", false));
-            }
-            g.Lines.Add(new ReviewLine("Takes effect the next time you start SH3.", false));
-            return g;
-        }
-
-        /// <summary>The depth stress clock fix (ticket 36), in what it does for
-        /// depth stress: no address, no byte.</summary>
-        static ReviewGroup Clock(PatchState d)
-        {
-            ReviewGroup g = new ReviewGroup();
-            g.Title = ClockCave.PatchName;
-            if (d.ClockCaveApplied)
-            {
-                g.Lines.Add(new ReviewLine("Adds the small piece of h.sie's code that OAE already "
-                    + "carries, so depth stress can read the game clock. Without it, depth stress "
-                    + "does nothing on this install.", false));
-                g.Lines.Add(new ReviewLine("APE keeps a copy of the game as it was, and takes the "
-                    + "code out again when you uncheck this.", false));
-            }
-            else
-            {
-                g.Lines.Add(new ReviewLine("Takes that code out of sh3.exe again. Depth stress will "
-                    + "then do nothing on this install.", d.DepthApplied));
             }
             g.Lines.Add(new ReviewLine("Takes effect the next time you start SH3.", false));
             return g;
@@ -242,7 +218,7 @@ namespace ApePatcher
                 ? "hull damage is multiplied by " + Fmt.F2(mult)
                 : "hull multiplier off (1.0)";
             string seep = leak > 0
-                ? "water seeps in at " + Fmt.F1(leak) + "% of the electric engine room per game-minute"
+                ? "water seeps in at " + Fmt.F1To2(leak) + "% of the electric engine room per game-minute"
                 : "leakage off (0)";
             return hull + "; " + seep + ".";
         }

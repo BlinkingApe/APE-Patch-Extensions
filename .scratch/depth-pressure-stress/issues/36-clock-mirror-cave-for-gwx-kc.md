@@ -150,3 +150,19 @@ These are the bytes OAE 1.5.2 and `data/exe_with_hsie_patches/sh3_vanilla.exe` a
 - Check the Depth stress clock fix as well as Depth stress, and apply.
 - `ape_act.log` should no longer say `anchor 'clock' unresolved`.
 - Seepage should start below 100 m.
+
+### 2026-11-25: the clock code now goes in with depth stress (owner's request)
+
+- There is no separate checkbox any more. Checking **Depth stress** on an exe that lacks h.sie's
+  cave (state `Missing`) also writes the cave and keeps `sh3.exe.ape-orig`. Unchecking depth
+  stress takes out APE's cave and deletes the copy.
+- If `ape.act` is already deployed but the cave is missing (a KC install patched with v1.14
+  before this fix), opening APE and pressing Apply adds the cave.
+- Review shows it inside the Depth stress group, with no extra line. The apply summary says
+  "sh3.exe clock code added/removed".
+- The Depth stress note warns only when APE can't add the cave (`Unrecognised`,
+  `ChangedByOtherMod`, `Unreadable`).
+- The player-facing text no longer mentions OAE: it calls this h.sie's clock code.
+- In the same commit, the leakage defaults became **0.35 / 0.6 %/min** (tier 1 / tier 2), set
+  by the owner. Changed: `kDefaultConstants`, `PatchState`, the leakage fields (2 decimals,
+  0.05 steps), ADR-0012 (as a note) and readme.html.

@@ -19,9 +19,9 @@ TEST_CASE("the shipped constants carry the current defaults in runtime units") {
   // Patcher conversions (PRD Fields): leakage p %/min -> p/6000 per game-s,
   // flooding threshold t % -> t/100, motor damage a %/game-s -> a/100.
   CHECK(c.tier2_depth_m == doctest::Approx(150.0));
-  // Leakage halved to 2 / 7.5 %/min (ticket 30, ADR-0012).
-  CHECK(c.tier[0].seep_per_s == doctest::Approx(2.0 / 6000.0));
-  CHECK(c.tier[1].seep_per_s == doctest::Approx(7.5 / 6000.0));
+  // Leakage 0.35 / 0.6 %/min (owner, 2026-11-25).
+  CHECK(c.tier[0].seep_per_s == doctest::Approx(0.35 / 6000.0));
+  CHECK(c.tier[1].seep_per_s == doctest::Approx(0.6 / 6000.0));
   // Motor flooding damage (ADR-0012, Stoss): 20 %, 10 %/game-s.
   CHECK(c.flood_threshold == doctest::Approx(0.2));
   CHECK(c.motor_damage_per_s == doctest::Approx(0.1));

@@ -249,7 +249,8 @@ namespace ApePatcher.Tests
         /// <summary>Stock's clock store, `mov [esi+0x150],eax`, as GWX-KC 2.5's
         /// sh3.exe (e2b190e1) holds it.</summary>
         public static readonly byte[] StockClockStore = Hex.ToBytes("898650010000");
-        /// <summary>OAE 1.5.2's `jmp 0x51CFC7; nop` and the cave it jumps to.</summary>
+        /// <summary>h.sie's `jmp 0x51CFC7; nop` and the cave it jumps to, as OAE 1.5.2's
+        /// sh3.exe carries them.</summary>
         public static readonly byte[] CaveJump = Hex.ToBytes("e9adae050090");
         public static readonly byte[] CaveBody = Hex.ToBytes("a380ff6300898650010000e94451faff");
 

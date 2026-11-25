@@ -26,13 +26,13 @@ APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardco
   there repairs it. This optional fix sets it back to 30, keeping the
   original as `Zones.cfg.ape-orig` for the revert. Without it, send your
   repair team to the bow quarters to fix the starboard motor.
-- **Depth stress clock fix** — Depth stress reads the game clock through a
-  small cave of h.sie's in `sh3.exe` (at `0x004C2115`, mirroring the clock to
-  `0x0063FF80`). OAE's `sh3.exe` has it; GWX-KC 2.5's does not, so on KC depth
-  stress does nothing without this fix. The patcher offers it only on an
-  `sh3.exe` that lacks the cave and holds stock code at both sites, writes
-  OAE's exact bytes, and keeps the original as `sh3.exe.ape-orig`. Unchecking
-  it puts both sites back and deletes the copy. OAE never sees it.
+- **h.sie's clock code** — Depth stress reads the game clock through a small
+  cave of h.sie's in `sh3.exe` (at `0x004C2115`, mirroring the clock to
+  `0x0063FF80`). Some installs' `sh3.exe` lack it, GWX-KC 2.5's among them.
+  There, checking depth stress also writes h.sie's cave bytes into `sh3.exe`,
+  keeping the original as `sh3.exe.ape-orig`; unchecking depth stress puts
+  both sites back and deletes the copy. APE writes it only where both sites
+  hold stock code, and never touches an `sh3.exe` that already has the cave.
 
 Diesel damage builds on h.sie's own Diesel Damage switch, which is off by
 default in OAE and GWX. If the patcher shows it as unavailable, turn the

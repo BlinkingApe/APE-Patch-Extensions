@@ -1,17 +1,18 @@
-// The depth stress clock fix (depth-pressure-stress ticket 36).
+// h.sie's clock cave, added with depth stress (depth-pressure-stress ticket 36).
 //
 // ape.act reads the mission clock from 0x0063FF80, a mirror that h.sie's
 // clock cave writes: at 0x004C2115 stock's `mov [esi+0x150],eax` becomes a jump
 // to 0x0051CFC7, which stores the clock to the mirror, does the stock store and
 // jumps back. ape.act finds the mirror by that cave's bytes (its 'clock' anchor).
-// OAE 1.5.2's sh3.exe has the cave; GWX-KC 2.5's (e2b190e1) does not, so there
-// the anchor never resolves and depth stress does nothing.
+// Most h.sie installs' sh3.exe carry the cave (OAE 1.5.2's does); GWX-KC 2.5's
+// (e2b190e1) does not, so there the anchor never resolves and depth stress does
+// nothing.
 //
-// APE offers to write OAE's exact bytes into an exe that has stock's store at
+// With depth stress, APE writes h.sie's cave bytes into an exe that has stock's store at
 // 0x004C2115, zero slack at 0x0051CFC7, and no match for the clock signature
 // anywhere. It keeps sh3.exe as it was in sh3.exe.ape-orig before its first
-// write; that copy is also what marks the cave as APE's, since OAE's own cave is
-// byte-identical. Revert writes the two sites back and deletes the copy. An exe
+// write; that copy is also what marks the cave as APE's, since h.sie's own cave
+// is byte-identical. Revert writes the two sites back and deletes the copy. An exe
 // in any other state is never written.
 
 using System;
@@ -21,8 +22,8 @@ namespace ApePatcher
 {
     public enum ClockCaveState
     {
-        NotNeeded,          // the clock signature already resolves: h.sie's own cave (OAE)
-        Missing,            // stock store, empty slack, no signature: the cave is offered
+        NotNeeded,          // the clock signature already resolves: h.sie's own cave
+        Missing,            // stock store, empty slack, no signature: APE adds it with depth stress
         Applied,            // APE's cave, beside APE's copy of sh3.exe
         ChangedByOtherMod,  // APE's copy is there, but the sites no longer hold either state
         Unrecognised,       // no signature, but the sites hold something APE doesn't know
@@ -47,7 +48,6 @@ namespace ApePatcher
     public static class ClockCave
     {
         public const string PatchId = "clock-cave";
-        public const string PatchName = "Depth stress clock fix";
         public const string OrigSuffix = ".ape-orig";
 
         public const int SiteOffset = 0xC2115;      // VA 0x004C2115, stock's clock store

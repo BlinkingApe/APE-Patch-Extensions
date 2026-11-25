@@ -29,7 +29,8 @@ This ADR records why a depth-stress feature damages motors at 50 m.
   Past stock's total power cut (0.7 flood) the motors still take damage until the player
   orders stop. That is "put the motors out of service".
 - **Defaults (Stoss's recommendation, 2026-11-25):** threshold 20 % (range 5–95), amount
-  10 % per game-second (range 0–100, 0 = off). Leakage halved to 2 / 7.5 %/min. The seep
+  10 % per game-second (range 0–100, 0 = off). Leakage halved to 2 / 7.5 %/min (later set to 0.35 / 0.6 %/min by the owner,
+  2026-11-25). The seep
   ceiling stays 0.8.
 
 ## Considered Options

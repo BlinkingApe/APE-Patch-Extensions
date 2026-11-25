@@ -140,7 +140,8 @@ namespace ApePatcher
             if (patchId == CrushTime.PatchId) return ZonWrites.Count > 0;
             if (patchId == MotorZoneFix.PatchId) return Zones != null;
             if (patchId == ClockCave.PatchId) return Clock != null;
-            if (patchId == DepthStress.PatchId) return ApeAct != null;
+            // h.sie's clock cave goes in and out with depth stress (ticket 36).
+            if (patchId == DepthStress.PatchId) return ApeAct != null || Clock != null;
             foreach (PlannedWrite w in Writes)
                 if (w.Patch.Id == patchId) return true;
             return false;
@@ -154,7 +155,7 @@ namespace ApePatcher
                 foreach (PlannedWrite w in Writes)
                     if (!seen.Contains(w.Patch.Id)) seen.Add(w.Patch.Id);
                 return seen.Count + (ZonWrites.Count > 0 ? 1 : 0) + (Zones != null ? 1 : 0)
-                    + (Clock != null ? 1 : 0) + (ApeAct != null ? 1 : 0);
+                    + (ApeAct != null || Clock != null ? 1 : 0);
             }
         }
 
@@ -318,9 +319,10 @@ namespace ApePatcher
                 Install.Zones.State == ZonesState.Faulty || Install.Zones.State == ZonesState.Applied);
             Install.SetApplied(MotorZoneFix.PatchId, Install.Zones.State == ZonesState.Applied);
 
-            // The depth stress clock fix (ticket 36): offered only where h.sie's
-            // clock cave is missing from stock code APE knows, or where APE's own
-            // cave is there to take out. OAE's own cave reads as not needed.
+            // h.sie's clock cave, which depth stress reads the clock through
+            // (ticket 36): APE adds it only where it is missing from stock code APE
+            // knows, and takes out only its own. An exe with h.sie's own cave
+            // reads as not needed.
             try
             {
                 byte[] exeOrig = File.Exists(ExeOrigPath) ? File.ReadAllBytes(ExeOrigPath) : null;
@@ -438,7 +440,6 @@ namespace ApePatcher
                 DepthStress.Read(apeActTemplate, manifest.DepthStressStruct, Current);
 
             Current.MotorZoneFixApplied = Install.Applied(MotorZoneFix.PatchId);
-            Current.ClockCaveApplied = Install.Applied(ApePatcher.ClockCave.PatchId);
             Current.CrushApplied = Install.Applied(CrushTime.PatchId);
             foreach (UBoatZon b in Install.UBoats)
             {
@@ -581,15 +582,17 @@ namespace ApePatcher
             plan.Zones = w;
         }
 
-        /// <summary>The depth stress clock fix's write: the cave when wanted and
-        /// missing, stock's code back when not wanted and APE's cave is there. An
-        /// exe in any other state is never written.</summary>
+        /// <summary>h.sie's clock cave goes in and out with depth stress, which
+        /// can't read the clock without it: the cave when depth stress is wanted
+        /// and the cave is missing, stock's code back when depth stress is not
+        /// wanted and APE's cave is there. An exe in any other state is never
+        /// written.</summary>
         void PlanClockCave(WritePlan plan, PatchState desired)
         {
             ClockCaveState state = Install.ClockCave.State;
-            if (desired.ClockCaveApplied && state == ClockCaveState.Missing)
+            if (desired.DepthApplied && state == ClockCaveState.Missing)
                 plan.Clock = new ClockCaveWrite();
-            else if (!desired.ClockCaveApplied && state == ClockCaveState.Applied)
+            else if (!desired.DepthApplied && state == ClockCaveState.Applied)
             {
                 plan.Clock = new ClockCaveWrite();
                 plan.Clock.Restore = true;
@@ -1079,12 +1082,15 @@ namespace ApePatcher
             if (plan.Zones != null)
                 parts.Add(MotorZoneFix.PatchName + " (" + MotorZoneFix.RelativePath
                     + (plan.Zones.Restore ? " restored)" : ")"));
-            if (plan.Clock != null)
-                parts.Add(ClockCave.PatchName + " (" + Sh3ExeName
-                    + (plan.Clock.Restore ? " restored)" : ")"));
-            if (plan.ApeAct != null)
-                parts.Add(DepthStress.PatchName + " (" + DepthStress.FileName
-                    + (plan.ApeAct.Delete ? " removed)" : " deployed)"));
+            if (plan.ApeAct != null || plan.Clock != null)
+            {
+                List<string> what = new List<string>();
+                if (plan.ApeAct != null)
+                    what.Add(DepthStress.FileName + (plan.ApeAct.Delete ? " removed" : " deployed"));
+                if (plan.Clock != null)
+                    what.Add(Sh3ExeName + (plan.Clock.Restore ? " clock code removed" : " clock code added"));
+                parts.Add(DepthStress.PatchName + " (" + string.Join(", ", what.ToArray()) + ")");
+            }
             return "Written: " + string.Join(", ", parts.ToArray()) + ".";
         }
 

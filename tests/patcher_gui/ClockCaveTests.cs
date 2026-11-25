@@ -1,7 +1,8 @@
-// The depth stress clock fix (depth-pressure-stress ticket 36): GWX-KC 2.5's sh3.exe
-// lacks h.sie's clock-mirror cave, so ape.act's clock anchor never resolves there and
-// depth stress does nothing. APE can write OAE's exact cave bytes into it, keeping
-// sh3.exe.ape-orig, and put the two sites back on revert.
+// h.sie's clock cave, added with depth stress (depth-pressure-stress ticket 36).
+// GWX-KC 2.5's sh3.exe lacks the cave that mirrors the mission clock, so ape.act's
+// clock anchor never resolves there and depth stress does nothing. Checking depth
+// stress on such an exe quietly writes h.sie's cave bytes into it too, keeping
+// sh3.exe.ape-orig; unchecking depth stress puts the two sites back.
 //
 // Like the other session tests, these go through PatchSession only.
 
@@ -13,70 +14,88 @@ namespace ApePatcher.Tests
 {
     static class ClockCaveTests
     {
-        static PatchState Cave(PatchSession session, bool on)
+        static PatchState Depth(PatchSession session, bool on)
         {
             PatchState s = session.Current.Clone();
-            s.ClockCaveApplied = on;
+            s.DepthApplied = on;
             return s;
         }
 
+        static string Copy(Fixtures.Install fx) { return fx.Sh3Exe + ".ape-orig"; }
+
         // -- discovery ---------------------------------------------------------
 
-        public static void Test_AKcShapedExeOffersTheCaveUnapplied()
+        public static void Test_AKcShapedExeNeedsTheCave()
         {
             PatchSession session = Fixtures.KcShaped().Session();
             Check.Equal(ClockCaveState.Missing, session.Install.ClockCave.State, "no cave, stock store");
-            Check.True(session.Install.Available(ClockCave.PatchId), "the cave is offered");
-            Check.False(session.Install.Applied(ClockCave.PatchId), "and not yet applied");
-            Check.False(session.Current.ClockCaveApplied, "so the box opens unchecked");
+            Check.True(session.Install.Available(ClockCave.PatchId), "APE can add it");
+            Check.False(session.Install.Applied(ClockCave.PatchId), "and hasn't yet");
         }
 
         // -- writing -----------------------------------------------------------
 
-        public static void Test_ApplyingWritesOaesCaveAndKeepsACopyOfSh3Exe()
+        public static void Test_CheckingDepthStressAddsTheCaveAndKeepsACopyOfSh3Exe()
         {
             Fixtures.Install fx = Fixtures.KcShaped();
             byte[] before = fx.ExeBytes();
             PatchSession session = fx.Session();
 
-            WriteReport report = session.Apply(Cave(session, true));
+            WriteReport report = session.Apply(Depth(session, true));
             Check.True(report.Ok, report.Message);
-            Check.Contains(ClockCave.PatchName, report.Message, "the confirmation names the fix");
             byte[] after = fx.ExeBytes();
             Check.Bytes(Fixtures.CaveJump, Fixtures.Slice(after, Fixtures.ClockSiteOffset, 6), "the jump");
             Check.Bytes(Fixtures.CaveBody, Fixtures.Slice(after, Fixtures.ClockCaveOffset, 16), "the cave");
             int differing = 0;
             for (int i = 0; i < after.Length; i++) if (after[i] != before[i]) differing++;
             Check.True(differing <= 22, "nothing else in sh3.exe changes");
-            Check.Bytes(before, File.ReadAllBytes(fx.Sh3Exe + ".ape-orig"), "the copy is sh3.exe as it was");
+            Check.Bytes(before, File.ReadAllBytes(Copy(fx)), "the copy is sh3.exe as it was");
+            Check.True(fx.Session().Install.Applied(DepthStress.PatchId), "and ape.act is deployed");
         }
 
         public static void Test_AnAppliedCaveReadsBackWithTheClockResolvingToTheMirror()
         {
             Fixtures.Install fx = Fixtures.KcShaped();
             PatchSession session = fx.Session();
-            Check.True(session.Apply(Cave(session, true)).Ok, "applying");
+            Check.True(session.Apply(Depth(session, true)).Ok, "applying");
 
             PatchSession after = fx.Session();
             Check.Equal(ClockCaveState.Applied, after.Install.ClockCave.State, "reads as APE's");
             Check.Equal(1, after.Install.ClockCave.ClockMatches, "the clock signature matches once");
             Check.Equal(0x0063FF80u, after.Install.ClockCave.ClockTarget, "and names the mirror");
-            Check.True(after.Current.ClockCaveApplied, "so the box opens checked");
+            Check.True(after.Current.DepthApplied, "depth stress opens checked");
             Check.True(after.Plan(after.Current).Empty, "opening and applying changes nothing");
         }
 
-        public static void Test_UncheckingRestoresSh3ExeByteForByteAndRemovesTheCopy()
+        public static void Test_DepthStressDeployedWithoutTheCaveGetsItOnTheNextApply()
+        {
+            // An install where an earlier APE deployed ape.act before it knew to add
+            // the cave: opening and applying, changing nothing else, fixes it.
+            Fixtures.Install fx = Fixtures.KcShaped();
+            File.WriteAllBytes(Path.Combine(fx.Dir, DepthStress.FileName), fx.ApeActTemplate());
+            PatchSession session = fx.Session();
+            Check.True(session.Current.DepthApplied, "depth stress reads as on");
+
+            WritePlan plan = session.Plan(session.Current);
+            Check.True(plan.Touches(ClockCave.PatchId), "the cave is planned");
+            Check.Equal(1, plan.FeatureCount, "as part of depth stress, one feature");
+            Check.True(session.Apply(session.Current).Ok, "applying");
+            Check.Equal(ClockCaveState.Applied, fx.Session().Install.ClockCave.State, "the cave is in");
+        }
+
+        public static void Test_UncheckingDepthStressRestoresSh3ExeByteForByte()
         {
             Fixtures.Install fx = Fixtures.KcShaped();
             byte[] before = fx.ExeBytes();
             PatchSession session = fx.Session();
-            Check.True(session.Apply(Cave(session, true)).Ok, "applying");
+            Check.True(session.Apply(Depth(session, true)).Ok, "applying");
 
             PatchSession after = fx.Session();
-            WriteReport report = after.Apply(Cave(after, false));
+            WriteReport report = after.Apply(Depth(after, false));
             Check.True(report.Ok, report.Message);
             Check.Bytes(before, fx.ExeBytes(), "sh3.exe is back as it was");
-            Check.False(File.Exists(fx.Sh3Exe + ".ape-orig"), "and APE's copy is gone");
+            Check.False(File.Exists(Copy(fx)), "and APE's copy is gone");
+            Check.False(fx.Session().Install.Applied(DepthStress.PatchId), "with ape.act");
             Check.Equal(ClockCaveState.Missing, fx.Session().Install.ClockCave.State, "as it was before APE");
         }
 
@@ -84,35 +103,34 @@ namespace ApePatcher.Tests
         {
             Fixtures.Install fx = Fixtures.KcShaped();
             PatchSession session = fx.Session();
-            Check.True(session.Apply(Cave(session, true)).Ok, "the cave");
+            Check.True(session.Apply(Depth(session, true)).Ok, "depth stress");
             PatchSession second = fx.Session();
             PatchState hull = second.Current.Clone();
             hull.HullApplied = true;
             Check.True(second.Apply(hull).Ok, "then hull repair");
 
             PatchSession third = fx.Session();
-            Check.True(third.Apply(Cave(third, false)).Ok, "taking the cave out");
+            Check.True(third.Apply(Depth(third, false)).Ok, "taking depth stress out");
             PatchSession after = fx.Session();
             Check.True(after.Install.Applied(Manifest.HullPatchId), "hull repair stays");
             Check.Equal(ClockCaveState.Missing, after.Install.ClockCave.State, "the cave is gone");
         }
 
-        public static void Test_AnOaeShapedExeIsNeverOfferedOrWritten()
+        public static void Test_AnExeWithHsiesOwnCaveIsNeverWritten()
         {
             Fixtures.Install fx = Fixtures.OaeShaped();
             byte[] before = fx.ExeBytes();
             PatchSession session = fx.Session();
             Check.Equal(ClockCaveState.NotNeeded, session.Install.ClockCave.State, "h.sie's own cave");
-            Check.False(session.Install.Available(ClockCave.PatchId), "not offered");
-            Check.False(session.Current.ClockCaveApplied, "and not APE's");
+            Check.False(session.Install.Available(ClockCave.PatchId), "nothing to add");
 
-            WriteReport on = session.Apply(Cave(session, true));
+            WriteReport on = session.Apply(Depth(session, true));
             Check.True(on.Ok, on.Message);
-            Check.Equal("Nothing to apply.", on.Message, "asking for it writes nothing");
-            WriteReport off = fx.Session().Apply(Cave(fx.Session(), false));
-            Check.Equal("Nothing to apply.", off.Message, "nor does asking for it off");
-            Check.Bytes(before, fx.ExeBytes(), "sh3.exe untouched");
-            Check.False(File.Exists(fx.Sh3Exe + ".ape-orig"), "no copy made");
+            Check.True(fx.Session().Install.Applied(DepthStress.PatchId), "depth stress deploys");
+            PatchSession again = fx.Session();
+            Check.True(again.Apply(Depth(again, false)).Ok, "and comes out");
+            Check.Bytes(before, fx.ExeBytes(), "sh3.exe untouched either way");
+            Check.False(File.Exists(Copy(fx)), "no copy made");
         }
 
         static void RefusedWith(int offset, byte value, string what)
@@ -123,10 +141,10 @@ namespace ApePatcher.Tests
             File.WriteAllBytes(fx.Sh3Exe, exe);
             PatchSession session = fx.Session();
             Check.Equal(ClockCaveState.Unrecognised, session.Install.ClockCave.State, what);
-            Check.False(session.Install.Available(ClockCave.PatchId), what + ": not offered");
-            Check.Equal("Nothing to apply.", session.Apply(Cave(session, true)).Message, what + ": nothing written");
+            Check.False(session.Install.Available(ClockCave.PatchId), what + ": APE won't add it");
+            Check.True(session.Apply(Depth(session, true)).Ok, what + ": depth stress still applies");
             Check.Bytes(exe, fx.ExeBytes(), what + ": sh3.exe untouched");
-            Check.False(File.Exists(fx.Sh3Exe + ".ape-orig"), what + ": no copy made");
+            Check.False(File.Exists(Copy(fx)), what + ": no copy made");
         }
 
         public static void Test_UnexpectedBytesAtEitherSiteAreRefused()
@@ -142,32 +160,31 @@ namespace ApePatcher.Tests
             Fixtures.Install fx = Fixtures.KcShaped();
             byte[] stock = fx.ExeBytes();
             PatchSession session = fx.Session();
-            Check.True(session.Apply(Cave(session, true)).Ok, "applying");
+            Check.True(session.Apply(Depth(session, true)).Ok, "applying");
             File.WriteAllBytes(fx.Sh3Exe, stock);
 
             PatchSession after = fx.Session();
             Check.Equal(ClockCaveState.Missing, after.Install.ClockCave.State, "missing again");
-            Check.False(after.Current.ClockCaveApplied, "so the box opens unchecked");
-            Check.True(after.Apply(Cave(after, true)).Ok, "and it can be applied again");
+            Check.False(after.Plan(after.Current).Empty, "so applying with depth stress on adds it back");
+            Check.True(after.Apply(after.Current).Ok, "applying");
             Check.Equal(ClockCaveState.Applied, fx.Session().Install.ClockCave.State, "applied");
-            Check.Bytes(stock, File.ReadAllBytes(fx.Sh3Exe + ".ape-orig"), "the copy is still the first one");
+            Check.Bytes(stock, File.ReadAllBytes(Copy(fx)), "the copy is still the first one");
         }
 
         public static void Test_AnExeChangedAfterTheCaveIsLeftAlone()
         {
             Fixtures.Install fx = Fixtures.KcShaped();
             PatchSession session = fx.Session();
-            Check.True(session.Apply(Cave(session, true)).Ok, "applying");
+            Check.True(session.Apply(Depth(session, true)).Ok, "applying");
             byte[] exe = fx.ExeBytes();
             exe[Fixtures.ClockSiteOffset] = 0xCC;
             File.WriteAllBytes(fx.Sh3Exe, exe);
 
             PatchSession after = fx.Session();
             Check.Equal(ClockCaveState.ChangedByOtherMod, after.Install.ClockCave.State, "someone else's now");
-            Check.False(after.Install.Available(ClockCave.PatchId), "not offered");
-            Check.Equal("Nothing to apply.", after.Apply(Cave(after, false)).Message, "unchecking writes nothing");
-            Check.Bytes(exe, fx.ExeBytes(), "sh3.exe untouched");
-            Check.True(File.Exists(fx.Sh3Exe + ".ape-orig"), "nor is APE's copy deleted");
+            Check.True(after.Apply(Depth(after, false)).Ok, "unchecking depth stress");
+            Check.Bytes(exe, fx.ExeBytes(), "doesn't write sh3.exe");
+            Check.True(File.Exists(Copy(fx)), "nor delete APE's copy");
         }
 
         public static void Test_AWriteFailureLeavesNoCopyAndNoPatchedExe()
@@ -184,13 +201,27 @@ namespace ApePatcher.Tests
                 real(path, bytes);
             };
 
-            PatchState want = Cave(session, true);
+            PatchState want = Depth(session, true);
             want.MotorZoneFixApplied = true;
             WriteReport report = session.Apply(want);
             Check.False(report.Ok, "the apply fails");
             Check.Contains("disk full", report.Message, "with the cause");
             Check.Bytes(before, fx.ExeBytes(), "sh3.exe is put back");
-            Check.False(File.Exists(fx.Sh3Exe + ".ape-orig"), "and the copy made this attempt is removed");
+            Check.False(File.Exists(Copy(fx)), "and the copy made this attempt is removed");
+        }
+
+        public static void Test_AnApeActWriteFailurePutsSh3ExeBack()
+        {
+            Fixtures.Install fx = Fixtures.KcShaped();
+            byte[] before = fx.ExeBytes();
+            PatchSession session = fx.Session();
+            session.WriteApeActBytes = delegate(string path, byte[] bytes) { throw new IOException("ape.act locked"); };
+
+            WriteReport report = session.Apply(Depth(session, true));
+            Check.False(report.Ok, "the apply fails");
+            Check.Contains("ape.act locked", report.Message, "with the cause");
+            Check.Bytes(before, fx.ExeBytes(), "sh3.exe is put back");
+            Check.False(File.Exists(Copy(fx)), "and the copy is removed");
         }
 
         public static void Test_ACopyStaysWhenSh3ExeCannotBePutBack()
@@ -210,12 +241,12 @@ namespace ApePatcher.Tests
                 real(path, bytes);
             };
 
-            PatchState want = Cave(session, true);
+            PatchState want = Depth(session, true);
             want.DieselApplied = true;   // diesel damage writes hsie.ini
             WriteReport report = session.Apply(want);
             Check.False(report.Ok, "the apply fails");
             Check.Contains("inconsistent", report.Message, "and says the install is inconsistent");
-            Check.True(File.Exists(fx.Sh3Exe + ".ape-orig"), "the copy stays beside the patched exe");
+            Check.True(File.Exists(Copy(fx)), "the copy stays beside the patched exe");
             Check.Equal(ClockCaveState.Applied, fx.Session().Install.ClockCave.State, "so the cave still reads as APE's");
         }
 
@@ -232,11 +263,11 @@ namespace ApePatcher.Tests
                 real(path, bytes);
             };
 
-            WriteReport report = session.Apply(Cave(session, true));
+            WriteReport report = session.Apply(Depth(session, true));
             Check.False(report.Ok, "the apply fails");
             Check.Contains("access denied", report.Message, "with the cause");
             Check.Bytes(before, fx.ExeBytes(), "sh3.exe unchanged");
-            Check.False(File.Exists(fx.Sh3Exe + ".ape-orig"), "no copy left behind");
+            Check.False(File.Exists(Copy(fx)), "no copy left behind");
         }
 
         public static void Test_ACopyAppearingAfterOpeningRefusesTheWholeApply()
@@ -244,9 +275,9 @@ namespace ApePatcher.Tests
             Fixtures.Install fx = Fixtures.KcShaped();
             byte[] before = fx.ExeBytes();
             PatchSession session = fx.Session();
-            File.WriteAllBytes(fx.Sh3Exe + ".ape-orig", before);
+            File.WriteAllBytes(Copy(fx), before);
 
-            WriteReport report = session.Apply(Cave(session, true));
+            WriteReport report = session.Apply(Depth(session, true));
             Check.False(report.Ok, "refused");
             Check.Contains("changed after APE opened", report.Message, "says why");
             Check.Bytes(before, fx.ExeBytes(), "sh3.exe untouched");
@@ -254,25 +285,21 @@ namespace ApePatcher.Tests
 
         // -- review ------------------------------------------------------------
 
-        public static void Test_TheReviewSaysWhatTheFixDoesForDepthStress()
+        public static void Test_TheCaveIsQuietlyPartOfDepthStressInTheReview()
         {
             Fixtures.Install fx = Fixtures.KcShaped();
             PatchSession session = fx.Session();
-            PatchState on = Cave(session, true);
+            PatchState on = Depth(session, true);
             Review r = Review.Build(session.Install, session.Plan(on), on);
             Check.Equal(1, r.FeatureCount, "one feature");
-            Check.Equal(ClockCave.PatchName, r.Groups[0].Title, "titled by the fix");
-            string text = string.Join("\n", r.Groups[0].Lines.ConvertAll(l => l.Text).ToArray());
-            Check.Contains("depth stress", text, "what it is for");
-            Check.Contains("next time you start SH3", text, "when it takes effect");
-            Check.DoesNotContain("0x", text, "no addresses");
-            Check.DoesNotContain("sh3.exe", text, "no file names");
+            Check.Equal(DepthStress.PatchName, r.Groups[0].Title, "depth stress, no group of its own");
 
             Check.True(session.Apply(on).Ok, "applying");
             PatchSession after = fx.Session();
-            PatchState off = Cave(after, false);
+            PatchState off = Depth(after, false);
             Review back = Review.Build(after.Install, after.Plan(off), off);
-            Check.Equal(ClockCave.PatchName, back.Groups[0].Title, "unchecking shows too");
+            Check.Equal(1, back.FeatureCount, "unchecking: still one feature");
+            Check.Equal(DepthStress.PatchName, back.Groups[0].Title, "depth stress");
         }
     }
 }

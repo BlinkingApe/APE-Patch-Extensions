@@ -53,11 +53,6 @@ namespace ApePatcher.Ui
         Control depthFields;
         List<DepthField> depthInputs = new List<DepthField>();
 
-        // depth stress clock fix (depth-pressure-stress ticket 36)
-        CheckBox clockOn;
-        Label clockTitle, clockState;
-        Control clockRow;
-
         // starboard motor zone fix (depth-pressure-stress ticket 33)
         CheckBox zoneOn;
         Label zoneTitle, zoneState;
@@ -324,14 +319,14 @@ namespace ApePatcher.Ui
                 delegate(double v) { desired.Tier2Depth = v; });
             depthStack.Controls.Add(Widgets.Label("Tier 1 — from 100 m", Look.Bold, Look.Dim));
             AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
-                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage1; },
+                2, 0.05m, DepthStress.LeakageTip, delegate { return desired.Leakage1; },
                 delegate(double v) { desired.Leakage1 = v; });
             AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
                 (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
                 delegate { return desired.HullMult1; }, delegate(double v) { desired.HullMult1 = v; });
             depthStack.Controls.Add(Widgets.Label("Tier 2 — from the tier-2 depth", Look.Bold, Look.Dim));
             AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
-                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage2; },
+                2, 0.05m, DepthStress.LeakageTip, delegate { return desired.Leakage2; },
                 delegate(double v) { desired.Leakage2 = v; });
             AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
                 (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
@@ -347,31 +342,6 @@ namespace ApePatcher.Ui
             depthNote = Widgets.Wrapped("", Look.Base, Look.Warn, inner);
             depthNote.Margin = new Padding(22, 2, 0, 12);
             column.Controls.Add(depthNote);
-
-            // ---- depth stress clock fix: only on an sh3.exe without h.sie's clock cave
-            clockOn = new CheckBox();
-            clockOn.AutoSize = true;
-            clockOn.Text = "";
-            clockTitle = Widgets.Label(ClockCave.PatchName, Look.Bold, SystemColors.ControlText);
-            clockRow = Row(clockOn, clockTitle);
-            column.Controls.Add(clockRow);
-            clockOn.CheckedChanged += delegate { if (!binding) { desired.ClockCaveApplied = clockOn.Checked; Sync(); } };
-
-            clockState = Widgets.Wrapped("", Look.Base, Look.Dim, inner);
-            clockState.Margin = new Padding(22, 2, 0, 12);
-            column.Controls.Add(clockState);
-
-            string clockTip = "Depth stress reads the game clock through a small piece of h.sie's code "
-                + "that OAE's sh3.exe carries and this one does not. Without it, depth stress does "
-                + "nothing here."
-                + Environment.NewLine
-                + "This adds OAE's exact bytes to sh3.exe. APE keeps a copy of sh3.exe as it was, "
-                + "and takes the code out again when you uncheck this."
-                + Environment.NewLine
-                + "Takes effect the next time you start SH3.";
-            tips.SetToolTip(clockOn, clockTip);
-            tips.SetToolTip(clockTitle, clockTip);
-            tips.SetToolTip(clockState, clockTip);
 
             // ---- starboard motor zone fix
             zoneOn = new CheckBox();
@@ -536,7 +506,6 @@ namespace ApePatcher.Ui
             List<Control> order = new List<Control>(new Control[] { hullOn, hullMin, hullMax,
                 dieselOn, rate, bandLo, bandHi, crushOn, crushTime, depthOn });
             foreach (DepthField f in depthInputs) order.Add(f.Box);
-            order.Add(clockOn);
             order.Add(zoneOn);
             order.Add(apply);
             for (int i = 0; i < order.Count; i++)
@@ -645,7 +614,6 @@ namespace ApePatcher.Ui
 
                 RenderCrush(install, supported);
                 RenderDepth(install, supported);
-                RenderClockCave(install, supported);
                 RenderZoneFix(install, supported);
                 RenderReview();
                 RenderApplyButton();
@@ -728,34 +696,6 @@ namespace ApePatcher.Ui
             Widgets.SetWrappedText(zoneState, state, zoneState.Width);
         }
 
-        void RenderClockCave(InstallReport install, bool supported)
-        {
-            ClockCaveInfo c = install.ClockCave;
-            bool usable = supported && install.Available(ClockCave.PatchId);
-            bool applied = supported && install.Applied(ClockCave.PatchId);
-            // OAE's sh3.exe already has h.sie's cave: nothing to show there.
-            bool shown = supported && (usable || c.State == ClockCaveState.ChangedByOtherMod
-                                       || c.State == ClockCaveState.Unreadable);
-            clockRow.Visible = clockState.Visible = shown;
-
-            clockOn.Enabled = usable;
-            clockOn.Checked = desired.ClockCaveApplied && usable;
-            clockTitle.ForeColor = usable ? SystemColors.ControlText : Look.Dim;
-
-            string state =
-                c.State == ClockCaveState.ChangedByOtherMod ? "Unavailable — " + PatchSession.Sh3ExeName
-                    + " was changed by another tool after APE added the clock code. APE leaves it alone."
-                : c.State == ClockCaveState.Unreadable ? "Unavailable — APE cannot read "
-                    + PatchSession.Sh3ExeName + " safely (" + c.Problem + "). APE leaves it alone."
-                : desired.ClockCaveApplied && applied
-                    ? "APE is applied. Unchecking it and applying takes the clock code out again."
-                : desired.ClockCaveApplied
-                    ? "Adds the clock code depth stress needs to " + PatchSession.Sh3ExeName + "."
-                : "Not applied — this " + PatchSession.Sh3ExeName + " lacks the clock code depth "
-                    + "stress reads, so depth stress does nothing here.";
-            Widgets.SetWrappedText(clockState, state, clockState.Width);
-        }
-
         void RenderDepth(InstallReport install, bool supported)
         {
             bool available = supported && install.Available(DepthStress.PatchId);
@@ -782,16 +722,16 @@ namespace ApePatcher.Ui
                 : "Not applied — depth costs a boat nothing until crush depth.";
             Widgets.SetWrappedText(depthState, state, depthState.Width);
 
+            // h.sie's clock code goes in with depth stress where it's missing
+            // (ticket 36). Only an exe APE can't add it to is worth a word.
             ClockCaveState clock = install.ClockCave.State;
             string problem = desired.DepthApplied && !desired.DepthStressValid
                 ? "A depth-stress value is out of range. Hover a field to see what it allows."
-                : !supported || !desired.DepthApplied || clock == ClockCaveState.NotNeeded ? ""
-                : clock == ClockCaveState.Missing || clock == ClockCaveState.Applied
-                    ? (desired.ClockCaveApplied ? ""
-                       : "This sh3.exe lacks the clock code depth stress reads. Check "
-                         + ClockCave.PatchName + " below, or depth stress will do nothing.")
-                : "This sh3.exe lacks the clock code depth stress reads, and APE cannot add it ("
-                    + install.ClockCave.Problem + "). Depth stress will do nothing here.";
+                : !supported || !desired.DepthApplied || clock == ClockCaveState.NotNeeded
+                  || clock == ClockCaveState.Missing || clock == ClockCaveState.Applied ? ""
+                : "This " + PatchSession.Sh3ExeName + " lacks h.sie's clock code that depth stress "
+                    + "reads, and APE cannot add it (" + install.ClockCave.Problem + "). Depth "
+                    + "stress will do nothing here.";
             Widgets.SetWrappedText(depthNote, problem, depthNote.Width);
             depthNote.Visible = problem.Length > 0;
         }

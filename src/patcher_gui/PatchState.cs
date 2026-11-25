@@ -19,6 +19,8 @@ namespace ApePatcher
 
         public static string F1(double d) { return d.ToString("0.0", Inv); }
         public static string F2(double d) { return d.ToString("0.00", Inv); }
+        /// <summary>One decimal, or two when the second isn't 0: 7.5, 0.35.</summary>
+        public static string F1To2(double d) { return d.ToString("0.0#", Inv); }
         public static string Sci(double d) { return d.ToString("0.0000e-00", Inv); }
         public static string Int(int i) { return i.ToString(Inv); }
 
@@ -78,10 +80,6 @@ namespace ApePatcher
         // [ElectricEngine1] Father 24 -> 30. No values, only on or off.
         public bool MotorZoneFixApplied;
 
-        // Depth stress clock fix (depth-pressure-stress ticket 36): h.sie's clock-
-        // mirror cave, written into an sh3.exe that lacks it. Only on or off.
-        public bool ClockCaveApplied;
-
         public bool CrushTimeValid
         {
             get { return CrushTime >= CrushTimeMin && CrushTime <= CrushTimeMax; }
@@ -105,7 +103,7 @@ namespace ApePatcher
 
         public bool DepthApplied;
         public double Tier2Depth = 150;
-        public double Leakage1 = 2, Leakage2 = 7.5;
+        public double Leakage1 = 0.35, Leakage2 = 0.6;
         public double FloodThreshold = 20;
         public double MotorDamage = 10;
         public double HullMult1 = 1.25, HullMult2 = 1.5;
