@@ -345,7 +345,9 @@ namespace ApePatcher.Tests
             Check.Equal(1, r.FeatureCount, "one feature");
             string text = AllText(r);
             Check.Contains("Crush time", text, "the group is named");
-            Check.Contains("about 5 seconds", text, "with the time");
+            Check.Contains("roughly 5 seconds", text, "with the time");
+            Check.Contains("about a third as long at its rated crush depth", text,
+                "the time is nominal (ADR-0011)");
             Check.Contains("data/Submarine/NSS_Uboat7c/NSS_Uboat7c.zon", text, "VIIC named");
             Check.Contains("data/Submarine/NSS_Uboat2A/NSS_Uboat2A.zon", text, "IIA named");
             Check.Contains("data/Submarine/NSS_Uboat21/NSS_Uboat21.zon", text, "XXI named");

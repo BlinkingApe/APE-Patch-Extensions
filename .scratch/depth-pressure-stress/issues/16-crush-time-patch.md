@@ -110,3 +110,29 @@ Not done here:
   this checkout. The cause is not this ticket: `core.autocrlf=true` checks
   `ape-manifest.json` out with CRLF, while the generator emits LF. The content is
   identical. Fixed by a new `.gitattributes` rule, `data/manifest/*.json text eol=lf`.
+
+## Pointer (2026-11-25): crush rate measured on OAE
+
+The crush rate measured live on OAE wasn't flat. It grew from 0.40 to 1.77
+HP/game-s as hull fell, at one depth ([ticket 17](17-live-crush-depth-and-speed.md)'s
+answer). That conflicts with this ticket's "`CrashSpeed` is hull HP per second".
+The owner has asked that the flat rate be assumed. The question is
+[ticket 20](20-crush-rate-ramp-vs-adr-0010.md)'s; nothing here changes.
+
+## Pointer (2026-11-25): ticket 20 resolved, crush time is nominal
+
+[Ticket 20](20-crush-rate-ramp-vs-adr-0010.md) settled on the measured ramp
+(ADR-0011). The patch and its formula stand. Two things here change:
+
+- **The GUI tooltip** says "how long a U-boat at full hull lasts below crush depth". It
+  should say that T is nominal: just past the onset a boat lasts about 1.3·T, and at its
+  rated crush depth about 0.3·T. Deeper or damaged boats die faster. The onset is 70 % of
+  the rated crush depth at full hull.
+- **The in-play criterion** "both die in about that time" becomes: at full hull, a few
+  metres past the onset, both last about 1.3·T; at the rated crush depth, about 0.3·T.
+  At T = 5 s that is roughly 2–7 s.
+
+**Done (2026-11-25):** the tooltip (`ui/MainForm.cs`) and the Review's crush-time line
+(`Review.cs`) now call the time rough and give the "longer just past, a third at the
+rated crush depth" spread. `CrushTimeTests` checks the Review wording. The in-play
+criterion above is still open and still to be read as reworded.

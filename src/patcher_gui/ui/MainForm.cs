@@ -259,8 +259,13 @@ namespace ApePatcher.Ui
             column.Controls.Add(crushFields);
 
             tips = new ToolTip();
-            string tip = "How long a U-boat at full hull lasts below crush depth, the same for "
-                + "every class." + Environment.NewLine
+            string tip = "Roughly how long a U-boat at full hull lasts below crush depth, on the "
+                + "same scale for every class." + Environment.NewLine
+                + "Crush damage grows the deeper the boat goes and the weaker its hull gets: just "
+                + "past crush depth a boat lasts a little longer than this, at its rated crush "
+                + "depth about a third as long." + Environment.NewLine
+                + "Crush depth begins at 70% of the rated crush depth at full hull, and gets "
+                + "shallower as the hull is damaged." + Environment.NewLine
                 + "APE writes each class's crush speed as its hull hit points divided by this time."
                 + Environment.NewLine
                 + "The game reads it when a mission loads, so a change takes effect from the next "

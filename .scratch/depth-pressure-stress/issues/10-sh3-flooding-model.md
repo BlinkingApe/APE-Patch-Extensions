@@ -1,7 +1,7 @@
 # SH3's flooding model: how does APE provoke an astern leak?
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: none
 
 ## Parent
@@ -62,12 +62,12 @@ signature.md`.
 
 ## Acceptance criteria
 
-- [ ] The mechanism is decided: direct water write, or damage-the-compartment.
-- [ ] The chosen value located, with anchor/chain/offset, and a write confirmed to
+- [x] The mechanism is decided: direct water write, or damage-the-compartment.
+- [x] The chosen value located, with anchor/chain/offset, and a write confirmed to
       stick and to be visible in the damage-control screen.
-- [ ] The target compartment named.
-- [ ] Crew pump rate observed and recorded, in units comparable to a seep rate.
-- [ ] Written up in `docs/re-notes/` as a new note (this is a new subsystem, not an
+- [x] The target compartment named (VII/IX; II/XXI → ticket 19).
+- [x] Crew pump rate observed and recorded, in units comparable to a seep rate.
+- [x] Written up in `docs/re-notes/` as a new note (this is a new subsystem, not an
       addendum to the crush-depth note).
 
 ## Notes
@@ -127,3 +127,27 @@ Full write-ups, in the sh3-crush-pressure repo (`d:\code\sh3-crush-pressure`, br
 `automated-depth-re` until merged): `docs/re-notes/flooding.md` (§§1–6 the value,
 §§12–15 the pump and play); finding records `docs/findings/stern-water.json` and
 `docs/findings/pump-rate.json`.
+
+## Answer (2026-11-25, OAE lab, sha256 `20360fe8…`)
+
+Ported in one session with tickets 11 and 17: `docs/re-notes/08-oae-port-of-depth-leads.md`
+§§1–2 (static), §7.1 (live).
+
+- **Mechanism: a direct write to the compartment's flood level**, zone state `+0x1C`,
+  0 dry → 1 full. On OAE a write of 0.5 held: the crew pumped it like its own water,
+  F7 drew it, CE reported "We have flooding, sir!", and the boat got heavy. The
+  damage-the-compartment route stays rejected (vanilla lead; the flood integrator
+  `SH3Collisions+0x77B9` is byte-identical on OAE).
+- **Chain, unchanged from vanilla:** list head `0x005547D4` (AOB
+  `8B 3D D4 47 55 00 85 FF C7 44 24 40 00 00 00 00` @`0x0043601D`, unique on OAE). Walk
+  `node = [node+0x4]` until `[[[node+0x14]+0x10]+0x8]` is the target zone; the value is
+  `[node+0x14]+0x1C`. Match by zone index; OAE's `Zones.cfg` keeps the indices.
+- **Target compartment, VII and IX: compartment 8, the stern torpedo room (zone 37).**
+  By data: OAE's `Basic.cfg` has vanilla's compartment ids, and the vanilla lead saw it
+  live on a VIIC. **Not seen live on OAE**: every OAE single mission spawned a IIA (note
+  §7). **II and XXI have no compartment 8.** That choice is a new decision: ticket 19.
+- **Pump rate: 0.003258 flood/game-s** at crew strength 1.0 (IIA, electric room),
+  against the formula's 0.00333 (`factor × (crew + team strength) × 0.2/60`, factor 1
+  with realistic repair time on; the pump code is byte-identical to vanilla, not
+  h.sie-caved). The vanilla lead's 0.00243 was at a crew strength of ~0.73. A
+  compartment with no crew isn't pumped at all.

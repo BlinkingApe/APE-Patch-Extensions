@@ -1,7 +1,7 @@
 # Locate the electric-engine damage float; confirm write and repairability
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: none
 
 ## Parent
@@ -122,12 +122,12 @@ lead left standing from any pass, static or live.
 
 ## Acceptance criteria
 
-- [ ] Electric-engine damage float located; anchor/chain/offset recorded.
-- [ ] Write confirmed to stick and to show in the damage-control screen.
-- [ ] Repair threshold established empirically — the highest value from which crew
+- [x] Electric-engine damage float located; anchor/chain/offset recorded.
+- [x] Write confirmed to stick and to show in the damage-control screen.
+- [x] Repair threshold established empirically — the highest value from which crew
       repair still recovers the system at sea.
-- [ ] A recommended **hard ceiling** proposed, with margin below that threshold.
-- [ ] Written up alongside `docs/re-notes/04-diesel-damage-signature.md`'s findings
+- [x] A recommended **hard ceiling** proposed, with margin below that threshold.
+- [x] Written up alongside `docs/re-notes/04-diesel-damage-signature.md`'s findings
       on the same singleton, or as a new note if it turns out to live elsewhere.
 
 ## Notes
@@ -190,3 +190,32 @@ Full write-ups, in the sh3-crush-pressure repo (`d:\code\sh3-crush-pressure`, br
 `automated-depth-re` until merged): `docs/re-notes/electric-engines.md` (§§1–10 the
 value, §§11–16 threshold and consequences); finding records
 `docs/findings/electric-engine.json` and `docs/findings/repair-threshold.json`.
+
+## Answer (2026-11-25, OAE lab, sha256 `20360fe8…`)
+
+Ported in one session with tickets 10 and 17: `docs/re-notes/08-oae-port-of-depth-leads.md`
+§§1–2 (static), §7.2 (live).
+
+- **The value: one float32 per engine, at the engine's zone state `+0x14`**, 0.0
+  healthy → 1.0 destroyed. Chain: port `[[[[0x5543DC]+0x4]+0x37C]+0x0]`, starboard
+  `…+0x4]`, each a pointer to the field. It sits beside the diesel pair: the diesel
+  block is at `+0x300`, the electric block at `+0x370`. AOBs, unique on OAE at vanilla's
+  VAs: root `89 35 DC 43 55 00 57 8D 7E 10` @`0x004A28B6`; offset
+  `8B 80 7C 03 00 00 8D 77 FC` @`0x004C14D1`. **`+0x358`/`+0x360` is ruled out** (diesel
+  fuel doubles, vanilla lead). Avoid the crew report's mirror float[44] at `0x005FD860`.
+- **Writes hold and show:** F7 draws damage icons on the electric-engine station.
+- **Repair threshold: strictly under 1.0.** On OAE, 0.99999994 was repaired; the gate
+  `0x0042A2D0` (`0 < d < 1.0`, ≥ 2 crew) is byte-identical to vanilla.
+- **Hard ceiling: 0.9**, as ticket 12's grilling fixed. Margin 0.1 to the threshold
+  and 0.09 to the "destroyed" message at 0.99.
+- **New on OAE: repair is 60× slower.** h.sie's Realistic Repair Times (flag 1, on;
+  `hsie.ini Val1=60.0`) caves the repair step at `0x0041DFB6` and divides it by 60.
+  Measured: 5.43e-5 and 5.37e-5 damage/game-s at crew strength 1.0 (predicted 5.56e-5),
+  ~4.6 game-hours from the 0.9 ceiling back to 0. The crew repairs one engine at a
+  time. This changes ticket 12's tail analysis (see the pointer there).
+- **Consequences, from the vanilla lead and unchanged code:** speed, not battery or
+  noise. Power is scaled by `1 − max(d, clamp(2·(room flood − 0.2), 0, 1))`. OAE's mod
+  loader hooks the propulsion setup (`eng_erpm`, `eng_throttle`), which may change top
+  speed but not that factor's read (`SH3Sim+0xA017`, byte-identical).
+- **Walkable table:** yes, the zone-state tree; it bears on the map's fog about
+  extending wear past the electric engines.

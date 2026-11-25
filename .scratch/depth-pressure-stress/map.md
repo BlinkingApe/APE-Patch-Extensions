@@ -35,9 +35,9 @@ write target is unlocated is not specified.
   more so. Each tier carries a flat hull-damage **multiplier**, a flat **astern
   seep rate**, and a flat **electric-engine wear chance**. Tier 3 is stock's own
   crush-depth damage, untouched. *(Revised 2026-11-25, ADR-0010: tier 2 now ends at
-  crush depth, read live; APE sets stock's crush speed; see the grilling note below.)*
-  **Crush depth is never read**: APE's effects simply
-  continue below it rather than switching off.
+  crush depth, read live; APE sets stock's crush speed; see the grilling note below.
+  Revised again by ADR-0011: crush depth is stock's live onset `0.7·E`, which moves with
+  hull.)* APE's effects continue below crush depth rather than switching off.
 - **The historian's premise** (via the user, 2026-08-16): "All but the late war
   variants of the boats, and even the type II, were designed for an operating depth
   of 100 m. With a 2.5 safety margin, so calculated crush 250, this was standard
@@ -180,8 +180,26 @@ write target is unlocated is not specified.
   A separate **crush-time patch** (ticket `16`, blocked by `18`'s U-boat discovery rule)
   writes `CrashSpeed = Hit_Points ÷ crush time` into each playable U-boat's `.zon`. It is
   static and can ship before `ape.act`. Basis: the owner's in-game testing that
-  `CrashSpeed` is HP per second, which supersedes the external RE's
-  `excess × CrashSpeed × dt` reading. Tier-2 depth defaults to 150 m. Crush time defaults to 5 s for every U-boat (set after ticket `18`).
+  `CrashSpeed` is HP per second. *(Superseded by ADR-0011: crush damage is a hull-scaled
+  ramp, crush time is nominal, the exemption is the ramp share; ticket `20`.)* Tier-2 depth defaults to 150 m. Crush time defaults to 5 s for every U-boat (set after ticket `18`).
+
+- **OAE port session 2026-11-25 (tickets `10`, `11`, `17` together, at the owner's
+  request)** (`docs/re-notes/08-oae-port-of-depth-leads.md`). The live install's
+  `sh3.exe` has drifted again, to `20360fe8…`. Statically, every vanilla anchor lands
+  at the same VA in OAE except two h.sie caves:
+  - **Realistic Repair Times** divides every repair step by 60.
+  - **The clock mirror `0x0063FF80`** is written beside the stock clock from the same
+    register. That settles the save-load guard question above: the mirror reads 0
+    whenever the stock clock does.
+
+  Live, the sh3-crush-pressure harness was ported to OAE (`SH3_LAB=oae`, branch
+  `oae-port`, against a robocopy of the install, never the install itself) and driven
+  step by step. Findings:
+  - **Every OAE single mission spawned a Type IIA**, stock Barham's VIIC included.
+    Cause not found; class-dependent answers fall back on data.
+  - **Crush loss measured as a ramp that grows as hull falls, not a flat rate.** That
+    conflicts with the owner's in-game experience and ADR-0010's basis. Settled by
+    ticket `20` in favour of the ramp (ADR-0011).
 
 ## Decisions so far
 
@@ -193,6 +211,12 @@ write target is unlocated is not specified.
 - [Live-value session A: current depth + mission clock](issues/08-live-values-depth-and-clock.md) — both resolved: mission clock is static VA `0x0063FF80`, no chain; current depth is `[[["sh3.exe"+002307BC]+4]+4]+0x54`, a 3-level static chain confirmed stable across two relaunches.
 - [Live-value session B: boat pointer chain for the hull-HP write](issues/09-live-values-hull-hp-write.md) — resolved: `[0x00554A88]→+0xC4→+0x2240→+0x24→+0x4C]+0xB8` confirmed live (write holds); found the engine's own universal hull-HP writer (`02C930D7`, per-frame, single `fsub` per collision, cause-agnostic) as a bonus, safe for poll-and-amplify by construction. Delta observed: `450 → 448.2609`.
 - [Which `.zon` files are playable U-boats? A discovery rule that works for OAE and KC](issues/18-playable-uboat-zon-discovery.md) — `[Unit] HumanPlayable=YES` in `data/Submarine/<X>/<X>.cfg`; the same 8 classes in both installs (2A, 2D, 7b, 7c, 9b, 9c, 9d2, 21), XIV and other AI U-boats excluded; `.zon` key/float layout confirmed for all 42 files. It also showed that live OAE crush speeds come from the owner's JSGME test mod (stock VIIC ≈ 6250 s, KC 250 s). The owner then set the crush-time default to 5 s for every U-boat. APE replaces the test mod, so there's no JSGME conflict.
+- [SH3's flooding model: how does APE provoke an astern leak?](issues/10-sh3-flooding-model.md) — direct write to the zone state's flood `+0x1C` via list `0x005547D4`, holds and pumps on OAE; VII/IX seep into compartment 8 (by data); pump 0.00326/game-s at crew strength 1.0. II/XXI compartment → ticket `19`.
+- [Locate the electric-engine damage float; confirm write and repairability](issues/11-electric-engine-damage-float.md) — `[[[[0x5543DC]+4]+0x37C]+0/4]` points at each engine's float; holds and shows on OAE; repairable strictly below 1.0 (0.99999994 repaired); ceiling 0.9; OAE repairs 60× slower (h.sie), ~5.4e-5/game-s.
+- [Live values: crush depth and crush speed from the boat object](issues/17-live-crush-depth-and-speed.md) — `+0xC0` = `.zon` CrashDepth ÷ 10, `+0xC4` = `.zon` CrashSpeed after load; stock's onset is `0.7·E` (hull-scaled) at a reference point off the gauge; live loss rose with falling hull, conflict → ticket `20`.
+
+- [Which compartment seeps on U-boats with no stern torpedo room (II, XXI)?](issues/19-astern-compartment-without-stern-room.md) — compartment 8 if the boat has one, else 4 (electric engine room), chosen at run time from the zone→compartment table, no class lookup; on II/XXI the water also cuts electric power, accepted.
+- [Crush damage measured as a hull-scaled ramp on OAE: does ADR-0010's crush time and exemption still hold?](issues/20-crush-rate-ramp-vs-adr-0010.md) — the ramp governs (ADR-0011): crush depth = live onset `0.7·E`, `.zon` value = rated crush depth; crush time nominal (~1.3·T to ~0.3·T), patch unchanged, tooltip reworded; exemption = ramp share at gauge depth.
 
 ## Not yet specified
 
