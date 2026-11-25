@@ -222,6 +222,117 @@ namespace ApePatcher.Tests
             Check.True(risky[2].Warn && risky[3].Warn, "and only that line warns");
         }
 
+        // -- depth stress (ticket 23) --------------------------------------------
+
+        static Review DepthReview(Action<PatchState> tune, out string text)
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+            PatchState want = session.Current.Clone();
+            want.DepthApplied = true;
+            if (tune != null) tune(want);
+            Review r = Build(session, want);
+            text = AllText(r);
+            return r;
+        }
+
+        public static void Test_DepthStressGroupDescribesTiersLeakageWearAndMultiplier()
+        {
+            string text;
+            Review r = DepthReview(delegate(PatchState d)
+            {
+                d.Tier2Depth = 180;
+                d.Leakage1 = 4.5; d.Leakage2 = 15;
+                d.WearAmount1 = 7.5; d.WearAmount2 = 22.5;
+                d.WearRate1 = 200; d.WearRate2 = 130;
+                d.HullMult1 = 1.25; d.HullMult2 = 1.5;
+            }, out text);
+
+            Check.Equal(1, r.FeatureCount, "depth stress is one feature");
+            Check.Equal("Depth stress", r.Groups[0].Title, "named");
+            Check.Contains("100 m", text, "tier 1 begins at 100 m");
+            Check.Contains("180 m", text, "tier 2 begins at the chosen depth");
+            Check.Contains("1.25", text, "tier 1 multiplier");
+            Check.Contains("1.50", text, "tier 2 multiplier");
+            Check.Contains("4.5%", text, "tier 1 leakage, per game-minute");
+            Check.Contains("22.5%", text, "tier 2 wear amount");
+            Check.Contains("200.0 game-minutes", text, "tier 1 wear rate");
+            Check.Contains("tier 3", text, "crush depth carries on at tier 2");
+            Check.Contains("next game launch", text, "when it takes effect");
+            Check.Contains("crewed", text, "the stern compartment must be crewed");
+        }
+
+        public static void Test_DepthStressSaysAnEffectAtItsNeutralValueIsOff()
+        {
+            string text;
+            DepthReview(delegate(PatchState d)
+            {
+                d.Leakage1 = 0; d.WearAmount1 = 0; d.HullMult1 = 1.0;
+            }, out text);
+            Check.Contains("leakage off", text, "leakage 0 is off");
+            Check.Contains("engine wear off", text, "wear amount 0 is off");
+            Check.Contains("hull multiplier off", text, "multiplier 1.0 is off");
+            Check.DoesNotContain("do nothing", text, "tier 2 still acts, so it is not all off");
+        }
+
+        public static void Test_DepthStressWithEveryEffectNeutralWarnsItDoesNothing()
+        {
+            string text;
+            Review r = DepthReview(delegate(PatchState d)
+            {
+                d.Leakage1 = d.Leakage2 = 0;
+                d.WearAmount1 = d.WearAmount2 = 0;
+                d.HullMult1 = d.HullMult2 = 1.0;
+            }, out text);
+            Check.Contains("will do nothing", text, "stated outright");
+            bool warned = false;
+            foreach (ReviewLine l in r.Groups[0].Lines) if (l.Warn) warned = true;
+            Check.True(warned, "and as a warning");
+        }
+
+        public static void Test_DepthStressRemovalSaysItIsTakenOut()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+            PatchState on = session.Current.Clone();
+            on.DepthApplied = true;
+            Check.True(session.Apply(on).Ok, "deploy first");
+
+            PatchSession reopened = fx.Session();
+            PatchState off = reopened.Current.Clone();
+            off.DepthApplied = false;
+            Review r = Build(reopened, off);
+            Check.Equal("Depth stress", r.Groups[0].Title, "the group is shown for the removal");
+            Check.Contains("taken out", AllText(r), "and says so");
+        }
+
+        public static void Test_DepthStressReviewStaysInGameTerms()
+        {
+            string text;
+            DepthReview(null, out text);
+            string[] forbidden = { "ape.act", "sh3.exe", "0x", "byte", "offset", "struct" };
+            foreach (string bad in forbidden)
+                Check.DoesNotContain(bad, text, "the review list stays in game terms");
+        }
+
+        public static void Test_DepthStressTooltipsSayWhatTheStoriesAsk()
+        {
+            Check.Contains("shallower", DepthStress.Tier2DepthTip, "tier-2 depth: shallower classes");
+            Check.Contains("tier 3", DepthStress.Tier2DepthTip, "skip straight to tier 3");
+            Check.Contains("IIB", DepthStress.Tier2DepthTip, "names the IIB");
+            Check.Contains("XXIII", DepthStress.Tier2DepthTip, "and the XXIII");
+            Check.Contains("crewed", DepthStress.LeakageTip, "leakage: stern compartment crewed");
+            Check.Contains("next game launch", DepthStress.Tier2DepthTip, "next-launch timing");
+            Check.Contains("next game launch", DepthStress.LeakageTip, "on the leakage tooltip too");
+        }
+
+        public static void Test_TheDepthStressSectionIsGatedByOneSwitchAndExplainsWhy()
+        {
+            // Flipping this to true is the whole change once sh3.exe loads ape.act.
+            Check.False(DepthStress.LoadCallSiteExists, "no load call site yet");
+            Check.Contains("does not load", DepthStress.NotLoadedYet, "the disabled section explains");
+        }
+
         /// <summary>The rate line legitimately carries no percent sign, but the
         /// band line's numbers must not be mistaken for one; strip the lines that
         /// are allowed to mention percentages before asserting.</summary>

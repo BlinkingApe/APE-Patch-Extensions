@@ -47,6 +47,18 @@ namespace ApePatcher.Ui
         Control crushFields;
         ToolTip tips;
 
+        // depth stress (depth-pressure-stress ticket 23)
+        CheckBox depthOn;
+        Label depthTitle, depthState, depthNote;
+        Control depthFields;
+        List<DepthField> depthInputs = new List<DepthField>();
+
+        class DepthField
+        {
+            public NumericUpDown Box;
+            public Func<double> Get;
+        }
+
         // right column
         Label reviewHeading, reviewCount;
         Panel reviewList;
@@ -277,7 +289,86 @@ namespace ApePatcher.Ui
             crushNote.Margin = new Padding(22, 2, 0, 12);
             column.Controls.Add(crushNote);
 
+            // ---- depth stress
+            depthOn = new CheckBox();
+            depthOn.AutoSize = true;
+            depthOn.Text = "";
+            depthTitle = Widgets.Label(DepthStress.PatchName, Look.Bold, SystemColors.ControlText);
+            column.Controls.Add(Row(depthOn, depthTitle));
+            depthOn.CheckedChanged += delegate { if (!binding) { desired.DepthApplied = depthOn.Checked; Sync(); } };
+
+            depthState = Widgets.Wrapped("", Look.Base, Look.Dim, inner);
+            depthState.Margin = new Padding(22, 2, 0, 4);
+            column.Controls.Add(depthState);
+
+            FlowLayoutPanel depthStack = new FlowLayoutPanel();
+            depthStack.FlowDirection = FlowDirection.TopDown;
+            depthStack.WrapContents = false;
+            depthStack.AutoSize = true;
+            depthStack.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            depthStack.Margin = new Padding(0, 0, 0, 0);
+            depthFields = depthStack;
+            column.Controls.Add(depthStack);
+
+            AddDepth(depthStack, "Tier-2 depth", "m", PatchState.Tier2DepthMin, PatchState.Tier2DepthMax,
+                0, 1, DepthStress.Tier2DepthTip, delegate { return desired.Tier2Depth; },
+                delegate(double v) { desired.Tier2Depth = v; });
+            depthStack.Controls.Add(Widgets.Label("Tier 1 — from 100 m", Look.Bold, Look.Dim));
+            AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
+                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage1; },
+                delegate(double v) { desired.Leakage1 = v; });
+            AddDepth(depthStack, "Wear amount", "% per hit", PatchState.WearAmountMin, PatchState.WearAmountMax,
+                1, 0.5m, DepthStress.WearAmountTip, delegate { return desired.WearAmount1; },
+                delegate(double v) { desired.WearAmount1 = v; });
+            AddDepth(depthStack, "Wear rate", "game-minutes between hits", PatchState.WearRateMin,
+                PatchState.WearRateMax, 0, 5, DepthStress.WearRateTip, delegate { return desired.WearRate1; },
+                delegate(double v) { desired.WearRate1 = v; });
+            AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
+                (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
+                delegate { return desired.HullMult1; }, delegate(double v) { desired.HullMult1 = v; });
+            depthStack.Controls.Add(Widgets.Label("Tier 2 — from the tier-2 depth", Look.Bold, Look.Dim));
+            AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
+                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage2; },
+                delegate(double v) { desired.Leakage2 = v; });
+            AddDepth(depthStack, "Wear amount", "% per hit", PatchState.WearAmountMin, PatchState.WearAmountMax,
+                1, 0.5m, DepthStress.WearAmountTip, delegate { return desired.WearAmount2; },
+                delegate(double v) { desired.WearAmount2 = v; });
+            AddDepth(depthStack, "Wear rate", "game-minutes between hits", PatchState.WearRateMin,
+                PatchState.WearRateMax, 0, 5, DepthStress.WearRateTip, delegate { return desired.WearRate2; },
+                delegate(double v) { desired.WearRate2 = v; });
+            AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
+                (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
+                delegate { return desired.HullMult2; }, delegate(double v) { desired.HullMult2 = v; });
+
+            depthNote = Widgets.Wrapped("", Look.Base, Look.Warn, inner);
+            depthNote.Margin = new Padding(22, 2, 0, 12);
+            column.Controls.Add(depthNote);
+
             return column;
+        }
+
+        void AddDepth(FlowLayoutPanel into, string label, string unit, double min, double max,
+            int decimals, decimal step, string tip, Func<double> get, Action<double> set)
+        {
+            AddDepth(into, label, unit, (decimal)min, (decimal)max, decimals, step, tip, get, set);
+        }
+
+        void AddDepth(FlowLayoutPanel into, string label, string unit, decimal min, decimal max,
+            int decimals, decimal step, string tip, Func<double> get, Action<double> set)
+        {
+            NumericUpDown box = Widgets.Num((decimal)get(), min, max, decimals, step, 72);
+            box.ValueChanged += delegate { if (!binding) { set((double)box.Value); Sync(); } };
+            Label name = Widgets.Label(label, Look.Base, Look.Dim);
+            name.AutoSize = false;
+            name.Width = 110;
+            Label units = Widgets.Label(unit, Look.Base, Look.Dim);
+            tips.SetToolTip(box, tip);
+            tips.SetToolTip(name, tip);
+            into.Controls.Add(Fields(new Control[] { name, box, units }));
+            DepthField f = new DepthField();
+            f.Box = box;
+            f.Get = get;
+            depthInputs.Add(f);
         }
 
         Site SiteOf(string patchId, string siteId)
@@ -389,9 +480,11 @@ namespace ApePatcher.Ui
         void SetTabOrder()
         {
             // Top to bottom through the left column, ending on Apply.
-            Control[] order = { hullOn, hullMin, hullMax, dieselOn, rate, bandLo, bandHi,
-                                crushOn, crushTime, apply };
-            for (int i = 0; i < order.Length; i++)
+            List<Control> order = new List<Control>(new Control[] { hullOn, hullMin, hullMax,
+                dieselOn, rate, bandLo, bandHi, crushOn, crushTime, depthOn });
+            foreach (DepthField f in depthInputs) order.Add(f.Box);
+            order.Add(apply);
+            for (int i = 0; i < order.Count; i++)
             {
                 order[i].TabIndex = i;
                 order[i].TabStop = true;
@@ -496,6 +589,7 @@ namespace ApePatcher.Ui
                 }
 
                 RenderCrush(install, supported);
+                RenderDepth(install, supported);
                 RenderReview();
                 RenderApplyButton();
             }
@@ -545,6 +639,46 @@ namespace ApePatcher.Ui
                 : string.Join(" ", leftAlone.ToArray());
             Widgets.SetWrappedText(crushNote, problem, crushNote.Width);
             crushNote.Visible = problem.Length > 0;
+        }
+
+        void RenderDepth(InstallReport install, bool supported)
+        {
+            bool available = supported && install.Available(DepthStress.PatchId);
+            bool deployed = supported && install.Applied(DepthStress.PatchId);
+            bool loads = DepthStress.LoadCallSiteExists;
+
+            // Until the load call site exists the section is shown disabled; the one
+            // thing still allowed is taking out an ape.act that is already there.
+            bool usable = available && loads;
+            bool canRemove = deployed && !loads;
+
+            depthOn.Enabled = usable || (canRemove && desired.DepthApplied);
+            depthOn.Checked = desired.DepthApplied && (usable || canRemove);
+            depthTitle.ForeColor = (usable || canRemove) ? SystemColors.ControlText : Look.Dim;
+            bool fieldsLive = usable && desired.DepthApplied;
+            foreach (DepthField f in depthInputs)
+            {
+                f.Box.Enabled = fieldsLive;
+                f.Box.Value = Clamp((decimal)f.Get(), f.Box);
+            }
+            depthFields.Visible = supported;
+
+            string state =
+                !supported ? "Unavailable — APE does not recognise this install."
+                : !loads ? (deployed ? DepthStress.NotLoadedButDeployed : DepthStress.NotLoadedYet)
+                : !available ? "Unavailable — this build of APE carries no depth-stress module."
+                : desired.DepthApplied && deployed
+                    ? "APE is applied. Unchecking it and applying removes depth stress."
+                : desired.DepthApplied
+                    ? "Depth stress begins at 100 m. " + DepthStress.LaunchNote
+                : "Not applied — depth costs a boat nothing until crush depth.";
+            Widgets.SetWrappedText(depthState, state, depthState.Width);
+
+            string problem = desired.DepthApplied && !desired.DepthStressValid
+                ? "A depth-stress value is out of range. Hover a field to see what it allows."
+                : "";
+            Widgets.SetWrappedText(depthNote, problem, depthNote.Width);
+            depthNote.Visible = problem.Length > 0;
         }
 
         static decimal Clamp(decimal v, NumericUpDown n)
@@ -635,7 +769,8 @@ namespace ApePatcher.Ui
         {
             bool valid = (!desired.HullApplied || desired.HullValid)
                       && (!desired.DieselApplied || desired.DieselValid)
-                      && (!desired.CrushApplied || desired.CrushTimeValid);
+                      && (!desired.CrushApplied || desired.CrushTimeValid)
+                      && (!desired.DepthApplied || desired.DepthStressValid);
             bool anything = !session.Plan(desired).Empty;
 
             apply.Enabled = session.Install.Supported && valid && anything;

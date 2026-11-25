@@ -19,6 +19,54 @@ namespace ApePatcher
         public const string FileName = "ape.act";
         public const string TemplateResource = "ape.act";
 
+        /// <summary>The one switch (ticket 23). False until sh3.exe has a call site
+        /// that loads ape.act (ADR-0002, umbrella ticket 02): until then the UI
+        /// shows the depth-stress section disabled, so no player deploys a file
+        /// nothing loads. Flip it to true when that site exists.</summary>
+        public static readonly bool LoadCallSiteExists = false;
+
+        public const string NotLoadedYet =
+            "Not available yet — this version of the game does not load ape.act. "
+            + "Depth stress needs a change to sh3.exe that APE has not made yet, so "
+            + "deploying it now would do nothing.";
+
+        public const string NotLoadedButDeployed =
+            "ape.act is in the game folder, but nothing loads it yet. Unchecking this and "
+            + "applying removes it.";
+
+        // Tooltips (user stories 31, 32, 37). Here rather than in the form so the
+        // wording the stories ask for is held by test.
+        public const string LaunchNote =
+            "Depth-stress settings take effect at the next game launch, not in a game "
+            + "that is already running.";
+
+        public const string Tier2DepthTip =
+            "Depth stress begins at 100 m for every class. Tier 2, the harsher tier, begins "
+            + "at this depth." + "\n"
+            + "A class whose crush depth is shallower than this depth goes straight from "
+            + "tier 1 to tier 3 (the IIB and XXIII). Below crush depth, tier 2's values keep "
+            + "applying." + "\n" + LaunchNote;
+
+        public const string LeakageTip =
+            "Water rising in the sternmost compartment (the stern torpedo room, or the "
+            + "electric engine room on a Type II or XXI), as a percentage of the compartment "
+            + "per game-minute. 0 turns leakage off." + "\n"
+            + "The stern compartment must be crewed for its leakage to be pumped. An "
+            + "uncrewed one keeps filling, to 80% at most." + "\n" + LaunchNote;
+
+        public const string WearAmountTip =
+            "How much of one electric engine's health a single hit takes, in percent. 0 "
+            + "turns wear off. Wear never takes an engine past 90% damage, so the crew can "
+            + "always repair it." + "\n" + LaunchNote;
+
+        public const string WearRateTip =
+            "About how many game-minutes pass between hits, on average. The timing is "
+            + "random." + "\n" + LaunchNote;
+
+        public const string HullMultTip =
+            "Whatever hull damage the boat takes in this tier is multiplied by this. 1.0 "
+            + "turns it off. Crush damage itself is never multiplied." + "\n" + LaunchNote;
+
         /// <summary>The ape.act the patcher was built with, or null if it was
         /// built without one (then depth stress is unavailable).</summary>
         public static byte[] EmbeddedTemplate()

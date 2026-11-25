@@ -18,9 +18,25 @@ loads.
 
 **Blocked by:** 22 (The patcher deploys, reads back and removes `ape.act`)
 
-**Status:** ready-for-agent
+**Status:** resolved (UI not eyeballed in a window)
 
-- [ ] The section shows the installed values on reopen and writes the entered ones through ticket 22's session
-- [ ] The tooltips for the tier-2 depth, leakage and next-launch timing say what the user stories ask
-- [ ] The Review group describes tiers, leakage, wear and multiplier in game terms, and says an effect at its neutral value is off; `ReviewTests` cover it in both cultures
-- [ ] While the load call site is missing, the section is disabled with an explanation, and that is gated by one switch that is easy to flip later
+- [x] The section shows the installed values on reopen and writes the entered ones through ticket 22's session
+- [x] The tooltips for the tier-2 depth, leakage and next-launch timing say what the user stories ask
+- [x] The Review group describes tiers, leakage, wear and multiplier in game terms, and says an effect at its neutral value is off; `ReviewTests` cover it in both cultures
+- [x] While the load call site is missing, the section is disabled with an explanation, and that is gated by one switch that is easy to flip later
+
+## Comments
+
+**2026-11-25, implemented.**
+
+- `Review.Depth` adds the depth-stress group (tiers, per-tier hull multiplier, leakage and
+  wear in game terms, "off" at neutral values, a warning when every effect is neutral,
+  next-launch note, "taken out" on removal). `ReviewTests` has seven new cases, run in both
+  cultures (228 pass).
+- The tooltip text and the gate live in `ApeAct.cs` (`DepthStress.*Tip`,
+  `LoadCallSiteExists`) so tests hold the wording. **To enable the section once sh3.exe
+  loads ape.act: set `DepthStress.LoadCallSiteExists = true`.** Until then the checkbox
+  and fields are disabled with an explanation; an already-deployed ape.act can still be
+  unchecked and removed.
+- `MainForm` gains the section (tier-2 depth, then four fields per tier) and tab order.
+  It compiles clean; I did not open the window to check layout.
