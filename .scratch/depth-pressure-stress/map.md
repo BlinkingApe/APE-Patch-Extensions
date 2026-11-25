@@ -201,6 +201,11 @@ write target is unlocated is not specified.
     conflicts with the owner's in-game experience and ADR-0010's basis. Settled by
     ticket `20` in favour of the ramp (ADR-0011).
 
+- **Destination reached 2026-11-25.** `PRD.md` was rewritten in place for the tier
+  model (`ready-for-agent`). No wayfinder tickets remain open. The next step is to
+  split the PRD into implementation issues. The `ape.act` load call site is a hard
+  prerequisite that the umbrella map owns.
+
 ## Decisions so far
 
 <!-- charted 2026-08-16; the model above was settled in the charting session's
