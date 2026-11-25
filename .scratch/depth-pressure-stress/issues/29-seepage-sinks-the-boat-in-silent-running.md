@@ -1,7 +1,7 @@
 # 29: Seepage sinks the boat when the crew isn't pumping (silent running)
 
 Type: grilling
-Status: needs-triage
+Status: resolved
 Blocked by: none
 
 ## Parent
@@ -41,3 +41,24 @@ crew, but ticket 10's live data already showed 0.5 of stern water took the boat 
 ## Next
 
 Owner's call on intent (b/c/a). If (a), measure: what flood level sinks each class.
+
+## Answer
+
+**Resolved, by design (owner, 2026-11-25): not a bug.** Stiebler4B's "Silent-running Fix"
+(an add-on to h.sie's V16B1 patch) exists to do exactly this. In silent running all powered
+pumps are off, water seeps in below 100 m and accumulates in the bilges, and the boat grows
+heavier and sinks slowly. It only bites when the boat is too slow for the hydroplanes to hold
+depth. The player is meant to manage silent running below 100 m, switching it on and off.
+
+APE's depth stress replaces Stiebler's kludge (it nudged the depth gauge down) with a real
+flooding model. The behaviour seen in play, a boat sitting still in silent running at depth
+slowly flooding and sinking, is the intended result, so the options (a)-(d) are all dropped:
+
+- (a) `kSeepCeiling` stays 0.8; no PRD number changes.
+- (b) Seepage is not suppressed in silent running.
+- (c) Taken as the outcome, with the rationale above. A README / manual line saying
+  "silent running at depth is dangerous" would be a fair doc note, but is not required here.
+- (d) No patcher recommendation for h.sie's switch.
+
+The PRD story 8 wording ("depth stress alone never drowns the room's crew and sinks me")
+still holds for a crew that is pumping. With pumps off, the player owns the risk.
