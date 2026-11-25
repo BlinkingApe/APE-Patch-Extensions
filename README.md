@@ -19,7 +19,7 @@ APE is a small suite of patches for *Silent Hunter 3* with h.sie/Stiebler hardco
   running, both motors take damage. The patcher deploys `ape.act` into the
   game folder with the player's values written in. Stock `sh3.exe` loads
   every `*.act` there at startup, so nothing else is installed.
-- **Starboard motor zone fix** — OAE's damage model (from GWX) puts the
+- **Starboard motor zone fix** — The GWX damage model, used by OAE and GWX-KC, puts the
   starboard electric motor in the bow quarters (`data/Zones.cfg`,
   `[ElectricEngine1] Father=24`; stock SH3 has 30, the electric engine room).
   Its damage then shows in the bow quarters, and only a repair team sent

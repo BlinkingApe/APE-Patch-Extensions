@@ -355,7 +355,7 @@ namespace ApePatcher.Ui
             zoneState.Margin = new Padding(22, 2, 0, 12);
             column.Controls.Add(zoneState);
 
-            string zoneTip = "OAE's damage model (from GWX) puts the starboard electric motor in the "
+            string zoneTip = "The GWX damage model, used by OAE and GWX-KC, puts the starboard electric motor in the "
                 + "bow quarters instead of the electric engine room. The damage screen then shows "
                 + "its damage there, and only a repair team sent to the bow quarters repairs it."
                 + Environment.NewLine

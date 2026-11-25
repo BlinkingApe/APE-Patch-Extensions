@@ -61,7 +61,8 @@ lab file is byte-identical to the owner's again.
    shows in the bow quarters and damage control must be sent there to repair it.
 3. Both.
 
-Not yet checked: whether GWX itself or other GWX-based mods (GWX-KC) carry the same line.
+Checked 2026-11-25: GWX-KC 2.5 carries the same line (see the comment below). GWX
+itself is not checked.
 
 ## Comments
 
@@ -87,3 +88,15 @@ Not yet checked: whether GWX itself or other GWX-based mods (GWX-KC) carry the s
   quarters.
 - **Not checked live:** whether the game re-reads `Zones.cfg` when a mission loads. The
   lab test relaunched the game, so the patcher says "the next time you start SH3".
+
+### 2026-11-25: GWX-KC 2.5 has the same line; the fix stays in APE
+
+- The owner's GWX-KC 2.5 install (`C:\games\GWX_KC_2.5\data\Zones.cfg`, the only
+  `Zones.cfg` in that folder) has `[ElectricEngine1] Father=24` and
+  `[ElectricEngine2] Father=30`, the same as OAE 1.5.2. So this is a GWX damage-model
+  line, not an OAE-only one.
+- The owner suggested moving the fix out of APE into an OAE JSGME mod, on the belief that
+  GWX-KC was unaffected. That belief turned out wrong, so the fix stays in the patcher:
+  it already turns up on any install whose value is 24, GWX-KC included, and it changes
+  two bytes instead of replacing the whole file per mod.
+- README.md and the release readme now name OAE and GWX-KC.

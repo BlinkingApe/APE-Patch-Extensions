@@ -224,7 +224,7 @@
     <p><strong class="hl">Motor flooding:</strong> once the electric engine room is flooded past the threshold (default 20 %), both electric motors take damage for as long as the engine telegraph is not at stop, at any depth and whatever flooded the room. Ordering <strong class="hl">all stop</strong>, or pumping the room back below the threshold, ends it. Damage never goes past the point where the crew can still repair it. The idea is Stoss's (M. Hamacher on YouTube): water in the motor room meant the motors had to be taken out of service. Five points below the threshold (15 % by default) the chief engineer warns you once: <em>&ldquo;Water in the motor room, sir! Pump it out or stop the motors!&rdquo;</em> The warning is English only and is off when Motor damage is 0.</p>
     <p>In <strong class="hl">silent running</strong> (pumps off) a boat sitting deep will flood and slowly sink. This is intended: Stiebler's Silent-running Fix does the same, and Depth Stress replaces its depth-gauge workaround.</p>
 
-    <p><strong class="hl">Starboard motor in the bow quarters:</strong> OAE and other GWX-based installs put the starboard electric motor in the bow quarters in their damage model. When it is damaged, the damage screen shows the bow quarters damaged instead of the electric engine room, and only a repair team sent to the bow quarters repairs it. APE's optional <strong class="hl">Starboard motor zone fix</strong> puts the motor back in the electric engine room; it takes effect the next time you start SH3. Without it, send your repair team to the bow quarters.</p>
+    <p><strong class="hl">Starboard motor in the bow quarters:</strong> GWX-based installs, such as OAE and GWX-KC, put the starboard electric motor in the bow quarters in their damage model. When it is damaged, the damage screen shows the bow quarters damaged instead of the electric engine room, and only a repair team sent to the bow quarters repairs it. APE's optional <strong class="hl">Starboard motor zone fix</strong> puts the motor back in the electric engine room; it takes effect the next time you start SH3. Without it, send your repair team to the bow quarters.</p>
 
     <h1 class="section">Crush Time</h1>
     <p>Optional, and separate from Depth Stress. It rewrites every playable U-boat's crush speed from one setting (default 5 seconds). The time is nominal: it is the rough time a full-hull boat lasts below crush depth.</p>
@@ -248,7 +248,7 @@
           <li><strong>Depth Stress</strong>: below 100 m (and more below tier 2) the electric engine room takes on water and hull damage is multiplied; the crew pumps, and every depth, rate and multiplier is tunable</li>
           <li><strong>Motor flooding damage</strong>: past the flooding threshold (default 20 %) the electric motors take damage until you order all stop or pump the room out, with a chief engineer warning at 15 %</li>
           <li><strong>Crush Time</strong>: one crush-speed setting for every playable U-boat</li>
-          <li><strong>Starboard motor zone fix</strong>: optional, for OAE and other GWX-based installs</li>
+          <li><strong>Starboard motor zone fix</strong>: optional, for GWX-based installs such as OAE and GWX-KC</li>
           <li>Depth Stress replaces Stiebler's Silent-running Fix depth-gauge workaround; no separate install step, APE deploys <code>ape.act</code> for you</li>
         </ul>
       </li>

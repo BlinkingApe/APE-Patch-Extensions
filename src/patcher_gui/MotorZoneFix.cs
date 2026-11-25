@@ -1,6 +1,6 @@
 // The starboard motor zone fix (depth-pressure-stress ticket 33).
 //
-// OAE's data/Zones.cfg (the GWX 1.9 damage model) parents [ElectricEngine1], the
+// The GWX damage model's data/Zones.cfg (found in OAE 1.5.2 and GWX-KC 2.5) parents [ElectricEngine1], the
 // starboard electric motor's zone, to zone 24, Quarters1 -- the bow quarters --
 // where vanilla SH3 has 30, the electric engine room. The game then shows that
 // motor's damage in the bow quarters, and only a repair team sent there repairs
