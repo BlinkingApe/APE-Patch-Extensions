@@ -72,7 +72,8 @@ static_assert(offsetof(Constants, tier) == 24, "patcher contract");
 static_assert(offsetof(TierConstants, seep_per_s) == 0, "patcher contract");
 static_assert(offsetof(TierConstants, hull_mult) == 4, "patcher contract");
 
-// Ticket 12's defaults, leakage halved by ticket 30 (ADR-0012), motor flooding
+// Ticket 12's defaults, leakage halved by ticket 30 (ADR-0012) and set by the
+// owner to 0.35 / 0.6 %/min (2026-11-25), motor flooding
 // damage's as Stoss recommended (threshold 20 %, 10 %/s), after the patcher's conversions:
 // leakage p %/min is p/6000 per game-second, the flooding threshold t % is
 // t/100, motor damage a % per game-second is a/100.
@@ -83,8 +84,8 @@ constexpr Constants kDefaultConstants = {
     0.20f,
     0.10f,
     {
-        {2.0f / 6000.0f, 1.25f},
-        {7.5f / 6000.0f, 1.5f},
+        {0.35f / 6000.0f, 1.25f},
+        {0.6f / 6000.0f, 1.5f},
     },
 };
 

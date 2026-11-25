@@ -319,14 +319,14 @@ namespace ApePatcher.Ui
                 delegate(double v) { desired.Tier2Depth = v; });
             depthStack.Controls.Add(Widgets.Label("Tier 1 — from 100 m", Look.Bold, Look.Dim));
             AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
-                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage1; },
+                2, 0.05m, DepthStress.LeakageTip, delegate { return desired.Leakage1; },
                 delegate(double v) { desired.Leakage1 = v; });
             AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
                 (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
                 delegate { return desired.HullMult1; }, delegate(double v) { desired.HullMult1 = v; });
             depthStack.Controls.Add(Widgets.Label("Tier 2 — from the tier-2 depth", Look.Bold, Look.Dim));
             AddDepth(depthStack, "Leakage", "% per game-minute", PatchState.LeakageMin, PatchState.LeakageMax,
-                1, 0.5m, DepthStress.LeakageTip, delegate { return desired.Leakage2; },
+                2, 0.05m, DepthStress.LeakageTip, delegate { return desired.Leakage2; },
                 delegate(double v) { desired.Leakage2 = v; });
             AddDepth(depthStack, "Hull multiplier", "×", (decimal)PatchState.HullMultMin,
                 (decimal)PatchState.HullMultMax, 2, 0.05m, DepthStress.HullMultTip,
@@ -722,9 +722,16 @@ namespace ApePatcher.Ui
                 : "Not applied — depth costs a boat nothing until crush depth.";
             Widgets.SetWrappedText(depthState, state, depthState.Width);
 
+            // h.sie's clock code goes in with depth stress where it's missing
+            // (ticket 36). Only an exe APE can't add it to is worth a word.
+            ClockCaveState clock = install.ClockCave.State;
             string problem = desired.DepthApplied && !desired.DepthStressValid
                 ? "A depth-stress value is out of range. Hover a field to see what it allows."
-                : "";
+                : !supported || !desired.DepthApplied || clock == ClockCaveState.NotNeeded
+                  || clock == ClockCaveState.Missing || clock == ClockCaveState.Applied ? ""
+                : "This " + PatchSession.Sh3ExeName + " lacks h.sie's clock code that depth stress "
+                    + "reads, and APE cannot add it (" + install.ClockCave.Problem + "). Depth "
+                    + "stress will do nothing here.";
             Widgets.SetWrappedText(depthNote, problem, depthNote.Width);
             depthNote.Visible = problem.Length > 0;
         }

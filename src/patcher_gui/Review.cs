@@ -218,7 +218,7 @@ namespace ApePatcher
                 ? "hull damage is multiplied by " + Fmt.F2(mult)
                 : "hull multiplier off (1.0)";
             string seep = leak > 0
-                ? "water seeps in at " + Fmt.F1(leak) + "% of the electric engine room per game-minute"
+                ? "water seeps in at " + Fmt.F1To2(leak) + "% of the electric engine room per game-minute"
                 : "leakage off (0)";
             return hull + "; " + seep + ".";
         }

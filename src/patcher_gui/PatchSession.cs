@@ -38,6 +38,9 @@ namespace ApePatcher
         /// <summary>data/Zones.cfg, for the starboard motor zone fix (ticket 33).</summary>
         public ZonesCfg Zones = new ZonesCfg();
 
+        /// <summary>sh3.exe's clock cave, for the depth stress clock fix (ticket 36).</summary>
+        public ClockCaveInfo ClockCave = new ClockCaveInfo();
+
         readonly Dictionary<string, bool> available = new Dictionary<string, bool>(StringComparer.Ordinal);
         readonly Dictionary<string, bool> applied = new Dictionary<string, bool>(StringComparer.Ordinal);
 
@@ -106,6 +109,13 @@ namespace ApePatcher
         public byte[] NewBytes;
     }
 
+    /// <summary>The depth stress clock fix's two sh3.exe sites: h.sie's cave
+    /// written in, or stock's code back when Restore is set (ticket 36).</summary>
+    public class ClockCaveWrite
+    {
+        public bool Restore;
+    }
+
     /// <summary>Depth stress's one file: ape.act deployed with the desired
     /// values, or deleted (ADR-0006).</summary>
     public class ApeActWrite
@@ -122,13 +132,16 @@ namespace ApePatcher
         public List<PlannedWrite> Writes = new List<PlannedWrite>();
         public List<ZonWrite> ZonWrites = new List<ZonWrite>();
         public ZonesCfgWrite Zones;   // null when Zones.cfg stays as it is
+        public ClockCaveWrite Clock;  // null when the clock cave stays as it is
         public ApeActWrite ApeAct;    // null when ape.act stays as it is
 
         public bool Touches(string patchId)
         {
             if (patchId == CrushTime.PatchId) return ZonWrites.Count > 0;
             if (patchId == MotorZoneFix.PatchId) return Zones != null;
-            if (patchId == DepthStress.PatchId) return ApeAct != null;
+            if (patchId == ClockCave.PatchId) return Clock != null;
+            // h.sie's clock cave goes in and out with depth stress (ticket 36).
+            if (patchId == DepthStress.PatchId) return ApeAct != null || Clock != null;
             foreach (PlannedWrite w in Writes)
                 if (w.Patch.Id == patchId) return true;
             return false;
@@ -142,13 +155,17 @@ namespace ApePatcher
                 foreach (PlannedWrite w in Writes)
                     if (!seen.Contains(w.Patch.Id)) seen.Add(w.Patch.Id);
                 return seen.Count + (ZonWrites.Count > 0 ? 1 : 0) + (Zones != null ? 1 : 0)
-                    + (ApeAct != null ? 1 : 0);
+                    + (ApeAct != null || Clock != null ? 1 : 0);
             }
         }
 
         public bool Empty
         {
-            get { return Writes.Count == 0 && ZonWrites.Count == 0 && Zones == null && ApeAct == null; }
+            get
+            {
+                return Writes.Count == 0 && ZonWrites.Count == 0 && Zones == null && Clock == null
+                    && ApeAct == null;
+            }
         }
     }
 
@@ -218,6 +235,7 @@ namespace ApePatcher
         }
 
         string ExePath { get { return Path.Combine(dir, Sh3ExeName); } }
+        string ExeOrigPath { get { return ExePath + ApePatcher.ClockCave.OrigSuffix; } }
         string IniPath { get { return Path.Combine(dir, HsieIniName); } }
         string MenuTextPath { get { return Path.Combine(dir, "data", "Menu", "en_menu.txt"); } }
         string ApeActPath { get { return Path.Combine(dir, DepthStress.FileName); } }
@@ -300,6 +318,26 @@ namespace ApePatcher
             Install.SetAvailable(MotorZoneFix.PatchId,
                 Install.Zones.State == ZonesState.Faulty || Install.Zones.State == ZonesState.Applied);
             Install.SetApplied(MotorZoneFix.PatchId, Install.Zones.State == ZonesState.Applied);
+
+            // h.sie's clock cave, which depth stress reads the clock through
+            // (ticket 36): APE adds it only where it is missing from stock code APE
+            // knows, and takes out only its own. An exe with h.sie's own cave
+            // reads as not needed.
+            try
+            {
+                byte[] exeOrig = File.Exists(ExeOrigPath) ? File.ReadAllBytes(ExeOrigPath) : null;
+                Install.ClockCave = ApePatcher.ClockCave.Classify(exe, exeOrig);
+            }
+            catch (Exception e)
+            {
+                Install.ClockCave = new ClockCaveInfo();
+                Install.ClockCave.State = ClockCaveState.Unreadable;
+                Install.ClockCave.Problem = e.Message;
+            }
+            Install.SetAvailable(ApePatcher.ClockCave.PatchId,
+                Install.ClockCave.State == ClockCaveState.Missing
+                || Install.ClockCave.State == ClockCaveState.Applied);
+            Install.SetApplied(ApePatcher.ClockCave.PatchId, Install.ClockCave.State == ClockCaveState.Applied);
 
             // Depth stress is applied exactly when ape.act is in the game root:
             // APE deploys it only for a runtime feature, and depth stress is the
@@ -519,6 +557,7 @@ namespace ApePatcher
             }
             PlanZons(plan, desired);
             PlanZonesFix(plan, desired);
+            PlanClockCave(plan, desired);
             PlanApeAct(plan, desired);
             return plan;
         }
@@ -541,6 +580,23 @@ namespace ApePatcher
             }
             else return;
             plan.Zones = w;
+        }
+
+        /// <summary>h.sie's clock cave goes in and out with depth stress, which
+        /// can't read the clock without it: the cave when depth stress is wanted
+        /// and the cave is missing, stock's code back when depth stress is not
+        /// wanted and APE's cave is there. An exe in any other state is never
+        /// written.</summary>
+        void PlanClockCave(WritePlan plan, PatchState desired)
+        {
+            ClockCaveState state = Install.ClockCave.State;
+            if (desired.DepthApplied && state == ClockCaveState.Missing)
+                plan.Clock = new ClockCaveWrite();
+            else if (!desired.DepthApplied && state == ClockCaveState.Applied)
+            {
+                plan.Clock = new ClockCaveWrite();
+                plan.Clock.Restore = true;
+            }
         }
 
         /// <summary>Depth stress's write: the template with the desired values when
@@ -776,6 +832,7 @@ namespace ApePatcher
 
             string zonChanged = VerifyZons(plan);
             if (zonChanged == null) zonChanged = VerifyZonesFix(plan);
+            if (zonChanged == null) zonChanged = VerifyClockCave(plan);
             if (zonChanged != null)
             {
                 report.Message = zonChanged;
@@ -813,6 +870,14 @@ namespace ApePatcher
                 }
                 report.SitesWritten.Add(w.Site.Describe());
             }
+            if (plan.Clock != null)
+            {
+                if (plan.Clock.Restore) ClockCave.WriteStock(newExe);
+                else ClockCave.WriteCave(newExe);
+                exeChanged = true;
+                report.SitesWritten.Add(Sh3ExeName + (plan.Clock.Restore
+                    ? " clock store restored" : " clock-mirror cave"));
+            }
             foreach (ZonWrite z in plan.ZonWrites)
                 report.SitesWritten.Add(z.Boat.RelativePath + " CrashSpeed");
             if (plan.Zones != null)
@@ -825,12 +890,32 @@ namespace ApePatcher
             byte[] exeBackup = exe;
             IniFile iniBackup = ini;
             IniFile menuBackup = menuText;
+
+            // The clock fix keeps sh3.exe as it was before its first write. Its
+            // copy goes first, and comes out again if anything after it fails.
+            string exeCopyMade = null;
+            if (plan.Clock != null && !plan.Clock.Restore && Install.ClockCave.Original == null)
+            {
+                try
+                {
+                    WriteExeBytes(ExeOrigPath, exe);
+                    exeCopyMade = ExeOrigPath;
+                }
+                catch (Exception e)
+                {
+                    DropCopy(ExeOrigPath);
+                    report.SitesWritten.Clear();
+                    report.Message = CannotWrite(Sh3ExeName + ApePatcher.ClockCave.OrigSuffix, e);
+                    return report;
+                }
+            }
             try
             {
                 if (exeChanged) WriteExeBytes(ExePath, newExe);
             }
             catch (Exception e)
             {
+                DropCopy(exeCopyMade);
                 report.SitesWritten.Clear();
                 report.Message = CannotWrite(Sh3ExeName, e);
                 return report;
@@ -855,10 +940,13 @@ namespace ApePatcher
                     }
                     catch (Exception rollbackFailure)
                     {
+                        // sh3.exe may still hold APE's cave: its copy stays, so the
+                        // cave still reads as APE's and can be taken out.
                         report.Message = InconsistentState(iniFailure, rollbackFailure);
                         return report;
                     }
                 }
+                DropCopy(exeCopyMade);
                 report.Message = CannotWrite(HsieIniName, iniFailure);
                 return report;
             }
@@ -888,6 +976,7 @@ namespace ApePatcher
                     report.Message = InconsistentStateAfterMenuFailure(menuFailure, rollbackFailure);
                     return report;
                 }
+                DropCopy(exeCopyMade);
                 report.Message = CannotWrite(MenuTextName, menuFailure);
                 return report;
             }
@@ -899,6 +988,7 @@ namespace ApePatcher
             undo.Exe = exeChanged ? exeBackup : null;
             undo.Ini = iniChanged ? iniBackup : null;
             undo.Menu = menuChanged ? menuBackup : null;
+            if (exeCopyMade != null) undo.CopiesMade.Add(exeCopyMade);
             string lateFailure = WriteZons(plan, undo);
             if (lateFailure == null) lateFailure = WriteZonesFix(plan, undo);
             if (lateFailure == null) lateFailure = WriteApeAct(plan, undo);
@@ -910,6 +1000,7 @@ namespace ApePatcher
             }
             FinishZons(plan);
             FinishZonesFix(plan);
+            FinishClockCave(plan);
 
             exe = newExe;
             ini = newIni;
@@ -991,9 +1082,15 @@ namespace ApePatcher
             if (plan.Zones != null)
                 parts.Add(MotorZoneFix.PatchName + " (" + MotorZoneFix.RelativePath
                     + (plan.Zones.Restore ? " restored)" : ")"));
-            if (plan.ApeAct != null)
-                parts.Add(DepthStress.PatchName + " (" + DepthStress.FileName
-                    + (plan.ApeAct.Delete ? " removed)" : " deployed)"));
+            if (plan.ApeAct != null || plan.Clock != null)
+            {
+                List<string> what = new List<string>();
+                if (plan.ApeAct != null)
+                    what.Add(DepthStress.FileName + (plan.ApeAct.Delete ? " removed" : " deployed"));
+                if (plan.Clock != null)
+                    what.Add(Sh3ExeName + (plan.Clock.Restore ? " clock code removed" : " clock code added"));
+                parts.Add(DepthStress.PatchName + " (" + string.Join(", ", what.ToArray()) + ")");
+            }
             return "Written: " + string.Join(", ", parts.ToArray()) + ".";
         }
 
@@ -1124,11 +1221,6 @@ namespace ApePatcher
                 try { WriteZonBytes(undo.ZonesWritten.Path, undo.ZonesWritten.Bytes); }
                 catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
             }
-            foreach (string copy in undo.CopiesMade)
-            {
-                try { DeleteFile(copy); }
-                catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
-            }
             if (undo.Menu != null)
             {
                 try { SaveIni(undo.Menu, MenuTextPath); }
@@ -1139,9 +1231,19 @@ namespace ApePatcher
                 try { SaveIni(undo.Ini, IniPath); }
                 catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
             }
+            bool exeBack = true;
             if (undo.Exe != null)
             {
                 try { WriteExeBytes(ExePath, undo.Exe); }
+                catch (Exception e) { exeBack = false; if (rollbackFailure == null) rollbackFailure = e; }
+            }
+            // Copies go last. sh3.exe's copy is what marks the clock cave as APE's
+            // rather than h.sie's, so if sh3.exe didn't go back it stays, for the
+            // cave to be taken out later.
+            foreach (string copy in undo.CopiesMade)
+            {
+                if (!exeBack && string.Equals(copy, ExeOrigPath, StringComparison.OrdinalIgnoreCase)) continue;
+                try { DeleteFile(copy); }
                 catch (Exception e) { if (rollbackFailure == null) rollbackFailure = e; }
             }
             return rollbackFailure;
@@ -1270,6 +1372,48 @@ namespace ApePatcher
         {
             if (plan.Zones == null || !plan.Zones.Restore) return;
             try { DeleteFile(plan.Zones.File.OrigPath); }
+            catch (Exception) { }
+        }
+
+        /// <summary>APE's copy of sh3.exe must still be what this session read: one
+        /// that has appeared or changed since is no longer the state APE judged.</summary>
+        string VerifyClockCave(WritePlan plan)
+        {
+            if (plan.Clock == null) return null;
+            byte[] original = Install.ClockCave.Original;
+            bool same;
+            try
+            {
+                same = original == null
+                    ? !File.Exists(ExeOrigPath)
+                    : File.Exists(ExeOrigPath) && Same(File.ReadAllBytes(ExeOrigPath), original);
+            }
+            catch (Exception)
+            {
+                same = false;
+            }
+            if (same) return null;
+            return "APE refused to write. " + Sh3ExeName + ApePatcher.ClockCave.OrigSuffix
+                + " changed after APE opened this install." + Environment.NewLine
+                + "Nothing was written, in any file. Reopen APE and try again.";
+        }
+
+        /// <summary>Once every store is written: deletes APE's copy of sh3.exe
+        /// after a revert. A copy that won't delete leaves stock's code beside it,
+        /// which reads as the cave missing again; the next apply reuses it.</summary>
+        void FinishClockCave(WritePlan plan)
+        {
+            if (plan.Clock == null || !plan.Clock.Restore) return;
+            DropCopy(ExeOrigPath);
+        }
+
+        /// <summary>Deletes a copy this attempt made, when a later write failed.
+        /// A copy left beside the exe as it was reads as the cave missing, which
+        /// is the truth, so a failure here is not reported.</summary>
+        void DropCopy(string path)
+        {
+            if (path == null) return;
+            try { DeleteFile(path); }
             catch (Exception) { }
         }
 

@@ -219,9 +219,10 @@
     <p>Set the values to your preference &mdash; the effects of your choices are explained in the field "What will change". When you are done, click "Apply changes" in the bottom-right corner.</p>
 
     <h1 class="section">Depth Stress</h1>
-    <p>Optional. Below 100 m (tier 1) a U-boat's electric engine room takes on water and hull damage is multiplied; below the tier-2 depth (default 150 m) both get worse. The crew pumps the water out, and a fresh crew keeps up. Every depth, rate and multiplier can be set in APE. APE installs its own <code>ape.act</code> module for this; unchecking Depth Stress removes it.</p>
+    <p>Optional. Below 100 m (tier 1) a U-boat's electric engine room takes on water (0.35 % per game-minute by default, 0.6 % in tier 2) and hull damage is multiplied; below the tier-2 depth (default 150 m) both get worse. The crew pumps the water out, and a fresh crew keeps up. Every depth, rate and multiplier can be set in APE. APE installs its own <code>ape.act</code> module for this; unchecking Depth Stress removes it.</p>
     <p class="callout">Disable &lsquo;Silent Running Fix&rsquo; from hsie/Stiebler Options!</p>
     <p><strong class="hl">Motor flooding:</strong> once the electric engine room is flooded past the threshold (default 20 %), both electric motors take damage for as long as the engine telegraph is not at stop, at any depth and whatever flooded the room. Ordering <strong class="hl">all stop</strong>, or pumping the room back below the threshold, ends it. Damage never goes past the point where the crew can still repair it. The idea is Stoss's (M. Hamacher on YouTube): water in the motor room meant the motors had to be taken out of service. Five points below the threshold (15 % by default) the chief engineer warns you once: <em>&ldquo;Water in the motor room, sir! Pump it out or stop the motors!&rdquo;</em> The warning is English only and is off when Motor damage is 0.</p>
+    <p><strong class="hl">GWX-KC:</strong> depth stress reads the game clock through a small piece of h.sie's code that KC's <code>sh3.exe</code> lacks. On KC, checking Depth Stress adds it for you; APE keeps a copy of <code>sh3.exe</code> as it was, and unchecking Depth Stress takes the code out again.</p>
     <p>In <strong class="hl">silent running</strong> (pumps off) a boat sitting deep will flood and slowly sink. This is intended: Stiebler's Silent-running Fix does the same, and Depth Stress replaces its depth-gauge workaround.</p>
 
     <p><strong class="hl">Starboard motor in the bow quarters:</strong> GWX-based installs, such as OAE and GWX-KC, put the starboard electric motor in the bow quarters in their damage model. When it is damaged, the damage screen shows the bow quarters damaged instead of the electric engine room, and only a repair team sent to the bow quarters repairs it. APE's optional <strong class="hl">Starboard motor zone fix</strong> puts the motor back in the electric engine room; it takes effect the next time you start SH3. Without it, send your repair team to the bow quarters.</p>
@@ -249,6 +250,7 @@
           <li><strong>Motor flooding damage</strong>: past the flooding threshold (default 20 %) the electric motors take damage until you order all stop or pump the room out, with a chief engineer warning at 15 %</li>
           <li><strong>Crush Time</strong>: one crush-speed setting for every playable U-boat</li>
           <li><strong>Starboard motor zone fix</strong>: optional, for GWX-based installs such as OAE and GWX-KC</li>
+          <li>On GWX-KC, Depth Stress adds the h.sie clock code it needs to <code>sh3.exe</code></li>
           <li>Depth Stress replaces Stiebler's Silent-running Fix depth-gauge workaround; no separate install step, APE deploys <code>ape.act</code> for you</li>
         </ul>
       </li>

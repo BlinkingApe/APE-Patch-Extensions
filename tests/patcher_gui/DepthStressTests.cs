@@ -122,11 +122,11 @@ namespace ApePatcher.Tests
             Check.Equal(2.0, session.Current.HullMult2, "the template's tier-2 multiplier");
         }
 
-        public static void Test_AFreshStateHoldsTheHalvedLeakageDefaults()
+        public static void Test_AFreshStateHoldsTheLeakageDefaults()
         {
             PatchState d = new PatchState();
-            Check.Equal(2.0, d.Leakage1, "2 %/min (ticket 30)");
-            Check.Equal(7.5, d.Leakage2, "7.5 %/min (ticket 30)");
+            Check.Equal(0.35, d.Leakage1, "0.35 %/min (owner, 2026-11-25)");
+            Check.Equal(0.6, d.Leakage2, "0.6 %/min (owner, 2026-11-25)");
         }
 
         public static void Test_AFreshStateHoldsTheMotorFloodingDefaults()
@@ -141,8 +141,8 @@ namespace ApePatcher.Tests
             PatchSession session = Fixtures.Stock(true).Session();
             PatchState d = session.Current;
             Check.Equal(150.0, d.Tier2Depth, "150 m");
-            Check.Equal(2.0, d.Leakage1, "2 %/min (halved, ticket 30)");
-            Check.Equal(7.5, d.Leakage2, "7.5 %/min (halved, ticket 30)");
+            Check.Equal(0.35, d.Leakage1, "0.35 %/min (owner, 2026-11-25)");
+            Check.Equal(0.6, d.Leakage2, "0.6 %/min (owner, 2026-11-25)");
             Check.Equal(20.0, d.FloodThreshold, "20 % flood (Stoss)");
             Check.Equal(10.0, d.MotorDamage, "10 %/game-s (ticket 31)");
             Check.Equal(1.25, d.HullMult1, "x1.25");

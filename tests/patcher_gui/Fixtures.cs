@@ -241,6 +241,49 @@ namespace ApePatcher.Tests
             return path;
         }
 
+        // -- h.sie's clock-mirror cave (depth-pressure-stress ticket 36) --------
+
+        public const int ClockSiteOffset = 0xC2115;     // VA 0x004C2115
+        public const int ClockCaveOffset = 0x11CFC7;    // VA 0x0051CFC7
+
+        /// <summary>Stock's clock store, `mov [esi+0x150],eax`, as GWX-KC 2.5's
+        /// sh3.exe (e2b190e1) holds it.</summary>
+        public static readonly byte[] StockClockStore = Hex.ToBytes("898650010000");
+        /// <summary>h.sie's `jmp 0x51CFC7; nop` and the cave it jumps to, as OAE 1.5.2's
+        /// sh3.exe carries them.</summary>
+        public static readonly byte[] CaveJump = Hex.ToBytes("e9adae050090");
+        public static readonly byte[] CaveBody = Hex.ToBytes("a380ff6300898650010000e94451faff");
+
+        /// <summary>A stock fixture whose sh3.exe has stock's clock store and
+        /// zero slack where OAE has h.sie's cave: GWX-KC 2.5's shape.</summary>
+        public static Install KcShaped()
+        {
+            Install install = Stock(true);
+            byte[] exe = install.ExeBytes();
+            StockClockStore.CopyTo(exe, ClockSiteOffset);
+            File.WriteAllBytes(install.Sh3Exe, exe);
+            return install;
+        }
+
+        /// <summary>A stock fixture whose sh3.exe already carries h.sie's cave:
+        /// OAE 1.5.2's shape.</summary>
+        public static Install OaeShaped()
+        {
+            Install install = Stock(true);
+            byte[] exe = install.ExeBytes();
+            CaveJump.CopyTo(exe, ClockSiteOffset);
+            CaveBody.CopyTo(exe, ClockCaveOffset);
+            File.WriteAllBytes(install.Sh3Exe, exe);
+            return install;
+        }
+
+        public static byte[] Slice(byte[] bytes, int at, int length)
+        {
+            byte[] run = new byte[length];
+            Array.Copy(bytes, at, run, 0, length);
+            return run;
+        }
+
         /// <summary>The CrashSpeed a .zon currently holds, found the same way APE
         /// finds it.</summary>
         public static float CrashSpeedIn(string zonPath)
