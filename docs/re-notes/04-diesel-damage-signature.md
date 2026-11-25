@@ -705,6 +705,9 @@ non-negative telegraph.
   reverse is not represented as a negative-signed float at all, this gate
   becomes a no-op rather than wrong, since it only ever diverts on the sign
   bit being set.
+  *Confirmed live 2026-11-25 (note 08 §9, OAE, Type IIA): astern orders are
+  plain negative floats, −0.26 to −0.66, and stop is +0.0. So the gate
+  should divert every astern order (inferred; the gate itself wasn't watched).*
 
 ## 7. Not yet established
 

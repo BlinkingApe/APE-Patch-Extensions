@@ -458,6 +458,20 @@ TEST_CASE("motor: nothing at telegraph stop, or with no telegraph value") {
   CHECK(poll_twice(c, none, 11).writes.empty());
 }
 
+// Every running value [0x63E1D4] took on OAE (ticket 32, live, submerged and
+// surfaced, a Type IIA): ahead slow..flank and the four astern steps. Each is
+// plausible and runs the motors. Stop read exactly +0.0, tested above.
+TEST_CASE("motor: the telegraph values measured on OAE") {
+  const ds::Constants c = motor_only(0.3f, 0.01f);
+  for (float order : {0.40f, 0.57f, 0.80f, 0.94f, 1.0f,          // ahead
+                      -0.26f, -0.40f, -0.53f, -0.66f}) {         // astern
+    CAPTURE(order);
+    CHECK(ds::telegraph_plausible(order));
+    const ds::Sample s = motor_room(at(120.0f, 500.0f, 0), 0.6f, order);
+    CHECK(poll_twice(c, s, 11).writes.size() == 2);
+  }
+}
+
 TEST_CASE("motor: with no telegraph value the other effects still run") {
   ds::Constants c = motor_only(0.3f, 0.01f);
   for (auto& k : c.tier) k.seep_per_s = 0.002f;

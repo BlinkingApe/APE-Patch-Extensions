@@ -312,3 +312,49 @@ phases:
 closed and restored `Documents\SH3`. The owner's install `sh3.exe` was re-hashed
 unchanged (`20360fe8…`). The lab ledger is unchanged (no new lab changes). Nothing was
 ever written to the owner's install.
+
+## 9. Ticket 32: h.sie's telegraph copy `[0x63E1D4]`, live
+
+2026-11-25, same lab, hashes and ledger as §7–§8 (both `sh3.exe` `20360fe8…`, checked
+before and after). Mission "0 Lab Deep Water", 30 m start; the boat was a Type IIA again.
+A Frida logger attached at the main menu sampled five times a wall-second: the copy
+`[0x63E1D4]`, the cave's previous-second copy `[0x63E1D8]`, and the source the cave
+reads, `[[[[0x5543DC]+4]+0x320]]`, read straight. The orders were keys `1`–`9` and
+`All_stop`, sent through `harness.drive`. Probes and rows are in the sh3-crush-pressure
+repo: `work/oae_telegraph_{log,seq,summ}.py`, `work/oae-telegraph.jsonl`.
+
+- **Ticket 31's signature resolves once**, at `0x00635065`, to the store into `0x63E1D4`.
+- **The copy tracks submerged, on electric.** It changed with every order and always
+  equalled the source, one refresh (~1 s) or less behind. So the diesel cave runs
+  whatever the propulsion. (The first sequence's stop orders never reached the game, see
+  the trap below. Stop was then ordered from ahead flank, back emergency and ahead slow.)
+- **The encoding:**
+
+  | Order | Value |
+  |---|---|
+  | Stop | `0x00000000`, +0.0 |
+  | Ahead slow, one third, standard, full, flank | 0.40, 0.57, 0.80, 0.94, 1.0 |
+  | Back slow, standard, full, emergency | −0.26, −0.40, −0.53, −0.66 |
+
+  Astern is a plain negative float. These are the IIA's `[EngineProperties]` steps; stop
+  and the sign are the engine's.
+- **Surfaced:** the same values and the same tracking. Stop was ordered from ahead flank
+  and from back slow.
+- **Lag:** from key to source, 3.2–3.5 s for ahead and astern orders and 2.9–3.0 s for
+  stop (the crew's acknowledgement). The copy follows within about a second.
+- **Save-load:** saved at back standard (−0.40), set ahead flank, abandoned, loaded. In
+  the menus the copy kept the stale 1.0 (the source was gone). It dropped to 0 as loading
+  began, and read −0.40 one second after the clock resumed. For that second it read 0
+  while the source already read −0.40. After the load it tracked as before.
+
+**For APE:** ticket 31's gate needs nothing. Stop is exactly 0.0, astern is non-zero and
+inside [-1, 1]. The one-second 0 after a load reads as stop, so it costs at most one
+second of motor flooding damage, never adds any. The stale value in the menus never reaches the
+step, which needs a resolved boat.
+
+**For note 04 §6:** reverse is a negative-signed float. The v1.12 reverse-telegraph gate
+(a sign-bit test at `0x635111`) should therefore divert every astern order, not be a
+no-op. That is inferred from the encoding; the gate itself wasn't watched.
+
+**Lab trap:** on this UK keyboard layout the harness's `backquote` (scan 0x29) isn't
+`All_stop`. Its VK 0xC0 is scan 0x27 here.
