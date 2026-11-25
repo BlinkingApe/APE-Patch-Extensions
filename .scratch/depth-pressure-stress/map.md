@@ -35,9 +35,9 @@ write target is unlocated is not specified.
   more so. Each tier carries a flat hull-damage **multiplier**, a flat **astern
   seep rate**, and a flat **electric-engine wear chance**. Tier 3 is stock's own
   crush-depth damage, untouched. *(Revised 2026-11-25, ADR-0010: tier 2 now ends at
-  crush depth, read live; APE sets stock's crush speed; see the grilling note below.)*
-  **Crush depth is never read**: APE's effects simply
-  continue below it rather than switching off.
+  crush depth, read live; APE sets stock's crush speed; see the grilling note below.
+  Revised again by ADR-0011: crush depth is stock's live onset `0.7·E`, which moves with
+  hull.)* APE's effects continue below crush depth rather than switching off.
 - **The historian's premise** (via the user, 2026-08-16): "All but the late war
   variants of the boats, and even the type II, were designed for an operating depth
   of 100 m. With a 2.5 safety margin, so calculated crush 250, this was standard
@@ -180,8 +180,8 @@ write target is unlocated is not specified.
   A separate **crush-time patch** (ticket `16`, blocked by `18`'s U-boat discovery rule)
   writes `CrashSpeed = Hit_Points ÷ crush time` into each playable U-boat's `.zon`. It is
   static and can ship before `ape.act`. Basis: the owner's in-game testing that
-  `CrashSpeed` is HP per second, which supersedes the external RE's
-  `excess × CrashSpeed × dt` reading. Tier-2 depth defaults to 150 m. Crush time defaults to 5 s for every U-boat (set after ticket `18`).
+  `CrashSpeed` is HP per second. *(Superseded by ADR-0011: crush damage is a hull-scaled
+  ramp, crush time is nominal, the exemption is the ramp share; ticket `20`.)* Tier-2 depth defaults to 150 m. Crush time defaults to 5 s for every U-boat (set after ticket `18`).
 
 - **OAE port session 2026-11-25 (tickets `10`, `11`, `17` together, at the owner's
   request)** (`docs/re-notes/08-oae-port-of-depth-leads.md`). The live install's
@@ -198,8 +198,8 @@ write target is unlocated is not specified.
   - **Every OAE single mission spawned a Type IIA**, stock Barham's VIIC included.
     Cause not found; class-dependent answers fall back on data.
   - **Crush loss measured as a ramp that grows as hull falls, not a flat rate.** That
-    conflicts with the owner's in-game experience and ADR-0010's basis. The owner has
-    asked that the flat rate be assumed. Held in ticket `20`, not re-decided.
+    conflicts with the owner's in-game experience and ADR-0010's basis. Settled by
+    ticket `20` in favour of the ramp (ADR-0011).
 
 ## Decisions so far
 
@@ -214,6 +214,9 @@ write target is unlocated is not specified.
 - [SH3's flooding model: how does APE provoke an astern leak?](issues/10-sh3-flooding-model.md) — direct write to the zone state's flood `+0x1C` via list `0x005547D4`, holds and pumps on OAE; VII/IX seep into compartment 8 (by data); pump 0.00326/game-s at crew strength 1.0. II/XXI compartment → ticket `19`.
 - [Locate the electric-engine damage float; confirm write and repairability](issues/11-electric-engine-damage-float.md) — `[[[[0x5543DC]+4]+0x37C]+0/4]` points at each engine's float; holds and shows on OAE; repairable strictly below 1.0 (0.99999994 repaired); ceiling 0.9; OAE repairs 60× slower (h.sie), ~5.4e-5/game-s.
 - [Live values: crush depth and crush speed from the boat object](issues/17-live-crush-depth-and-speed.md) — `+0xC0` = `.zon` CrashDepth ÷ 10, `+0xC4` = `.zon` CrashSpeed after load; stock's onset is `0.7·E` (hull-scaled) at a reference point off the gauge; live loss rose with falling hull, conflict → ticket `20`.
+
+- [Which compartment seeps on U-boats with no stern torpedo room (II, XXI)?](issues/19-astern-compartment-without-stern-room.md) — compartment 8 if the boat has one, else 4 (electric engine room), chosen at run time from the zone→compartment table, no class lookup; on II/XXI the water also cuts electric power, accepted.
+- [Crush damage measured as a hull-scaled ramp on OAE: does ADR-0010's crush time and exemption still hold?](issues/20-crush-rate-ramp-vs-adr-0010.md) — the ramp governs (ADR-0011): crush depth = live onset `0.7·E`, `.zon` value = rated crush depth; crush time nominal (~1.3·T to ~0.3·T), patch unchanged, tooltip reworded; exemption = ramp share at gauge depth.
 
 ## Not yet specified
 

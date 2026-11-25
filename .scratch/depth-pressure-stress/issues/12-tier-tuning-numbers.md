@@ -159,3 +159,15 @@ Two inputs to this ticket changed:
 - **Pump rate: 0.00326 flood/game-s at crew strength 1.0**, the same formula as vanilla.
   The lead's 0.00243 is the same pump at a crew strength of ~0.73. Seep defaults should
   be judged against the crew strength expected in the stern room.
+
+## Pointer (2026-11-25): tickets 19 and 20 resolved
+
+- **Where seepage goes** ([ticket 19](19-astern-compartment-without-stern-room.md)):
+  compartment 8 if present, otherwise compartment 4, the electric engine room. On II and
+  XXI the water also cuts electric power above 0.2 flood. Worth weighing when the leakage
+  defaults are set.
+- **Crush depth is the live onset `0.7·E`** ([ticket 20](20-crush-rate-ramp-vs-adr-0010.md),
+  ADR-0011), not the `.zon` value. The IIB and XXIII (rated 214 m) start crushing at about
+  150 m at full hull, level with the 150 m tier-2 default. Damage lifts every onset. The
+  exemption above becomes the ramp share, `CrashSpeed · dt · (D − 0.7E)/(0.3E)`, not
+  `crush speed × elapsed`.

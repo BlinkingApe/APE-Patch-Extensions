@@ -1,7 +1,7 @@
 # Crush damage measured as a hull-scaled ramp on OAE: does ADR-0010's crush time and exemption still hold?
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: none
 
 ## Parent
@@ -35,3 +35,34 @@ Decide, with the owner:
    - where tier 3 starts: `0.7·E`, which moves with hull.
 3. **Whether to re-measure first** on a VIIC, at two depths at constant hull: that
    separates "depends on depth" from "depends on hull".
+
+## Answer (grilling with the owner, 2026-11-25)
+
+Recorded in [ADR-0011](../../../docs/adr/0011-crush-damage-is-a-hull-scaled-ramp.md),
+which amends ADR-0010, and in `CONTEXT.md`.
+
+1. **The measured ramp governs:** `hull −= CrashSpeed · dt · (D − 0.7E)/(0.3E)`, with
+   `E = 1 + (CD − 1)·h`. The evidence is crush code byte-identical to vanilla and three live
+   OAE points that fit within 5 %. The owner's flat rate is how the ramp looks when
+   `CrashSpeed` is tiny (the test mod's VIIC took ~6,250 s): hull barely moves in a
+   session, so at one depth the rate looks constant. The ramp shows only when hull falls
+   far or when two depths are compared. No re-measure first: at the 5 s default the
+   player sees almost no difference.
+2. **Under the ramp:**
+   - **Crush time is nominal.** `CrashSpeed = Hit_Points ÷ T` stays; ticket 16's patch
+     stands as built. Survival from full hull scales with `HP ÷ CrashSpeed` at any depth,
+     but its shape runs from about 1.3·T just past the onset to about 0.3·T at the rated
+     crush depth (simulated: VIIC at T = 5 s, 6.6 s at 247 m, 1.6 s at 346 m). Per-class
+     calibration to an exact T was rejected as precision no player can see. Ticket 16's GUI
+     tooltip and in-play criterion need rewording; see its pointer.
+   - **The exemption recomputes stock's ramp:** `CrashSpeed · dt · (D − 0.7E)/(0.3E)` from
+     `+0xB4`, `+0xB8`, `+0xC0`, `+0xC4`, with D the **gauge depth**, no reference-point
+     offset. The gauge reads 2.6–5 m deeper than stock's reference point, so the error is
+     always toward exempting more: crush damage is never multiplied, and a hit taken while
+     crushing is at worst slightly under-multiplied. The cause stamp `[obj+0x170]` was
+     rejected (last cause only, ambiguous when a hit and crush share a poll).
+   - **Tier 3 starts at the live onset `0.7·E`**, recomputed every poll. That is now what
+     **crush depth** means; the `.zon` value is **rated crush depth**. Damage lifts the
+     onset (a IIA's is 176 m at full hull, ~91 m at half). Tier 3 applies wherever it is,
+     even above tier 1 or the tier-2 depth; below it, the existing rule gives tier-2 values.
+3. **No re-measure.** The per-class gauge-to-reference offset isn't needed either.

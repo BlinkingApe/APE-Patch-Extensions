@@ -13,17 +13,20 @@ A plain PE32 DLL, loaded by OAE sh3.exe's own custom module loader (a hand-patch
 _Avoid_: "plugin", "act file" (ambiguous with the palette data files)
 
 **crush depth**:
-An engine-tracked, per-boat-class value: the depth at which stock SH3 begins taking hull damage from pressure. It is the floor of tier 2; below it is tier 3.
-_Avoid_: "CDT" as something APE owns (only the abandoned model did).
+The depth at which stock SH3 begins taking hull damage from pressure, right now. It is 70% of the rated crush depth at full hull and gets shallower as the hull is damaged, so a damaged boat starts crushing higher up. It is the floor of tier 2; below it is tier 3 (ADR-0011).
+_Avoid_: "CDT" as something APE owns (only the abandoned model did); "crush depth" for the per-class `.zon` figure (that is the **rated crush depth**).
+
+**rated crush depth**:
+A boat class's crush depth as its data states it (the `CrashDepth` value in each boat's `.zon` data). Not where damage begins: the live crush depth is shallower, 70% of it at full hull.
 
 **crush speed**:
-Stock's per-boat-class rate of hull damage below crush depth, in HP per second (the `CrashSpeed` value in each boat's `.zon` data). A boat at full hull below crush depth survives `Hit_Points ÷ crush speed` seconds.
+Stock's per-boat-class scale for hull damage below crush depth (the `CrashSpeed` value in each boat's `.zon` data). Damage isn't flat: it grows the deeper the boat sits below crush depth and the more damaged its hull, and equals the crush speed in HP per second only at the rated crush depth at full hull (ADR-0011).
 
 **crush time**:
-The player's chosen number of seconds a boat survives below crush depth from full hull. APE turns it into each U-boat class's crush speed (`Hit_Points ÷ crush time`), so every class dies in the same time. Not affected by the hull multiplier.
+The player's chosen nominal number of seconds a boat survives below crush depth from full hull. APE turns it into each U-boat class's crush speed (`Hit_Points ÷ crush time`), so every class crushes on the same scale. Nominal: just past crush depth a boat lasts somewhat longer, at its rated crush depth about a third as long. Not affected by the hull multiplier.
 
 **depth tier**:
-One of APE's absolute-depth bands of depth stress. Tier 1 runs from 100 m to the tier-2 depth; tier 2 from the player's tier-2 depth to crush depth. Each carries its own **hull multiplier**, **seepage** rate, and **electric-engine wear** (amount and rate). Crossing a boundary is a step change. Tier 3 (below crush depth) adds stock's crush damage, at the crush speed APE sets; seepage, wear and the hull multiplier carry on at tier-2 values, except that crush damage itself is never multiplied. See `.scratch/depth-pressure-stress/map.md`.
+One of APE's absolute-depth bands of depth stress. Tier 1 runs from 100 m to the tier-2 depth; tier 2 from the player's tier-2 depth to crush depth. Each carries its own **hull multiplier**, **seepage** rate, and **electric-engine wear** (amount and rate). Crossing a boundary is a step change. Tier 3 (below crush depth, wherever damage has lifted it, even above tier 1 or 2) adds stock's crush damage, at the crush speed APE sets; seepage, wear and the hull multiplier carry on at tier-2 values, except that crush damage itself is never multiplied. See `.scratch/depth-pressure-stress/map.md`.
 _Avoid_: "damage window", "band" (terminology from the abandoned three-band, fraction-of-crush-depth model)
 
 **hull multiplier**:

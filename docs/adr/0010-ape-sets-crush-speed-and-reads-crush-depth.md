@@ -1,5 +1,7 @@
 # APE sets each U-boat's crush speed and reads crush depth, amending ADR-0008
 
+> **Amended by ADR-0011** (2026-11-25): crush damage is a hull-scaled ramp, not a flat HP per second. Crush depth is the live onset `0.7·E`, crush time is nominal, and the exemption is the ramp share. Read ADR-0011 before relying on this ADR's basis or exemption.
+
 ADR-0008 handed everything below crush depth back to stock: APE "never reads CDT and never
 neutralizes `CrashSpeed`", and there was "no data edit left to ship". Grilling on
 2026-11-25 (after the sh3-crush-pressure leads on tickets 10–12) reversed both halves on
