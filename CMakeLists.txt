@@ -16,6 +16,16 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# --- Static C/C++ runtime (/MT, /MTd) --------------------------------------
+# ape.act is loaded into sh3.exe on players' machines, so it must not depend on
+# the Visual C++ Redistributable. Linked dynamically it needs MSVCP140.dll and
+# VCRUNTIME140.dll (x86): if they're missing, LoadLibrary fails at game start,
+# and if the process loads an msvcp140.dll older than 14.40, std::mutex
+# (constexpr since VS 2022 17.10) crashes in _Mtx_lock on the logger's first
+# write. Linking the runtime in leaves KERNEL32.dll as the only import. Every
+# target gets it, so the static libraries and tests agree with ape.act.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 # --- Vendored dependencies ------------------------------------------------
 # MinHook was dropped in the architecture pivot: APE runs alongside and never
 # hooks a stock function (ADR-0001), so no function-hooking library is linked.
