@@ -112,18 +112,50 @@ namespace ApePatcher
         }
 
         /// <summary>Reads the struct back into the model's game-term fields.
-        /// False, leaving the model alone, if the marker doesn't check out.</summary>
+        /// False, leaving the model alone, if the struct can't be found.</summary>
         public static bool Read(byte[] image, ApeActStruct s, PatchState into)
         {
-            if (Check(image, s) != null) return false;
-            into.Tier2Depth = Math.Round(Get(image, s, "tier2_depth_m"), 2);
-            into.Leakage1 = Math.Round(PatchState.LeakageFromSeep(Get(image, s, "t1_seep_per_s")), 2);
-            into.Leakage2 = Math.Round(PatchState.LeakageFromSeep(Get(image, s, "t2_seep_per_s")), 2);
-            into.FloodThreshold = Math.Round(PatchState.ThresholdFromFraction(Get(image, s, "flood_threshold")), 2);
-            into.MotorDamage = Math.Round(PatchState.MotorDamageFromPerSecond(Get(image, s, "motor_damage_per_s")), 2);
-            into.HullMult1 = Math.Round(Get(image, s, "t1_hull_mult"), 2);
-            into.HullMult2 = Math.Round(Get(image, s, "t2_hull_mult"), 2);
+            int at = Locate(image, s);
+            if (at < 0) return false;
+            into.Tier2Depth = Math.Round(Get(image, at, s, "tier2_depth_m"), 2);
+            into.Leakage1 = Math.Round(PatchState.LeakageFromSeep(Get(image, at, s, "t1_seep_per_s")), 2);
+            into.Leakage2 = Math.Round(PatchState.LeakageFromSeep(Get(image, at, s, "t2_seep_per_s")), 2);
+            into.FloodThreshold = Math.Round(PatchState.ThresholdFromFraction(Get(image, at, s, "flood_threshold")), 2);
+            into.MotorDamage = Math.Round(PatchState.MotorDamageFromPerSecond(Get(image, at, s, "motor_damage_per_s")), 2);
+            into.HullMult1 = Math.Round(Get(image, at, s, "t1_hull_mult"), 2);
+            into.HullMult2 = Math.Round(Get(image, at, s, "t2_hull_mult"), 2);
             return true;
+        }
+
+        /// <summary>Where the struct starts in `image`: the manifest's offset when
+        /// the marker and version are there, else the one place in the file where
+        /// the marker is followed by this version. -1 when there is no such place,
+        /// or more than one.
+        ///
+        /// An ape.act deployed by an older APE has the struct wherever that
+        /// build's linker put it, and a rebuild moves it (1.14 -> 1.15: 38920 ->
+        /// 152072). Same version means same fields, so the player's values still
+        /// read back, and the next apply rewrites the file from this template.
+        /// The bare marker also sits in .rdata, but not followed by a version.</summary>
+        public static int Locate(byte[] image, ApeActStruct s)
+        {
+            if (Check(image, s) == null) return s.Offset;
+            if (s == null || image == null) return -1;
+            int found = -1;
+            for (int at = 0; at + s.Size <= image.Length; at++)
+            {
+                if (!HoldsHeader(image, at, s)) continue;
+                if (found >= 0) return -1;
+                found = at;
+            }
+            return found;
+        }
+
+        static bool HoldsHeader(byte[] image, int at, ApeActStruct s)
+        {
+            for (int i = 0; i < s.Magic.Length; i++)
+                if (image[at + i] != s.Magic[i]) return false;
+            return BitConverter.ToUInt32(image, at + s.Magic.Length) == s.Version;
         }
 
         static void Put(byte[] image, ApeActStruct s, string field, double value)
@@ -131,9 +163,9 @@ namespace ApePatcher
             BitConverter.GetBytes((float)value).CopyTo(image, s.Offset + s.FieldAt(field));
         }
 
-        static double Get(byte[] image, ApeActStruct s, string field)
+        static double Get(byte[] image, int at, ApeActStruct s, string field)
         {
-            return BitConverter.ToSingle(image, s.Offset + s.FieldAt(field));
+            return BitConverter.ToSingle(image, at + s.FieldAt(field));
         }
     }
 }

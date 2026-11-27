@@ -222,6 +222,73 @@ namespace ApePatcher.Tests
 
         // -- refusing ----------------------------------------------------------
 
+        // An ape.act deployed by an older APE, whose build put the struct
+        // somewhere else (1.14 had it at 38920, 1.15 at 152072): the same
+        // template's bytes with the struct moved `by` bytes (far enough not to
+        // overlap) and the old spot's marker wiped.
+        static byte[] MovedStruct(byte[] deployed, ApeActStruct s, int by)
+        {
+            byte[] old = (byte[])deployed.Clone();
+            Array.Clear(old, s.Offset, s.Magic.Length);
+            Array.Copy(deployed, s.Offset, old, s.Offset + by, s.Size);
+            return old;
+        }
+
+        public static void Test_AnOlderBuildsApeActWithTheStructElsewhereStillReadsBack()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+            PatchState want = Enabled(session);
+            want.Tier2Depth = 205;
+            want.Leakage1 = 1.25; want.Leakage2 = 3.5;
+            want.FloodThreshold = 40; want.MotorDamage = 7.5;
+            want.HullMult1 = 1.75; want.HullMult2 = 2.25;
+            Check.True(session.Apply(want).Ok, "applying");
+            ApeActStruct s = Struct(fx);
+            File.WriteAllBytes(ApeActOf(fx), MovedStruct(File.ReadAllBytes(ApeActOf(fx)), s, -4096));
+
+            PatchSession after = fx.Session();
+            PatchState got = after.Current;
+            Check.True(got.DepthApplied, "the checkbox opens checked");
+            Check.Equal(205.0, got.Tier2Depth, "tier-2 depth");
+            Check.Equal(1.25, got.Leakage1, "tier-1 leakage");
+            Check.Equal(3.5, got.Leakage2, "tier-2 leakage");
+            Check.Equal(40.0, got.FloodThreshold, "flooding threshold");
+            Check.Equal(7.5, got.MotorDamage, "motor damage");
+            Check.Equal(1.75, got.HullMult1, "tier-1 multiplier");
+            Check.Equal(2.25, got.HullMult2, "tier-2 multiplier");
+
+            // The old file is replaced with this build's, keeping the player's values.
+            Check.False(after.Plan(got.Clone()).Empty, "the old ape.act is due a rewrite");
+            Check.True(after.Apply(got.Clone()).Ok, "applying again");
+            byte[] now = File.ReadAllBytes(ApeActOf(fx));
+            Check.Equal(fx.ApeActTemplate().Length, now.Length, "this build's ape.act");
+            Check.Equal(205f, FieldIn(now, fx, "tier2_depth_m"), "tier-2 depth kept");
+            Check.Equal(2.25f, FieldIn(now, fx, "t2_hull_mult"), "tier-2 multiplier kept");
+            Check.True(fx.Session().Plan(got.Clone()).Empty, "and then nothing is left to apply");
+        }
+
+        public static void Test_AStructFoundInTwoPlacesIsNotReadAndTheDefaultsAreShown()
+        {
+            Fixtures.Install fx = Fixtures.Stock(true);
+            PatchSession session = fx.Session();
+            PatchState want = Enabled(session);
+            want.Tier2Depth = 205;
+            Check.True(session.Apply(want).Ok, "applying");
+            ApeActStruct s = Struct(fx);
+            byte[] twice = MovedStruct(File.ReadAllBytes(ApeActOf(fx)), s, -4096);
+            Array.Copy(twice, s.Offset - 4096, twice, s.Offset - 8192, s.Size);
+            File.WriteAllBytes(ApeActOf(fx), twice);
+
+            PatchState defaults = new PatchState();
+            Check.True(DepthStress.Read(fx.ApeActTemplate(), s, defaults), "the template reads");
+            PatchSession after = fx.Session();
+            Check.True(after.Current.DepthApplied, "ape.act is still there");
+            Check.Equal(-1, DepthStress.Locate(File.ReadAllBytes(ApeActOf(fx)), s), "no single struct");
+            Check.Equal(defaults.Tier2Depth, after.Current.Tier2Depth,
+                "neither copy is trusted: the template's tier-2 depth is shown");
+        }
+
         public static void Test_AWrongMarkerInTheTemplateRefusesTheApplyAndWritesNothing()
         {
             Fixtures.Install fx = Fixtures.Stock(true);
